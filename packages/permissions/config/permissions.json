@@ -1,0 +1,20 @@
+{
+  "users.view": {
+    "name": "View Users",
+    "description": "Can view user accounts.",
+    "category": "Users",
+    "default": false
+  },
+  "users.edit": {
+    "name": "Edit Users",
+    "description": "Can edit user accounts.",
+    "category": "Users",
+    "default": false
+  },
+  "documents.approve": {
+    "name": "Approve Documents",
+    "description": "Can approve documents.",
+    "category": "Documents",
+    "default": false
+  }
+}
