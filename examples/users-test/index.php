@@ -1,31 +1,20 @@
 <?php
-require __DIR__ . '/vendor/autoload.php';
-
+require __DIR__.'/vendor/autoload.php';
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
-
-$provider = new class implements UserProviderInterface {
-    private array $rows = [];
-    public function __construct() { $this->rows[1] = ['id'=>1,'name'=>'Alice','email'=>'alice@example.com','active'=>true]; }
-    private function user(array $r): PrefabUser { return new PrefabUser($r['id'],$r['name'],$r['email'],$r['active']); }
-    public function find(int|string $id): ?PrefabUser { return isset($this->rows[(int)$id]) ? $this->user($this->rows[(int)$id]) : null; }
-    public function findByEmail(string $email): ?PrefabUser { foreach ($this->rows as $r) if (strcasecmp($r['email'],$email)===0) return $this->user($r); return null; }
-    public function all(int $limit=100,int $offset=0): array { return array_map(fn($r)=>$this->user($r), array_slice(array_values($this->rows),$offset,$limit)); }
-    public function create(array $data): PrefabUser { $id=$this->rows?max(array_keys($this->rows))+1:1; $this->rows[$id]=['id'=>$id,'name'=>$data['name']??null,'email'=>$data['email']??null,'active'=>$data['active']??true]; return $this->user($this->rows[$id]); }
-    public function update(int|string $id,array $data): PrefabUser { $i=(int)$id; $this->rows[$i]=array_merge($this->rows[$i],$data); return $this->user($this->rows[$i]); }
-    public function delete(int|string $id): bool { $i=(int)$id; if(!isset($this->rows[$i])) return false; unset($this->rows[$i]); return true; }
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();
+$_SESSION['users_test_rows']??=[1=>['id'=>1,'name'=>'Alice','email'=>'alice@example.com','active'=>true]];
+$provider=new class implements UserProviderInterface{
+ private function user(array $r):PrefabUser{return new PrefabUser($r['id'],$r['name'],$r['email'],$r['active']);}
+ public function find(int|string $id):?PrefabUser{$r=$_SESSION['users_test_rows'][(int)$id]??null;return $r?$this->user($r):null;}
+ public function findByEmail(string $email):?PrefabUser{foreach($_SESSION['users_test_rows'] as $r)if(strcasecmp($r['email'],$email)===0)return $this->user($r);return null;}
+ public function all(int $limit=100,int $offset=0):array{return array_map(fn($r)=>$this->user($r),array_slice(array_values($_SESSION['users_test_rows']),$offset,$limit));}
+ public function create(array $data):PrefabUser{$id=$_SESSION['users_test_rows']?max(array_keys($_SESSION['users_test_rows']))+1:1;$_SESSION['users_test_rows'][$id]=['id'=>$id,'name'=>$data['name'],'email'=>$data['email'],'active'=>true];return $this->user($_SESSION['users_test_rows'][$id]);}
+ public function update(int|string $id,array $data):PrefabUser{$i=(int)$id;$_SESSION['users_test_rows'][$i]=array_merge($_SESSION['users_test_rows'][$i],$data);return $this->user($_SESSION['users_test_rows'][$i]);}
+ public function delete(int|string $id):bool{$i=(int)$id;if(!isset($_SESSION['users_test_rows'][$i]))return false;unset($_SESSION['users_test_rows'][$i]);return true;}
 };
-
-$users = new UserManager($provider);
-$created = $users->create(['name'=>'Bob','email'=>'bob@example.com']);
-$updated = $users->update($created->data->id,['name'=>'Robert'],['actor_id'=>1]);
-$list = $users->all();
-function e(mixed $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-?>
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body class="bg-body-tertiary"><nav class="navbar bg-dark navbar-dark"><div class="container"><span class="navbar-brand">Prefab Users Test</span></div></nav><main class="container py-4">
-<div class="row g-3 mb-4"><div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">Users</div><div class="display-6"><?= count($list) ?></div></div></div></div><div class="col-md-8"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">Last operation</div><div class="fw-semibold"><?= e($updated->log['action']) ?></div><div><?= e($updated->log['message']) ?></div></div></div></div></div>
-<div class="card shadow-sm mb-4"><div class="card-header fw-semibold">Users</div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Status</th></tr></thead><tbody><?php foreach($list as $user): ?><tr><td><?= e($user->id) ?></td><td><?= e($user->name) ?></td><td><?= e($user->email) ?></td><td><span class="badge text-bg-<?= $user->active?'success':'secondary' ?>"><?= $user->active?'Active':'Inactive' ?></span></td></tr><?php endforeach; ?></tbody></table></div></div>
-<div class="card shadow-sm"><div class="card-header fw-semibold">Generated log payload</div><div class="card-body"><pre class="mb-0"><?= e(json_encode($updated->log, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></pre></div></div>
-</main></body></html>
+$users=new UserManager($provider);$log=null;
+if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='create'){$r=$users->create(['name'=>$_POST['name'],'email'=>$_POST['email']]);$log=$r->log;}elseif($a==='rename'){$r=$users->update((int)$_POST['id'],['name'=>$_POST['name']],['actor_id'=>1]);$log=$r->log;}elseif($a==='delete'){$r=$users->delete((int)$_POST['id'],['actor_id'=>1]);$log=$r->log;}elseif($a==='reset'){unset($_SESSION['users_test_rows']);header('Location:'.$_SERVER['PHP_SELF']);exit;}}
+function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><main class="container py-4"><div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3 mb-0">Users Interactive Test</h1><form method="post"><button name="action" value="reset" class="btn btn-outline-secondary btn-sm">Reset</button></form></div><div class="row g-4"><div class="col-md-4"><div class="card"><div class="card-header">Create User</div><div class="card-body"><form method="post" class="vstack gap-2"><input type="hidden" name="action" value="create"><input class="form-control" name="name" placeholder="Name" required><input class="form-control" type="email" name="email" placeholder="Email" required><button class="btn btn-primary">Create</button></form></div></div><?php if($log):?><div class="card mt-3"><div class="card-header">Last log payload</div><div class="card-body"><pre class="small mb-0"><?=e(json_encode($log,JSON_PRETTY_PRINT))?></pre></div></div><?php endif;?></div><div class="col-md-8"><div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr></thead><tbody><?php foreach($users->all() as $u):?><tr><td><?=e($u->id)?></td><td><?=e($u->name)?></td><td><?=e($u->email)?></td><td><form method="post" class="d-flex gap-2"><input type="hidden" name="id" value="<?=e($u->id)?>"><input class="form-control form-control-sm" name="name" value="<?=e($u->name)?>"><button name="action" value="rename" class="btn btn-sm btn-outline-primary">Rename</button><button name="action" value="delete" class="btn btn-sm btn-outline-danger">Delete</button></form></td></tr><?php endforeach;?></tbody></table></div></div></div></div></main></body></html>
