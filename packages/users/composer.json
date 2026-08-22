@@ -1,0 +1,14 @@
+{
+  "name": "tihloh/prefab-users",
+  "description": "Framework-independent user abstraction and mapping module for Tihloh Prefab PHP.",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Users\\": "src/"
+    }
+  }
+}
