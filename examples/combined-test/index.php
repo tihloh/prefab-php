@@ -18,15 +18,7 @@ use Tihloh\Prefab\Logs\Services\LogManager;
 
 class ProjectUser extends PrefabUser implements AuthenticatableUserInterface, PermissionSubjectInterface
 {
-    public function __construct(
-        int|string $id,
-        ?string $name,
-        ?string $email,
-        bool $active,
-        private string $passwordHash,
-        private array $groupIds = [],
-    ) { parent::__construct($id,$name,$email,$active); }
-
+    public function __construct(int|string $id, ?string $name, ?string $email, bool $active, private string $passwordHash, private array $groupIds = []) { parent::__construct($id,$name,$email,$active); }
     public function authId(): int|string { return $this->id; }
     public function authPasswordHash(): ?string { return $this->passwordHash; }
     public function authIsActive(): bool { return $this->active; }
@@ -45,7 +37,6 @@ $userProvider = new class implements UserProviderInterface {
     public function update(int|string $id,array $data): PrefabUser { $i=(int)$id; $this->rows[$i]=array_merge($this->rows[$i],$data); return $this->make($this->rows[$i]); }
     public function delete(int|string $id): bool { $i=(int)$id; if(!isset($this->rows[$i])) return false; unset($this->rows[$i]); return true; }
 };
-
 $users = new UserManager($userProvider);
 $authProvider = new class($users) implements AuthUserProviderInterface {
     public function __construct(private UserManager $users) {}
@@ -53,7 +44,6 @@ $authProvider = new class($users) implements AuthUserProviderInterface {
     public function findById(int|string $id): ?AuthenticatableUserInterface { $u=$this->users->find($id); return $u instanceof AuthenticatableUserInterface?$u:null; }
 };
 $auth = new AuthManager($authProvider,new NativeSessionStore('combined_test_user'));
-
 $permissionStore = new class implements PermissionStoreInterface {
     private array $data=[];
     public function get(string $type,int|string $id): array { return $this->data[$type][(string)$id]??[]; }
@@ -61,10 +51,9 @@ $permissionStore = new class implements PermissionStoreInterface {
     public function remove(string $type,int|string $id): void { unset($this->data[$type][(string)$id]); }
 };
 $permissions = new PermissionManager(new PermissionDefinitions([
-    'documents.view'=>['name'=>'View Documents','default'=>true],
-    'documents.approve'=>['name'=>'Approve Documents','default'=>false],
+    'documents.view'=>['name'=>'View Documents','description'=>'Can view documents','default'=>true],
+    'documents.approve'=>['name'=>'Approve Documents','description'=>'Can approve documents','default'=>false],
 ]),$permissionStore);
-
 $logRepo = new class implements LogRepositoryInterface {
     private array $rows=[]; private int $next=1;
     public function record(LogEntry $entry): int|string { $id=$this->next++; $this->rows[$id]=['id'=>$id]+$entry->toArray(); return $id; }
@@ -77,20 +66,19 @@ $logs = new LogManager($logRepo);
 
 $userUpdate = $users->update(1,['name'=>'Demo User Updated'],['actor_id'=>1]);
 $logs->record($userUpdate->log);
-
 $login = $auth->attempt('demo@example.com','password123');
 if ($login->log) $logs->record($login->log);
-
 $grant = $permissions->set('user',1,'documents.approve',true,['actor_id'=>1]);
 $logs->record($grant->log);
-
 $user = $users->find(1);
+$canView = $user instanceof PermissionSubjectInterface ? $permissions->can($user,'documents.view') : false;
 $canApprove = $user instanceof PermissionSubjectInterface ? $permissions->can($user,'documents.approve') : false;
-
-header('Content-Type:text/plain');
-echo "FULL COMBINED PREFAB TEST\n\n";
-echo "User: {$user->name} <{$user->email}>\n";
-echo 'Authenticated: '.($auth->check()?'YES':'NO')."\n";
-echo 'Can approve documents: '.($canApprove?'YES':'NO')."\n";
-echo 'Logs recorded: '.count($logs->recent())."\n\n";
-print_r($logs->recent());
+$resolved = $user instanceof PermissionSubjectInterface ? $permissions->resolvedFor($user) : [];
+$recentLogs = $logs->recent();
+function e(mixed $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+?>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab Combined Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body class="bg-body-tertiary"><nav class="navbar navbar-dark bg-dark"><div class="container"><span class="navbar-brand">Tihloh Prefab — Combined Test</span></div></nav><main class="container py-4">
+<div class="row g-3 mb-4"><div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">User</div><div class="fw-semibold"><?= e($user?->name) ?></div><div class="small"><?= e($user?->email) ?></div></div></div></div><div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">Authenticated</div><div class="h3 mb-0 text-<?= $auth->check()?'success':'danger' ?>"><?= $auth->check()?'YES':'NO' ?></div></div></div></div><div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">Can approve</div><div class="h3 mb-0 text-<?= $canApprove?'success':'danger' ?>"><?= $canApprove?'YES':'NO' ?></div></div></div></div><div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="small text-muted">Logs</div><div class="h3 mb-0"><?= count($recentLogs) ?></div></div></div></div></div>
+<div class="row g-4"><div class="col-lg-5"><div class="card shadow-sm mb-4"><div class="card-header fw-semibold">Permissions</div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Permission</th><th>Effective</th><th>Source</th></tr></thead><tbody><?php foreach($resolved as $id=>$r): ?><tr><td><code><?= e($id) ?></code></td><td><span class="badge text-bg-<?= $r->allowed?'success':'danger' ?>"><?= $r->allowed?'ALLOW':'DENY' ?></span></td><td><?= e($r->source) ?></td></tr><?php endforeach; ?></tbody></table></div></div></div><div class="col-lg-7"><div class="card shadow-sm"><div class="card-header fw-semibold">Activity Logs</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>#</th><th>Action</th><th>Message</th><th>Changes</th></tr></thead><tbody><?php foreach($recentLogs as $row): ?><tr><td><?= e($row['id']) ?></td><td><code><?= e($row['action']) ?></code></td><td><?= e($row['message']??'') ?></td><td><small><code><?= e(json_encode($row['changes']??[])) ?></code></small></td></tr><?php endforeach; ?></tbody></table></div></div></div></div>
+</main></body></html>
