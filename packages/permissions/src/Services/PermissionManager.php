@@ -44,7 +44,6 @@ final class PermissionManager
             if (!array_key_exists($permission, $groupPermissions)) {
                 continue;
             }
-
             if ($groupPermissions[$permission] === true) {
                 $allows[] = $groupId;
             } else {
@@ -55,7 +54,6 @@ final class PermissionManager
         if ($allows !== []) {
             return new PermissionResult(true, 'group', $allows, $denies);
         }
-
         if ($denies !== []) {
             return new PermissionResult(false, 'group', $denies, $denies);
         }
@@ -63,60 +61,52 @@ final class PermissionManager
         return new PermissionResult($this->definitions->default($permission), 'default');
     }
 
-    public function set(
-        string $subjectType,
-        int|string $subjectId,
-        string $permission,
-        bool $value,
-        array $context = [],
-    ): OperationResult {
+    public function overridesFor(string $subjectType, int|string $subjectId): array
+    {
+        return $this->store->get($subjectType, $subjectId);
+    }
+
+    public function resolvedFor(PermissionSubjectInterface|int|string $subject, array $groupIds = []): array
+    {
+        $resolved = [];
+        foreach (array_keys($this->definitions->all()) as $permission) {
+            $resolved[$permission] = $this->resolve($subject, $permission, $groupIds);
+        }
+        return $resolved;
+    }
+
+    public function set(string $subjectType, int|string $subjectId, string $permission, bool $value, array $context = []): OperationResult
+    {
         $permissions = $this->store->get($subjectType, $subjectId);
-        $old = array_key_exists($permission, $permissions) ? (bool) $permissions[$permission] : null;
+        $old = array_key_exists($permission, $permissions) ? (bool)$permissions[$permission] : null;
         $permissions[$permission] = $value;
         $this->store->put($subjectType, $subjectId, $this->definitions->validateOverrides($permissions));
 
-        return new OperationResult(
-            data: $value,
-            log: $this->logPayload(
-                action: $value ? 'permission.granted' : 'permission.denied',
-                subjectType: $subjectType,
-                subjectId: $subjectId,
-                permission: $permission,
-                old: $old,
-                new: $value,
-                context: $context,
-            ),
-        );
+        return new OperationResult($value, $this->logPayload(
+            $value ? 'permission.granted' : 'permission.denied', $subjectType, $subjectId,
+            $permission, $old, $value, $context
+        ));
     }
 
-    public function clear(
-        string $subjectType,
-        int|string $subjectId,
-        string $permission,
-        array $context = [],
-    ): OperationResult {
+    public function clear(string $subjectType, int|string $subjectId, string $permission, array $context = []): OperationResult
+    {
         $permissions = $this->store->get($subjectType, $subjectId);
-        $old = array_key_exists($permission, $permissions) ? (bool) $permissions[$permission] : null;
+        $old = array_key_exists($permission, $permissions) ? (bool)$permissions[$permission] : null;
         unset($permissions[$permission]);
-
         if ($permissions === []) {
             $this->store->remove($subjectType, $subjectId);
         } else {
             $this->store->put($subjectType, $subjectId, $permissions);
         }
 
-        return new OperationResult(
-            data: true,
-            log: $this->logPayload(
-                action: 'permission.cleared',
-                subjectType: $subjectType,
-                subjectId: $subjectId,
-                permission: $permission,
-                old: $old,
-                new: null,
-                context: $context,
-            ),
-        );
+        return new OperationResult(true, $this->logPayload(
+            'permission.cleared', $subjectType, $subjectId, $permission, $old, null, $context
+        ));
+    }
+
+    public function clearAll(string $subjectType, int|string $subjectId): void
+    {
+        $this->store->remove($subjectType, $subjectId);
     }
 
     public function definitions(): array
@@ -124,20 +114,18 @@ final class PermissionManager
         return $this->definitions->all();
     }
 
+    public function definition(string $permission): ?array
+    {
+        return $this->definitions->get($permission);
+    }
+
     public function defined(string $permission): bool
     {
         return $this->definitions->has($permission);
     }
 
-    private function logPayload(
-        string $action,
-        string $subjectType,
-        int|string $subjectId,
-        string $permission,
-        ?bool $old,
-        ?bool $new,
-        array $context,
-    ): array {
+    private function logPayload(string $action, string $subjectType, int|string $subjectId, string $permission, ?bool $old, ?bool $new, array $context): array
+    {
         $verb = match ($action) {
             'permission.granted' => 'granted to',
             'permission.denied' => 'denied for',
@@ -151,13 +139,8 @@ final class PermissionManager
             'actor_type' => $context['actor_type'] ?? null,
             'actor_id' => $context['actor_id'] ?? null,
             'message' => "Permission {$permission} was {$verb} {$subjectType} {$subjectId}.",
-            'changes' => [
-                $permission => ['old' => $old, 'new' => $new],
-            ],
-            'metadata' => array_merge(
-                ['permission' => $permission],
-                $context['metadata'] ?? [],
-            ),
+            'changes' => [$permission => ['old' => $old, 'new' => $new]],
+            'metadata' => array_merge(['permission' => $permission], $context['metadata'] ?? []),
             'ip_address' => $context['ip_address'] ?? null,
             'user_agent' => $context['user_agent'] ?? null,
         ];
