@@ -1,26 +1,16 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-
 use Tihloh\Prefab\Users\User\PrefabUser;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
 use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
-
-class ProjectUser extends PrefabUser implements AuthenticatableUserInterface {
-    public function __construct(int|string $id,?string $name,?string $email,bool $active,private string $hash) { parent::__construct($id,$name,$email,$active); }
-    public function authId(): int|string { return $this->id; }
-    public function authPasswordHash(): ?string { return $this->hash; }
-    public function authIsActive(): bool { return $this->active; }
-}
-$user = new ProjectUser(1,'Demo User','demo@example.com',true,password_hash('password123',PASSWORD_DEFAULT));
-$provider = new class($user) implements AuthUserProviderInterface {
-    public function __construct(private ProjectUser $user) {}
-    public function findByIdentifier(string $identifier): ?AuthenticatableUserInterface { return strcasecmp($identifier,$this->user->email??'')===0?$this->user:null; }
-    public function findById(int|string $id): ?AuthenticatableUserInterface { return (string)$id===(string)$this->user->id?$this->user:null; }
-};
-$auth = new AuthManager($provider,new NativeSessionStore('users_auth_test'));
-$result=$auth->attempt('demo@example.com','password123');
-function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
-?>
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users + Auth Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><nav class="navbar bg-dark navbar-dark"><div class="container"><span class="navbar-brand">Prefab Users + Auth Test</span></div></nav><main class="container py-4"><div class="row g-3"><div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold">User</div><div class="card-body"><div class="h5"><?=e($user->name)?></div><div><?=e($user->email)?></div><span class="badge text-bg-success mt-2">Active</span></div></div></div><div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold">Authentication</div><div class="card-body"><div class="small text-muted">Login result</div><div class="h2 text-<?=$result->success?'success':'danger'?>"><?=$result->success?'SUCCESS':'FAILED'?></div><div>Authenticated ID: <strong><?=e($auth->id()??'—')?></strong></div></div></div></div></div></main></body></html>
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();
+$_SESSION['ua_user']??=['id'=>1,'name'=>'Demo User','email'=>'demo@example.com','active'=>true,'hash'=>password_hash('password123',PASSWORD_DEFAULT)];
+class ProjectUser extends PrefabUser implements AuthenticatableUserInterface{public function __construct(int|string $id,?string $name,?string $email,bool $active,private string $hash){parent::__construct($id,$name,$email,$active);}public function authId():int|string{return $this->id;}public function authPasswordHash():?string{return $this->hash;}public function authIsActive():bool{return $this->active;}}
+$make=fn()=>new ProjectUser($_SESSION['ua_user']['id'],$_SESSION['ua_user']['name'],$_SESSION['ua_user']['email'],$_SESSION['ua_user']['active'],$_SESSION['ua_user']['hash']);
+$provider=new class($make) implements AuthUserProviderInterface{public function __construct(private Closure $make){}public function findByIdentifier(string $i):?AuthenticatableUserInterface{$u=($this->make)();return strcasecmp($i,$u->email??'')===0?$u:null;}public function findById(int|string $id):?AuthenticatableUserInterface{$u=($this->make)();return (string)$id===(string)$u->id?$u:null;}};
+$auth=new AuthManager($provider,new NativeSessionStore('users_auth_test'));
+$msg=null;if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='login'){$r=$auth->attempt($_POST['email']??'',$_POST['password']??'');$msg=$r->success?'Login successful':'Login failed';}elseif($a==='logout'){$auth->logout();$msg='Logged out';}elseif($a==='rename'){$_SESSION['ua_user']['name']=trim($_POST['name']);$msg='User renamed';}}
+$user=$make();function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users + Auth</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><main class="container py-4"><h1 class="h3 mb-4">Users + Auth Interactive Test</h1><?php if($msg):?><div class="alert alert-info"><?=e($msg)?></div><?php endif;?><div class="row g-4"><div class="col-md-6"><div class="card"><div class="card-header">User</div><div class="card-body"><form method="post" class="vstack gap-2"><input type="hidden" name="action" value="rename"><input class="form-control" name="name" value="<?=e($user->name)?>"><input class="form-control" value="<?=e($user->email)?>" disabled><button class="btn btn-outline-primary">Rename</button></form></div></div></div><div class="col-md-6"><div class="card"><div class="card-header">Auth</div><div class="card-body"><p>Status: <span class="badge text-bg-<?=$auth->check()?'success':'secondary'?>"><?=$auth->check()?'Authenticated':'Guest'?></span></p><?php if($auth->check()):?><form method="post"><button name="action" value="logout" class="btn btn-outline-danger w-100">Logout</button></form><?php else:?><form method="post" class="vstack gap-2"><input type="hidden" name="action" value="login"><input class="form-control" name="email" value="demo@example.com"><input class="form-control" type="password" name="password" value="password123"><button class="btn btn-primary">Login</button></form><?php endif;?></div></div></div></div></main></body></html>
