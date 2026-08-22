@@ -29,18 +29,34 @@ final class UserController
             : ['error' => 'User not found', 'status' => 404];
     }
 
-    public function store(array $input): array
+    public function store(array $input, array $context = []): array
     {
-        return ['data' => $this->users->create($input)->toArray(), 'status' => 201];
+        $result = $this->users->create($input, $context);
+
+        return [
+            'data' => $result->data->toArray(),
+            'log' => $result->log,
+            'status' => 201,
+        ];
     }
 
-    public function update(int|string $id, array $input): array
+    public function update(int|string $id, array $input, array $context = []): array
     {
-        return ['data' => $this->users->update($id, $input)->toArray()];
+        $result = $this->users->update($id, $input, $context);
+
+        return [
+            'data' => $result->data->toArray(),
+            'log' => $result->log,
+        ];
     }
 
-    public function destroy(int|string $id): array
+    public function destroy(int|string $id, array $context = []): array
     {
-        return ['deleted' => $this->users->delete($id)];
+        $result = $this->users->delete($id, $context);
+
+        return [
+            'deleted' => $result->data,
+            'log' => $result->log,
+        ];
     }
 }
