@@ -4,16 +4,23 @@ namespace Tihloh\Prefab\Users\Repositories;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\Users\Contracts\UserFactoryInterface;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Mapping\UserMap;
+use Tihloh\Prefab\Users\User\DefaultUserFactory;
 use Tihloh\Prefab\Users\User\PrefabUser;
 
 final class PdoUserProvider implements UserProviderInterface
 {
+    private UserFactoryInterface $factory;
+
     public function __construct(
         private PDO $pdo,
         private UserMap $map,
+        ?UserFactoryInterface $factory = null,
     ) {
+        $this->factory = $factory ?? new DefaultUserFactory();
+
         $this->assertIdentifier($map->table);
         foreach ($map->coreColumns() as $column) {
             $this->assertIdentifier($column);
@@ -129,7 +136,7 @@ final class PdoUserProvider implements UserProviderInterface
             $attributes[$key] = $row[$column] ?? null;
         }
 
-        return new PrefabUser(
+        return $this->factory->make(
             id: $row[$this->map->id],
             name: $this->map->name ? ($row[$this->map->name] ?? null) : null,
             email: $this->map->email ? ($row[$this->map->email] ?? null) : null,
