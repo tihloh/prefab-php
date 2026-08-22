@@ -1,0 +1,14 @@
+{
+  "name": "tihloh/prefab-logs",
+  "description": "Framework-independent structured logging manager for Tihloh Prefab PHP.",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Logs\\": "src/"
+    }
+  }
+}
