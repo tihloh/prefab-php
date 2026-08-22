@@ -1,29 +1,21 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
 use Tihloh\Prefab\Permissions\Services\PermissionManager;
-
-$store = new class implements PermissionStoreInterface {
-    private array $data=[];
-    public function get(string $type,int|string $id): array { return $this->data[$type][(string)$id]??[]; }
-    public function put(string $type,int|string $id,array $permissions): void { $this->data[$type][(string)$id]=$permissions; }
-    public function remove(string $type,int|string $id): void { unset($this->data[$type][(string)$id]); }
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();
+$_SESSION['permissions_test']??=[];
+$store=new class implements PermissionStoreInterface{
+ public function get(string $t,int|string $i):array{return $_SESSION['permissions_test'][$t][(string)$i]??[];}
+ public function put(string $t,int|string $i,array $p):void{$_SESSION['permissions_test'][$t][(string)$i]=$p;}
+ public function remove(string $t,int|string $i):void{unset($_SESSION['permissions_test'][$t][(string)$i]);}
 };
-$defs = new PermissionDefinitions([
-    'documents.view'=>['name'=>'View Documents','description'=>'View documents','default'=>true],
-    'documents.approve'=>['name'=>'Approve Documents','description'=>'Approve documents','default'=>false],
-]);
-$permissions = new PermissionManager($defs,$store);
-$permissions->set('group',10,'documents.approve',true);
-$permissions->set('user',25,'documents.view',false);
-$rows=[];
-foreach ($permissions->definitions() as $id=>$def) $rows[$id]=['definition'=>$def,'result'=>$permissions->resolve(25,$id,[10])];
-function e(mixed $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-?>
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Permissions Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body class="bg-body-tertiary"><nav class="navbar bg-dark navbar-dark"><div class="container"><span class="navbar-brand">Prefab Permissions Test</span></div></nav><main class="container py-4">
-<div class="alert alert-info">Resolving permissions for <strong>User 25</strong> with membership in <strong>Group 10</strong>.</div>
-<div class="card shadow-sm"><div class="card-header fw-semibold">Effective permissions</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Permission</th><th>Description</th><th>Effective</th><th>Source</th></tr></thead><tbody><?php foreach($rows as $id=>$row): $r=$row['result']; ?><tr><td><code><?= e($id) ?></code><div class="fw-semibold"><?= e($row['definition']['name']??$id) ?></div></td><td><?= e($row['definition']['description']??'') ?></td><td><span class="badge text-bg-<?= $r->allowed?'success':'danger' ?>"><?= $r->allowed?'ALLOW':'DENY' ?></span></td><td><?= e($r->source) ?></td></tr><?php endforeach; ?></tbody></table></div></div>
-</main></body></html>
+$permissions=new PermissionManager(new PermissionDefinitions([
+ 'documents.view'=>['name'=>'View Documents','description'=>'View documents','default'=>true],
+ 'documents.approve'=>['name'=>'Approve Documents','description'=>'Approve documents','default'=>false],
+]),$store);
+$uid=(int)($_GET['user']??25);
+if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';$perm=$_POST['permission']??'';if($a==='allow')$permissions->set('user',$uid,$perm,true);elseif($a==='deny')$permissions->set('user',$uid,$perm,false);elseif($a==='clear')$permissions->clear('user',$uid,$perm);elseif($a==='reset'){unset($_SESSION['permissions_test']);header('Location:'.$_SERVER['PHP_SELF']);exit;}}
+$resolved=$permissions->resolvedFor($uid,[]);
+function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Permissions Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><main class="container py-4"><div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3 mb-0">Permissions Interactive Test</h1><form method="post"><button name="action" value="reset" class="btn btn-outline-secondary btn-sm">Reset</button></form></div><div class="card"><div class="card-header">User #<?=e($uid)?></div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Permission</th><th>Description</th><th>Effective</th><th>Source</th><th>Override</th></tr></thead><tbody><?php foreach($permissions->definitions() as $id=>$def):$r=$resolved[$id];?><tr><td><code><?=e($id)?></code></td><td><?=e($def['description']??'')?></td><td><span class="badge text-bg-<?=$r->allowed?'success':'danger'?>"><?=$r->allowed?'ALLOW':'DENY'?></span></td><td><?=e($r->source)?></td><td><form method="post" class="btn-group btn-group-sm"><input type="hidden" name="permission" value="<?=e($id)?>"><button name="action" value="allow" class="btn btn-outline-success">Allow</button><button name="action" value="deny" class="btn btn-outline-danger">Deny</button><button name="action" value="clear" class="btn btn-outline-secondary">Clear</button></form></td></tr><?php endforeach;?></tbody></table></div></div></main></body></html>
