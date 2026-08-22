@@ -1,0 +1,13 @@
+{
+  "name": "tihloh/prefab-auth",
+  "description": "Framework-independent authentication prefab for PHP applications.",
+  "type": "library",
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Auth\\": "src/"
+    }
+  }
+}
