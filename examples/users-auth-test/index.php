@@ -21,7 +21,6 @@ $provider = new class($user) implements AuthUserProviderInterface {
 };
 $auth = new AuthManager($provider,new NativeSessionStore('users_auth_test'));
 $result=$auth->attempt('demo@example.com','password123');
-header('Content-Type:text/plain');
-echo "USERS + AUTH TEST\n\n";
-echo "PrefabUser name: {$user->name}\n";
-echo 'Login: '.($result->success?'SUCCESS':'FAILED')."\n";
+function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users + Auth Test</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><nav class="navbar bg-dark navbar-dark"><div class="container"><span class="navbar-brand">Prefab Users + Auth Test</span></div></nav><main class="container py-4"><div class="row g-3"><div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold">User</div><div class="card-body"><div class="h5"><?=e($user->name)?></div><div><?=e($user->email)?></div><span class="badge text-bg-success mt-2">Active</span></div></div></div><div class="col-md-6"><div class="card shadow-sm"><div class="card-header fw-semibold">Authentication</div><div class="card-body"><div class="small text-muted">Login result</div><div class="h2 text-<?=$result->success?'success':'danger'?>"><?=$result->success?'SUCCESS':'FAILED'?></div><div>Authenticated ID: <strong><?=e($auth->id()??'—')?></strong></div></div></div></div></div></main></body></html>
