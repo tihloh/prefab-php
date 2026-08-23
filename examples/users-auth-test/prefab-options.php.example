@@ -1,0 +1,31 @@
+<?php
+
+/*
+ | USERS + AUTH TEST — PREFAB INITIALIZATION OPTIONS
+ |
+ | Core always performs discovery/integration. In a normal project, initializing
+ | Users can be enough for Auth to initialize itself when it can derive the user
+ | provider/session requirements from available defaults.
+ |
+ | Preferred normal setup:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create(['db' => $pdo]);
+ |
+ | Explicit Users setup only when the project user source is custom:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create([
+ |   //     'modules' => [
+ |   //         'users' => $customUsers,
+ |   //     ],
+ |   // ]);
+ |
+ | Auth should still be discovered/initialized automatically if possible.
+ |
+ | Explicit Auth setup is only needed when Prefab cannot derive it:
+ |
+ |   // 'module_options' => [
+ |   //     'auth' => ['factory' => fn ($prefab, $options) => $customAuth],
+ |   // ]
+ |
+ | Other installed modules such as Logs/Permissions continue to auto-integrate.
+ */
