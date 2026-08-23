@@ -1,10 +1,20 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
 
-use Tihloh\Prefab\Core\Prefab;
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
+
+/*
+ * OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$pdo]);
+ *
+ * Users remains standalone. If no constructor config is given, it uses its
+ * internal defaults first, then shared PrefabConfig resources when needed.
+ * Explicit module config overrides shared config:
+ * $users = new UserManager(['database'=>$otherPdo,'table'=>'employees']);
+ */
 
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();
 $_SESSION['users_test_rows']??=[1=>['id'=>1,'name'=>'Alice','email'=>'alice@example.com','active'=>true]];
@@ -19,34 +29,12 @@ $provider=new class implements UserProviderInterface{
  public function delete(int|string $id):bool{$i=(int)$id;if(!isset($_SESSION['users_test_rows'][$i]))return false;unset($_SESSION['users_test_rows'][$i]);return true;}
 };
 
-$usersManager=new UserManager($provider);
+// This demo explicitly supplies a session-backed provider. No Core/registry setup is required.
+$users=new UserManager($provider);
 
-/*
- * Prefab Core ALWAYS performs module discovery/integration.
- *
- * This standalone test uses a custom session-backed provider, so Users is the
- * one unresolved module and is initialized explicitly. Core will still detect
- * and integrate any other installed/initializable Prefab modules automatically.
- */
-$prefab=Prefab::create([
-    'modules'=>['users'=>$usersManager],
-]);
-$users=$prefab->users();
-
-/*
- * Production/default example when Prefab can initialize Users from project resources:
- *
- * $prefab=Prefab::create(['db'=>$pdo]);
- * $users=$prefab->users();
- *
- * Optional custom factory if your project has a special user source:
- *
- * $prefab=Prefab::create([
- *     'db'=>$pdo,
- *     'module_options'=>[
- *         'users'=>['factory'=>fn($prefab,$options)=>new UserManager(new MyUserProvider(...))],
- *     ],
- * ]);
+/* Normal database-backed use can simply be:
+ * PrefabConfig::set(['database'=>$pdo]);
+ * $users = new UserManager();
  */
 
 $log=null;
