@@ -10,29 +10,21 @@ use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 
 /**
- * Manages one or more named PDO connections for an application.
+ * Standalone manager for one or more named PDO connections.
  *
- * The module is completely standalone. When used with other Prefab modules,
- * those modules may inherit its default or named connection if they were not
- * explicitly configured with their own database resource.
+ * The Database module never requires another Prefab package. When other Prefab
+ * modules are present, it publishes database capabilities that they may consume
+ * automatically when they have no explicit database configuration of their own.
  *
- * A connection may be provided as:
- * - an existing PDO instance, or
- * - a configuration array containing dsn, username, password, and options.
+ * Configuration priority is:
+ * 1. direct DatabaseManager constructor configuration;
+ * 2. PrefabConfig modules.database configuration;
+ * 3. common PrefabConfig configuration;
+ * 4. module internal defaults.
  *
- * Example:
- *
- *     $database = new DatabaseManager([
- *         'default' => 'main',
- *         'connections' => [
- *             'main' => $mainPdo,
- *             'logs' => [
- *                 'dsn' => 'mysql:host=127.0.0.1;dbname=logs;charset=utf8mb4',
- *                 'username' => 'app',
- *                 'password' => 'secret',
- *             ],
- *         ],
- *     ]);
+ * Other modules remain free to ignore this manager and use their own PDO or
+ * repository. Installing Prefab Database therefore adds capability, not a new
+ * dependency requirement.
  */
 final class DatabaseManager
 {
@@ -42,7 +34,9 @@ final class DatabaseManager
     /** @var array<string, PDO|array<string, mixed>> */
     private array $definitions = [];
 
+    /** Direct constructor configuration, local to this instance only. */
     private array $config = [];
+
     private string $defaultConnection = 'default';
 
     /**
@@ -63,52 +57,77 @@ final class DatabaseManager
     }
 
     /**
-     * Resolve all configured connections during module declaration.
+     * Resolve configuration, create connections once, and publish capabilities.
      *
-     * Connections are established here rather than on each feature call so
-     * normal runtime access is a direct array lookup of an already-created PDO.
+     * PrefabRuntime calls this during module declaration/configuration passes.
+     * Normal connection() calls afterwards are direct cached array lookups.
      */
     public function prefabConfigure(): void
     {
-        $config = array_replace(
-            PrefabConfig::moduleConfig('database'),
+        $default = PrefabConfig::resolve(
+            'database',
+            'default',
+            $this->config,
+            $this->defaultConnection,
+        );
+
+        $this->defaultConnection = (string) $default['value'];
+
+        PrefabRuntime::recordResolution(
+            'database',
+            'default_connection',
+            $default['source'],
+            ['name' => $this->defaultConnection],
+        );
+
+        $configuredConnections = PrefabConfig::resolve(
+            'database',
+            'connections',
+            $this->config,
+            [],
+        );
+
+        if (is_array($configuredConnections['value'])) {
+            foreach ($configuredConnections['value'] as $name => $definition) {
+                if ($definition instanceof PDO || is_array($definition)) {
+                    $this->definitions[(string) $name] = $definition;
+                }
+            }
+        }
+
+        /*
+         * Backward-compatible shorthand:
+         *
+         * PrefabConfig::set(['database' => $pdo])
+         *
+         * A PDO at the common `database` key becomes the default connection.
+         */
+        $database = PrefabConfig::resolve(
+            'database',
+            'database',
             $this->config,
         );
 
-        $this->defaultConnection = (string) (
-            $config['default']
-            ?? $this->defaultConnection
-        );
-
-        $configuredConnections = $config['connections'] ?? [];
-
-        if (isset($config['database']) && $config['database'] instanceof PDO) {
-            $configuredConnections[$this->defaultConnection] ??= $config['database'];
-        }
-
-        // The top-level shared Prefab `database` PDO remains compatible with
-        // older projects and becomes the default connection when available.
-        $sharedDatabase = PrefabConfig::get('database');
-
         if (
-            $sharedDatabase instanceof PDO
-            && !isset($configuredConnections[$this->defaultConnection])
+            $database['value'] instanceof PDO
+            && !isset($this->definitions[$this->defaultConnection])
             && !isset($this->connections[$this->defaultConnection])
         ) {
-            $configuredConnections[$this->defaultConnection] = $sharedDatabase;
+            $this->definitions[$this->defaultConnection] = $database['value'];
+
+            PrefabRuntime::recordResolution(
+                'database',
+                'database',
+                $database['source'],
+                ['connection' => $this->defaultConnection],
+            );
         }
 
-        foreach ($configuredConnections as $name => $definition) {
-            $this->definitions[(string) $name] = $definition;
-        }
-
-        // Complete connection creation during configuration. This keeps normal
-        // get()/connection() calls free from repeated discovery/initialization.
-        foreach (array_keys($this->definitions) as $name) {
+        foreach ($this->definitions as $name => $definition) {
             if (!isset($this->connections[$name])) {
                 $this->connections[$name] = $this->createConnection(
                     $name,
-                    $this->definitions[$name],
+                    $definition,
                 );
             }
         }
@@ -117,21 +136,56 @@ final class DatabaseManager
             $this->connections !== []
             && !isset($this->connections[$this->defaultConnection])
         ) {
-            // If no default name was explicitly present, use the first defined
-            // connection as a practical standalone fallback.
             $this->defaultConnection = (string) array_key_first($this->connections);
+
+            PrefabRuntime::recordResolution(
+                'database',
+                'default_connection',
+                'internal-fallback',
+                ['name' => $this->defaultConnection],
+            );
+        }
+
+        if ($this->connections === []) {
+            return;
+        }
+
+        /* Publish the default database capability for unconfigured modules. */
+        PrefabRuntime::provide(
+            'database',
+            $this->default(),
+            'prefab-database',
+            meta: [
+                'connection' => $this->defaultConnection,
+            ],
+        );
+
+        PrefabRuntime::provide(
+            'database_manager',
+            $this,
+            'prefab-database',
+        );
+
+        /* Publish each named connection as its own optional capability. */
+        foreach ($this->connections as $name => $connection) {
+            PrefabRuntime::provide(
+                'database.connection.' . $name,
+                $connection,
+                'prefab-database',
+                meta: ['connection' => $name],
+            );
         }
     }
 
-    /**
-     * Return a named connection, or the configured default when name is null.
-     */
+    /** Return a named connection, or the configured default when name is null. */
     public function connection(?string $name = null): PDO
     {
         $name ??= $this->defaultConnection;
 
         if (!isset($this->connections[$name])) {
-            throw new RuntimeException("Database connection '{$name}' is not configured.");
+            throw new RuntimeException(
+                "Database connection '{$name}' is not configured.",
+            );
         }
 
         return $this->connections[$name];
@@ -155,7 +209,7 @@ final class DatabaseManager
         return $this->defaultConnection;
     }
 
-    /** Determine whether a named connection is already available. */
+    /** Determine whether a named connection is available. */
     public function has(string $name): bool
     {
         return isset($this->connections[$name]);
@@ -168,10 +222,7 @@ final class DatabaseManager
     }
 
     /**
-     * Add or replace a connection at runtime.
-     *
-     * This is useful for project-defined connections discovered after startup,
-     * while still keeping normal connection access cached afterward.
+     * Add or replace a named connection.
      *
      * @param PDO|array<string, mixed> $definition
      */
@@ -180,6 +231,22 @@ final class DatabaseManager
         $this->definitions[$name] = $definition;
         $this->connections[$name] = $this->createConnection($name, $definition);
 
+        PrefabRuntime::provide(
+            'database.connection.' . $name,
+            $this->connections[$name],
+            'prefab-database',
+            meta: ['connection' => $name],
+        );
+
+        if ($name === $this->defaultConnection) {
+            PrefabRuntime::provide(
+                'database',
+                $this->connections[$name],
+                'prefab-database',
+                meta: ['connection' => $name],
+            );
+        }
+
         return $this;
     }
 
@@ -187,17 +254,31 @@ final class DatabaseManager
     public function useDefault(string $name): self
     {
         if (!$this->has($name)) {
-            throw new InvalidArgumentException("Unknown database connection '{$name}'.");
+            throw new InvalidArgumentException(
+                "Unknown database connection '{$name}'.",
+            );
         }
 
         $this->defaultConnection = $name;
 
+        PrefabRuntime::provide(
+            'database',
+            $this->connections[$name],
+            'prefab-database',
+            meta: ['connection' => $name],
+        );
+
+        PrefabRuntime::recordResolution(
+            'database',
+            'default_connection',
+            'runtime-explicit',
+            ['name' => $name],
+        );
+
         return $this;
     }
 
-    /**
-     * Verify a connection by executing a lightweight query.
-     */
+    /** Verify a connection by executing a lightweight query. */
     public function ping(?string $name = null): bool
     {
         try {
@@ -209,12 +290,7 @@ final class DatabaseManager
     }
 
     /**
-     * Expose database capabilities to compatible Prefab modules.
-     *
-     * Supported resources:
-     * - database: default PDO connection
-     * - connection:<name>: a specific named PDO connection
-     * - database_manager: this manager instance
+     * Backward-compatible direct resource access used by older Prefab modules.
      */
     public function prefabResource(string $name): mixed
     {
@@ -232,6 +308,12 @@ final class DatabaseManager
         }
 
         return null;
+    }
+
+    /** Explain how this module resolved its configuration/resources. */
+    public function explain(): array
+    {
+        return PrefabRuntime::explain('database');
     }
 
     /**
@@ -254,9 +336,11 @@ final class DatabaseManager
         $username = isset($definition['username'])
             ? (string) $definition['username']
             : null;
+
         $password = isset($definition['password'])
             ? (string) $definition['password']
             : null;
+
         $options = is_array($definition['options'] ?? null)
             ? $definition['options']
             : [];
