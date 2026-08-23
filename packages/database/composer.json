@@ -11,7 +11,8 @@
             "Tihloh\\Prefab\\Database\\": "src/"
         },
         "files": [
-            "src/prefab.php"
+            "src/prefab.php",
+            "src/database.php"
         ]
     }
 }
