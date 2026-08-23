@@ -2,16 +2,18 @@
 
 Framework-independent user abstraction and mapping for existing PHP projects.
 
+Prefab Users is standalone. It does not require Prefab Database, Auth, Permissions, Logs, Laravel, or another framework package.
+
 ## Goals
 
 - Project keeps ownership of its own `users`, `employees`, or `accounts` table.
 - Prefab maps that structure into one reusable `PrefabUser` object.
 - Extra project fields remain available as dynamic attributes.
 - Projects may return their own `PrefabUser` subclass through `UserFactoryInterface`.
-- No Laravel dependency.
-- HTTP controllers and framework integrations sit on top of the same `UserManager`.
+- Database-backed usage accepts plain PDO or Prefab's `DatabaseInterface`.
+- Compatible Prefab modules may integrate automatically without becoming dependencies.
 
-## Basic usage
+## Quick standalone usage
 
 ```php
 use Tihloh\Prefab\Users\Mapping\UserMap;
@@ -33,15 +35,86 @@ $map = new UserMap(
 );
 
 $users = new UserManager(
-    new PdoUserProvider($pdo, $map)
+    new PdoUserProvider($pdo, $map),
 );
 
 $user = $users->find(25);
-
-echo $user->name;
-echo $user->office;
-echo $user->position;
 ```
+
+The historical `PdoUserProvider` class name is retained for compatibility, but the provider now consumes `DatabaseInterface` internally. Passing PDO is automatically adapted.
+
+## Automatic database configuration
+
+A project may configure Users directly:
+
+```php
+$users = new UserManager([
+    'database' => $pdo,
+    'map' => $map,
+]);
+```
+
+or centrally:
+
+```php
+PrefabConfig::set([
+    'database' => $pdo,
+
+    'modules' => [
+        'users' => [
+            'map' => $map,
+        ],
+    ],
+]);
+
+$users = new UserManager();
+```
+
+When Prefab Database exists, Users can inherit its default or a named connection automatically:
+
+```php
+$database = new DatabaseManager([
+    'default' => 'main',
+    'connections' => [
+        'main' => $mainPdo,
+    ],
+]);
+
+$users = new UserManager();
+```
+
+The database resolution priority is:
+
+```text
+1. direct Users database / connection
+2. Users-specific PrefabConfig
+3. common PrefabConfig
+4. compatible database capability
+5. clear error if a database-backed provider is still unresolved
+```
+
+## Database abstraction
+
+Prefab Users does not require a concrete database package. Its built-in database provider accepts either:
+
+```text
+PDO
+DatabaseInterface
+```
+
+Plain PDO is normalized automatically:
+
+```text
+PDO
+ ↓
+PdoDatabaseAdapter
+ ↓
+DatabaseInterface
+ ↓
+PdoUserProvider
+```
+
+This allows future framework adapters to supply the same contract without changing UserManager.
 
 ## CRUD
 
@@ -72,7 +145,26 @@ class Employee extends PrefabUser
 }
 ```
 
-Then implement `UserFactoryInterface` and pass the factory to `PdoUserProvider`. This keeps the provider/database mapping reusable while allowing project-specific user behavior.
+Then implement `UserFactoryInterface` and pass the factory to the database provider. This keeps the project-owned schema reusable while allowing project-specific user behavior.
+
+## Automatic cooperation
+
+When compatible modules are present, Users may automatically:
+
+- provide `user_provider` for Prefab Auth;
+- publish its resolved database as a low-priority fallback capability;
+- use Prefab Logs for activity recording;
+- use Prefab Auth as the current actor provider.
+
+None of those modules are required.
+
+Use:
+
+```php
+$users->explain();
+```
+
+to inspect how Users resolved its provider, database, table, logger, and actor integrations.
 
 ## HTTP
 

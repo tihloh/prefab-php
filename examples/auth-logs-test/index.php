@@ -1,0 +1,34 @@
+<?php
+require __DIR__.'/vendor/autoload.php';
+
+use Tihloh\Prefab\PrefabConfig;
+use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
+use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
+use Tihloh\Prefab\Auth\Services\AuthManager;
+use Tihloh\Prefab\Auth\Session\NativeSessionStore;
+use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
+use Tihloh\Prefab\Logs\DTOs\LogEntry;
+use Tihloh\Prefab\Logs\Services\LogManager;
+
+/* OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$mainPdo,'modules'=>['logs'=>['database'=>$logPdo]]]);
+ */
+
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();$_SESSION['al_logs']??=[];
+$user=new class implements AuthenticatableUserInterface{public function authId():int|string{return 1;}public function authPasswordHash():?string{return password_hash('password123',PASSWORD_DEFAULT);}public function authIsActive():bool{return true;}};
+$users=new class($user) implements AuthUserProviderInterface{public function __construct(private AuthenticatableUserInterface $u){}public function findByIdentifier(string $i):?AuthenticatableUserInterface{return $i==='demo@example.com'?$this->u:null;}public function findById(int|string $id):?AuthenticatableUserInterface{return (string)$id==='1'?$this->u:null;}};
+$repo=new class implements LogRepositoryInterface{public function record(LogEntry $e):int|string{$id=count($_SESSION['al_logs'])+1;$_SESSION['al_logs'][$id]=['id'=>$id]+$e->toArray();return $id;}public function find(int|string $id):?array{return $_SESSION['al_logs'][(int)$id]??null;}public function recent(int $limit=100,int $offset=0):array{return array_slice(array_values(array_reverse($_SESSION['al_logs'],true)),$offset,$limit);}public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['al_logs'],fn($x)=>$x['subject_type']===$t&&(string)$x['subject_id']===(string)$id));}public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['al_logs'],fn($x)=>(string)($x['actor_id']??'')===(string)$id));}};
+
+$auth=new AuthManager($users,new NativeSessionStore('auth_logs_test'));
+$logs=new LogManager($repo);
+
+/*
+ * No manual Auth -> Logs wiring. When Logs is declared, the module declarations
+ * are reconfigured once and Auth activity is sent directly to the resolved Logs
+ * instance. Normal login/logout calls do not rediscover modules.
+ */
+
+$msg=null;
+if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='login'){$r=$auth->attempt($_POST['email']??'',$_POST['password']??'');$msg=$r->success?'Login successful':'Login failed';}elseif($a==='logout'){$auth->logout();$msg='Logged out';}elseif($a==='clear_logs'){$_SESSION['al_logs']=[];}}
+$rows=$logs->recent();function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Auth + Logs</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><main class="container py-4"><h1 class="h3 mb-4">Auth + Logs Interactive Test</h1><?php if($msg):?><div class="alert alert-info"><?=e($msg)?></div><?php endif;?><div class="row g-4"><div class="col-md-4"><div class="card"><div class="card-header">Auth</div><div class="card-body"><p>Status: <span class="badge text-bg-<?=$auth->check()?'success':'secondary'?>"><?=$auth->check()?'Authenticated':'Guest'?></span></p><?php if($auth->check()):?><form method="post"><button name="action" value="logout" class="btn btn-outline-danger w-100">Logout</button></form><?php else:?><form method="post" class="vstack gap-2"><input type="hidden" name="action" value="login"><input class="form-control" name="email" value="demo@example.com"><input class="form-control" type="password" name="password" value="password123"><button class="btn btn-primary">Login</button></form><?php endif;?></div></div></div><div class="col-md-8"><div class="card"><div class="card-header d-flex justify-content-between">Auth Logs <form method="post"><button name="action" value="clear_logs" class="btn btn-sm btn-outline-secondary">Clear</button></form></div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>#</th><th>Action</th><th>User</th><th>Message</th></tr></thead><tbody><?php foreach($rows as $r):?><tr><td><?=e($r['id'])?></td><td><code><?=e($r['action'])?></code></td><td><?=e($r['subject_id']??'—')?></td><td><?=e($r['message']??'')?></td></tr><?php endforeach;?></tbody></table></div></div></div></div></main></body></html>

@@ -2,26 +2,334 @@
 
 namespace Tihloh\Prefab\Permissions\Services;
 
+use PDO;
+use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
+use Tihloh\Prefab\PrefabConfig;
+use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
 use Tihloh\Prefab\Permissions\DTOs\OperationResult;
 use Tihloh\Prefab\Permissions\DTOs\PermissionResult;
+use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
 
+/**
+ * Main authorization service for Prefab Permissions.
+ *
+ * Permissions remains standalone. Storage may come from a custom store, plain
+ * PDO, Prefab Database, or any framework adapter implementing
+ * DatabaseInterface. Existing PDO configuration is normalized automatically.
+ */
 final class PermissionManager
 {
-    public function __construct(
-        private PermissionDefinitions $definitions,
-        private PermissionStoreInterface $store,
-    ) {}
+    private ?PermissionDefinitions $definitions = null;
+    private ?PermissionStoreInterface $store = null;
+    private ?DatabaseInterface $database = null;
+    private array $config = [];
+    private ?object $context = null;
+    private ?object $events = null;
 
-    public function can(PermissionSubjectInterface|int|string $subject, string $permission, array $groupIds = []): bool
-    {
-        return $this->resolve($subject, $permission, $groupIds)->allowed;
+    public function __construct(
+        PermissionDefinitions|array|string|null $definitions = null,
+        ?PermissionStoreInterface $store = null,
+    ) {
+        if ($definitions instanceof PermissionDefinitions) {
+            $this->definitions = $definitions;
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'definitions',
+                'module-local',
+            );
+        } elseif (is_string($definitions)) {
+            $this->config = ['definitions' => $definitions];
+        } elseif (is_array($definitions)) {
+            $this->config = $definitions;
+        }
+
+        if ($store) {
+            $this->store = $store;
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'store',
+                'module-local',
+                ['provider' => $store::class],
+            );
+        }
+
+        PrefabRuntime::register('permissions', $this);
     }
 
-    public function resolve(PermissionSubjectInterface|int|string $subject, string $permission, array $groupIds = []): PermissionResult
+    /** Resolve definitions/storage and publish reusable capabilities. */
+    public function prefabConfigure(): void
     {
-        if (!$this->definitions->has($permission)) {
+        if (!$this->definitions) {
+            $definitions = PrefabConfig::resolve(
+                'permissions',
+                'definitions',
+                $this->config,
+            );
+
+            $source = $definitions['value'];
+            $this->definitions = $source instanceof PermissionDefinitions
+                || is_array($source)
+                || is_string($source)
+                    ? PermissionDefinitions::from($source)
+                    : new PermissionDefinitions([]);
+
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'definitions',
+                $definitions['source'],
+                ['count' => count($this->definitions->all())],
+            );
+        }
+
+        if (!$this->store) {
+            $store = PrefabConfig::resolve(
+                'permissions',
+                'store',
+                $this->config,
+            );
+
+            if ($store['value'] instanceof PermissionStoreInterface) {
+                $this->store = $store['value'];
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'store',
+                    $store['source'],
+                    ['provider' => $this->store::class],
+                );
+            }
+        }
+
+        if (!$this->store) {
+            [$database, $source, $details] = $this->resolveDatabase();
+
+            if ($database) {
+                $this->database = $database;
+                $table = PrefabConfig::resolve(
+                    'permissions',
+                    'table',
+                    $this->config,
+                    'prefab_subject_permissions',
+                );
+
+                $this->store = new PdoPermissionStore(
+                    $database,
+                    (string) $table['value'],
+                );
+
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'database',
+                    $source,
+                    $details,
+                );
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'table',
+                    $table['source'],
+                    ['table' => (string) $table['value']],
+                );
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'store',
+                    'database-store',
+                    ['provider' => PdoPermissionStore::class],
+                );
+            }
+        }
+
+        if ($this->store) {
+            PrefabRuntime::provide(
+                'permission_store',
+                $this->store,
+                'prefab-permissions',
+            );
+        }
+
+        if ($this->database) {
+            PrefabRuntime::provide(
+                'database',
+                $this->database,
+                'prefab-permissions',
+                priority: -20,
+                meta: [
+                    'role' => 'permissions-database',
+                    'driver' => $this->database->driver(),
+                ],
+            );
+        }
+    }
+
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
+    private function resolveDatabase(): array
+    {
+        $localDatabase = $this->asDatabase(
+            $this->config['database'] ?? null,
+        );
+
+        if ($localDatabase) {
+            return [
+                $localDatabase,
+                'module-local',
+                ['driver' => $localDatabase->driver()],
+            ];
+        }
+
+        if (
+            isset($this->config['connection'])
+            && is_string($this->config['connection'])
+        ) {
+            return $this->namedConnection(
+                $this->config['connection'],
+                'module-local',
+            );
+        }
+
+        $module = PrefabConfig::moduleOnly('permissions');
+        $moduleDatabase = $this->asDatabase(
+            $module['database'] ?? null,
+        );
+
+        if ($moduleDatabase) {
+            return [
+                $moduleDatabase,
+                'prefab-config-module',
+                ['driver' => $moduleDatabase->driver()],
+            ];
+        }
+
+        if (
+            isset($module['connection'])
+            && is_string($module['connection'])
+        ) {
+            return $this->namedConnection(
+                $module['connection'],
+                'prefab-config-module',
+            );
+        }
+
+        $common = $this->asDatabase(PrefabConfig::get('database'));
+
+        if ($common) {
+            return [
+                $common,
+                'prefab-config-common',
+                ['driver' => $common->driver()],
+            ];
+        }
+
+        $entry = PrefabRuntime::resolveEntry('database');
+        $capability = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
+
+        if ($entry && $capability) {
+            return [
+                $capability,
+                'prefab-capability',
+                [
+                    'provider' => $entry['provider'],
+                    ...($entry['meta'] ?? []),
+                ],
+            ];
+        }
+
+        return [null, 'unresolved', []];
+    }
+
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
+    private function namedConnection(string $name, string $source): array
+    {
+        $entry = PrefabRuntime::resolveEntry(
+            'database.connection.' . $name,
+        );
+        $database = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
+
+        if ($entry && $database) {
+            return [
+                $database,
+                $source,
+                [
+                    'provider' => $entry['provider'],
+                    'connection' => $name,
+                    'driver' => $database->driver(),
+                ],
+            ];
+        }
+
+        return [
+            null,
+            $source,
+            [
+                'connection' => $name,
+                'unresolved' => true,
+            ],
+        ];
+    }
+
+    private function asDatabase(mixed $value): ?DatabaseInterface
+    {
+        if ($value instanceof DatabaseInterface) {
+            return $value;
+        }
+
+        return $value instanceof PDO
+            ? new PdoDatabaseAdapter($value)
+            : null;
+    }
+
+    public function prefabResource(string $name): mixed
+    {
+        return match ($name) {
+            'database' => $this->database,
+            'permission_store' => $this->store,
+            default => null,
+        };
+    }
+
+    public function explain(): array
+    {
+        return PrefabRuntime::explain('permissions');
+    }
+
+    public function useContext(object $context): self
+    {
+        $this->context = $context;
+        return $this;
+    }
+
+    public function useEvents(object $events): self
+    {
+        $this->events = $events;
+        return $this;
+    }
+
+    public function can(
+        PermissionSubjectInterface|int|string $subject,
+        string $permission,
+        array $groupIds = [],
+    ): bool {
+        return $this->resolve(
+            $subject,
+            $permission,
+            $groupIds,
+        )->allowed;
+    }
+
+    public function resolve(
+        PermissionSubjectInterface|int|string $subject,
+        string $permission,
+        array $groupIds = [],
+    ): PermissionResult {
+        $definitions = $this->defs();
+        $store = $this->store();
+
+        if (!$definitions->has($permission)) {
             return new PermissionResult(false, 'unknown');
         }
 
@@ -32,115 +340,256 @@ final class PermissionManager
             $subjectId = $subject;
         }
 
-        $userPermissions = $this->store->get('user', $subjectId);
-        if (array_key_exists($permission, $userPermissions)) {
-            return new PermissionResult((bool) $userPermissions[$permission], 'user');
+        $userOverrides = $store->get('user', $subjectId);
+
+        if (array_key_exists($permission, $userOverrides)) {
+            return new PermissionResult(
+                (bool) $userOverrides[$permission],
+                'user',
+            );
         }
 
-        $allows = [];
-        $denies = [];
+        $allowingGroups = [];
+        $denyingGroups = [];
+
         foreach ($groupIds as $groupId) {
-            $groupPermissions = $this->store->get('group', $groupId);
-            if (!array_key_exists($permission, $groupPermissions)) {
+            $groupOverrides = $store->get('group', $groupId);
+
+            if (!array_key_exists($permission, $groupOverrides)) {
                 continue;
             }
-            if ($groupPermissions[$permission] === true) {
-                $allows[] = $groupId;
+
+            if ($groupOverrides[$permission] === true) {
+                $allowingGroups[] = $groupId;
             } else {
-                $denies[] = $groupId;
+                $denyingGroups[] = $groupId;
             }
         }
 
-        if ($allows !== []) {
-            return new PermissionResult(true, 'group', $allows, $denies);
+        if ($allowingGroups !== []) {
+            return new PermissionResult(
+                true,
+                'group',
+                $allowingGroups,
+                $denyingGroups,
+            );
         }
-        if ($denies !== []) {
-            return new PermissionResult(false, 'group', $denies, $denies);
+
+        if ($denyingGroups !== []) {
+            return new PermissionResult(
+                false,
+                'group',
+                $denyingGroups,
+                $denyingGroups,
+            );
         }
 
-        return new PermissionResult($this->definitions->default($permission), 'default');
+        return new PermissionResult(
+            $definitions->default($permission),
+            'default',
+        );
     }
 
-    public function overridesFor(string $subjectType, int|string $subjectId): array
+    public function overridesFor(string $type, int|string $id): array
     {
-        return $this->store->get($subjectType, $subjectId);
+        return $this->store()->get($type, $id);
     }
 
-    public function resolvedFor(PermissionSubjectInterface|int|string $subject, array $groupIds = []): array
-    {
-        $resolved = [];
-        foreach (array_keys($this->definitions->all()) as $permission) {
-            $resolved[$permission] = $this->resolve($subject, $permission, $groupIds);
+    /** @return array<string, PermissionResult> */
+    public function resolvedFor(
+        PermissionSubjectInterface|int|string $subject,
+        array $groups = [],
+    ): array {
+        $results = [];
+
+        foreach (array_keys($this->defs()->all()) as $permission) {
+            $results[$permission] = $this->resolve(
+                $subject,
+                $permission,
+                $groups,
+            );
         }
-        return $resolved;
+
+        return $results;
     }
 
-    public function set(string $subjectType, int|string $subjectId, string $permission, bool $value, array $context = []): OperationResult
-    {
-        $permissions = $this->store->get($subjectType, $subjectId);
-        $old = array_key_exists($permission, $permissions) ? (bool)$permissions[$permission] : null;
-        $permissions[$permission] = $value;
-        $this->store->put($subjectType, $subjectId, $this->definitions->validateOverrides($permissions));
+    public function set(
+        string $type,
+        int|string $id,
+        string $permission,
+        bool $value,
+        array $context = [],
+    ): OperationResult {
+        $store = $this->store();
+        $definitions = $this->defs();
+        $overrides = $store->get($type, $id);
+        $old = array_key_exists($permission, $overrides)
+            ? (bool) $overrides[$permission]
+            : null;
 
-        return new OperationResult($value, $this->logPayload(
-            $value ? 'permission.granted' : 'permission.denied', $subjectType, $subjectId,
-            $permission, $old, $value, $context
-        ));
+        $overrides[$permission] = $value;
+        $store->put(
+            $type,
+            $id,
+            $definitions->validateOverrides($overrides),
+        );
+
+        return $this->result(
+            $value,
+            $this->logPayload(
+                $value
+                    ? 'permission.granted'
+                    : 'permission.denied',
+                $type,
+                $id,
+                $permission,
+                $old,
+                $value,
+                $context,
+            ),
+        );
     }
 
-    public function clear(string $subjectType, int|string $subjectId, string $permission, array $context = []): OperationResult
-    {
-        $permissions = $this->store->get($subjectType, $subjectId);
-        $old = array_key_exists($permission, $permissions) ? (bool)$permissions[$permission] : null;
-        unset($permissions[$permission]);
-        if ($permissions === []) {
-            $this->store->remove($subjectType, $subjectId);
+    public function clear(
+        string $type,
+        int|string $id,
+        string $permission,
+        array $context = [],
+    ): OperationResult {
+        $store = $this->store();
+        $overrides = $store->get($type, $id);
+        $old = array_key_exists($permission, $overrides)
+            ? (bool) $overrides[$permission]
+            : null;
+
+        unset($overrides[$permission]);
+
+        if ($overrides === []) {
+            $store->remove($type, $id);
         } else {
-            $this->store->put($subjectType, $subjectId, $permissions);
+            $store->put($type, $id, $overrides);
         }
 
-        return new OperationResult(true, $this->logPayload(
-            'permission.cleared', $subjectType, $subjectId, $permission, $old, null, $context
-        ));
+        return $this->result(
+            true,
+            $this->logPayload(
+                'permission.cleared',
+                $type,
+                $id,
+                $permission,
+                $old,
+                null,
+                $context,
+            ),
+        );
     }
 
-    public function clearAll(string $subjectType, int|string $subjectId): void
+    public function clearAll(string $type, int|string $id): void
     {
-        $this->store->remove($subjectType, $subjectId);
+        $this->store()->remove($type, $id);
     }
 
     public function definitions(): array
     {
-        return $this->definitions->all();
+        return $this->defs()->all();
     }
 
     public function definition(string $permission): ?array
     {
-        return $this->definitions->get($permission);
+        return $this->defs()->get($permission);
     }
 
     public function defined(string $permission): bool
     {
-        return $this->definitions->has($permission);
+        return $this->defs()->has($permission);
     }
 
-    private function logPayload(string $action, string $subjectType, int|string $subjectId, string $permission, ?bool $old, ?bool $new, array $context): array
+    private function defs(): PermissionDefinitions
     {
+        if (!$this->definitions) {
+            $this->prefabConfigure();
+        }
+
+        return $this->definitions
+            ?? new PermissionDefinitions([]);
+    }
+
+    private function store(): PermissionStoreInterface
+    {
+        if (!$this->store) {
+            throw new RuntimeException(
+                'Prefab Permissions needs a store or database capability/configuration.',
+            );
+        }
+
+        return $this->store;
+    }
+
+    private function result(mixed $data, array $log): OperationResult
+    {
+        if ($this->events && method_exists($this->events, 'dispatch')) {
+            $this->events->dispatch('prefab.log', $log);
+        } else {
+            PrefabRuntime::emitLog($log);
+        }
+
+        return new OperationResult($data, $log);
+    }
+
+    private function logPayload(
+        string $action,
+        string $type,
+        int|string $id,
+        string $permission,
+        ?bool $old,
+        ?bool $new,
+        array $context,
+    ): array {
+        $base = (
+            $this->context
+            && method_exists($this->context, 'logContext')
+        ) ? $this->context->logContext() : [];
+
+        if (!array_key_exists('actor_id', $base)) {
+            $base['actor_id'] = PrefabRuntime::actorId();
+        }
+
+        if (
+            !array_key_exists('actor_type', $base)
+            && ($base['actor_id'] ?? null) !== null
+        ) {
+            $base['actor_type'] = 'user';
+        }
+
+        $context = array_replace($base, $context);
         $verb = match ($action) {
             'permission.granted' => 'granted to',
             'permission.denied' => 'denied for',
             default => 'cleared from',
         };
+        $definition = $this->defs()->get($permission);
+        $permissionName = $definition['name'] ?? null;
 
         return [
             'action' => $action,
-            'subject_type' => $subjectType,
-            'subject_id' => $subjectId,
+            'subject_type' => $type,
+            'subject_id' => $id,
             'actor_type' => $context['actor_type'] ?? null,
             'actor_id' => $context['actor_id'] ?? null,
-            'message' => "Permission {$permission} was {$verb} {$subjectType} {$subjectId}.",
-            'changes' => [$permission => ['old' => $old, 'new' => $new]],
-            'metadata' => array_merge(['permission' => $permission], $context['metadata'] ?? []),
+            'message' => "Permission {$permission} was {$verb} {$type} {$id}.",
+            'changes' => [
+                $permission => [
+                    'old' => $old,
+                    'new' => $new,
+                ],
+            ],
+            'metadata' => array_merge(
+                [
+                    'permission' => $permission,
+                    'permission_name' => $permissionName,
+                ],
+                $context['metadata'] ?? [],
+            ),
             'ip_address' => $context['ip_address'] ?? null,
             'user_agent' => $context['user_agent'] ?? null,
         ];

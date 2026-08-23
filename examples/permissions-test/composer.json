@@ -1,0 +1,6 @@
+{
+  "name":"tihloh/prefab-permissions-test","type":"project",
+  "repositories":[{"type":"path","url":"../../packages/permissions","options":{"symlink":true}}],
+  "require":{"php":">=8.1","tihloh/prefab-permissions":"@dev"},
+  "minimum-stability":"dev","prefer-stable":true
+}

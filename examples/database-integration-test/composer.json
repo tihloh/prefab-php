@@ -1,0 +1,23 @@
+{
+  "name": "tihloh/prefab-database-integration-test",
+  "description": "Real SQLite example demonstrating standalone Prefab modules, three configuration levels, auto-integration, permission inheritance, and a separate logs database.",
+  "type": "project",
+  "repositories": [
+    {"type": "path", "url": "../../packages/database", "options": {"symlink": true}},
+    {"type": "path", "url": "../../packages/users", "options": {"symlink": true}},
+    {"type": "path", "url": "../../packages/auth", "options": {"symlink": true}},
+    {"type": "path", "url": "../../packages/permissions", "options": {"symlink": true}},
+    {"type": "path", "url": "../../packages/logs", "options": {"symlink": true}}
+  ],
+  "require": {
+    "php": ">=8.2",
+    "ext-pdo": "*",
+    "tihloh/prefab-database": "@dev",
+    "tihloh/prefab-users": "@dev",
+    "tihloh/prefab-auth": "@dev",
+    "tihloh/prefab-permissions": "@dev",
+    "tihloh/prefab-logs": "@dev"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
