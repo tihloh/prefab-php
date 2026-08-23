@@ -4,6 +4,17 @@ namespace Tihloh\Prefab;
 
 use RuntimeException;
 
+/*
+ |--------------------------------------------------------------------------
+ | Prefab interoperability bootstrap
+ |--------------------------------------------------------------------------
+ |
+ | This generated copy is embedded into every standalone package. This file is
+ | the canonical development source used by tools/sync-prefab-bootstrap.php.
+ |
+ | There is no required Core package. The first Prefab package Composer loads
+ | defines these guarded classes and the remaining packages reuse them.
+ */
 if (!class_exists(PrefabConfig::class, false)) {
     final class PrefabConfig
     {
@@ -30,11 +41,27 @@ if (!class_exists(PrefabConfig::class, false)) {
             return self::resolve($module, $key, default: $default)['value'];
         }
 
-        public static function resolve(string $module, string $key, array $local = [], mixed $default = null): array
-        {
-            if (array_key_exists($key, $local)) return ['value' => $local[$key], 'source' => 'module-local'];
-            if (isset(self::$modules[$module]) && array_key_exists($key, self::$modules[$module])) return ['value' => self::$modules[$module][$key], 'source' => 'prefab-config-module'];
-            if (array_key_exists($key, self::$common)) return ['value' => self::$common[$key], 'source' => 'prefab-config-common'];
+        /**
+         * Resolve the three developer-facing configuration levels:
+         * direct module config -> module PrefabConfig -> common PrefabConfig.
+         *
+         * @return array{value:mixed,source:string}
+         */
+        public static function resolve(
+            string $module,
+            string $key,
+            array $local = [],
+            mixed $default = null,
+        ): array {
+            if (array_key_exists($key, $local)) {
+                return ['value' => $local[$key], 'source' => 'module-local'];
+            }
+            if (isset(self::$modules[$module]) && array_key_exists($key, self::$modules[$module])) {
+                return ['value' => self::$modules[$module][$key], 'source' => 'prefab-config-module'];
+            }
+            if (array_key_exists($key, self::$common)) {
+                return ['value' => self::$common[$key], 'source' => 'prefab-config-common'];
+            }
             return ['value' => $default, 'source' => 'internal-default'];
         }
 
@@ -79,36 +106,65 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$modules[$name] ?? null;
         }
 
-        public static function provide(string $capability, mixed $value, string $provider, int $priority = 0, array $meta = []): void
-        {
+        /** Publish one optional capability without creating a package dependency. */
+        public static function provide(
+            string $capability,
+            mixed $value,
+            string $provider,
+            int $priority = 0,
+            array $meta = [],
+        ): void {
             if ($value === null) {
                 unset(self::$capabilities[$capability][$provider]);
                 return;
             }
-            self::$capabilities[$capability][$provider] = ['value' => $value, 'provider' => $provider, 'priority' => $priority, 'meta' => $meta];
+            self::$capabilities[$capability][$provider] = [
+                'value' => $value,
+                'provider' => $provider,
+                'priority' => $priority,
+                'meta' => $meta,
+            ];
         }
 
-        public static function resolveEntry(string $capability, ?string $preferredProvider = null): ?array
-        {
+        /** Resolve one capability and fail instead of guessing on equal-priority conflicts. */
+        public static function resolveEntry(
+            string $capability,
+            ?string $preferredProvider = null,
+        ): ?array {
             $providers = self::$capabilities[$capability] ?? [];
-            if ($preferredProvider !== null) return $providers[$preferredProvider] ?? null;
-            if ($providers === []) return null;
+            if ($preferredProvider !== null) {
+                return $providers[$preferredProvider] ?? null;
+            }
+            if ($providers === []) {
+                return null;
+            }
             uasort($providers, fn (array $a, array $b): int => $b['priority'] <=> $a['priority']);
             $top = reset($providers);
             $ties = array_filter($providers, fn (array $entry): bool => $entry['priority'] === $top['priority']);
             if (count($ties) > 1) {
-                throw new RuntimeException("Ambiguous Prefab capability '{$capability}'. Providers with equal priority: " . implode(', ', array_keys($ties)) . '. Configure the consuming module explicitly.');
+                throw new RuntimeException(
+                    "Ambiguous Prefab capability '{$capability}'. Providers with equal priority: "
+                    . implode(', ', array_keys($ties))
+                    . '. Configure the consuming module explicitly.',
+                );
             }
             return $top;
         }
 
-        public static function resolve(string $capability, ?string $preferredProvider = null): mixed
-        {
+        public static function resolve(
+            string $capability,
+            ?string $preferredProvider = null,
+        ): mixed {
             return self::resolveEntry($capability, $preferredProvider)['value'] ?? null;
         }
 
-        public static function recordResolution(string $module, string $resource, string $source, array $details = []): void
-        {
+        /** Record why a setting/resource resolved the way it did. */
+        public static function recordResolution(
+            string $module,
+            string $resource,
+            string $source,
+            array $details = [],
+        ): void {
             self::$resolutions[$module][$resource] = ['source' => $source, ...$details];
         }
 
@@ -117,30 +173,45 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$resolutions[$module] ?? [];
         }
 
+        /** Return diagnostics without exposing actual capability object values. */
         public static function inspect(): array
         {
             $capabilities = [];
             foreach (self::$capabilities as $name => $providers) {
                 foreach ($providers as $provider => $entry) {
-                    $capabilities[$name][$provider] = ['priority' => $entry['priority'], 'meta' => $entry['meta']];
+                    $capabilities[$name][$provider] = [
+                        'priority' => $entry['priority'],
+                        'meta' => $entry['meta'],
+                    ];
                 }
             }
-            return ['ready' => self::$ready, 'modules' => array_map(fn (object $module): string => $module::class, self::$modules), 'capabilities' => $capabilities, 'resolutions' => self::$resolutions];
+            return [
+                'ready' => self::$ready,
+                'modules' => array_map(fn (object $module): string => $module::class, self::$modules),
+                'capabilities' => $capabilities,
+                'resolutions' => self::$resolutions,
+            ];
         }
 
+        /** Reconfigure only while modules are being declared, not on feature calls. */
         public static function configureAll(): void
         {
-            if (self::$configuring) return;
+            if (self::$configuring) {
+                return;
+            }
             self::$configuring = true;
             try {
                 foreach (self::$modules as $module) {
-                    if (method_exists($module, 'prefabConfigure')) $module->prefabConfigure();
+                    if (method_exists($module, 'prefabConfigure')) {
+                        $module->prefabConfigure();
+                    }
                 }
             } finally {
                 self::$configuring = false;
             }
         }
 
+        /** Optional explicit end-of-startup boundary. */
         public static function ready(): void
         {
             self::configureAll();
@@ -155,7 +226,9 @@ if (!class_exists(PrefabRuntime::class, false)) {
         public static function emitLog(array $entry): void
         {
             $logger = self::resolve('logger');
-            if ($logger && method_exists($logger, 'record')) $logger->record($entry);
+            if ($logger && method_exists($logger, 'record')) {
+                $logger->record($entry);
+            }
         }
 
         public static function actorId(): int|string|null
