@@ -19,6 +19,8 @@ final class UserManager
     private array $config = [];
     private ?object $context = null;
     private ?object $events = null;
+    private ?object $autoLogger = null;
+    private ?object $actorProvider = null;
 
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
@@ -29,21 +31,23 @@ final class UserManager
 
     public function prefabConfigure(): void
     {
-        if ($this->provider) return;
-
-        $configuredProvider = $this->config['provider'] ?? PrefabConfig::module('users', 'provider');
-        if ($configuredProvider instanceof UserProviderInterface) {
-            $this->provider = $configuredProvider;
-            return;
+        if (!$this->provider) {
+            $configuredProvider = $this->config['provider'] ?? PrefabConfig::module('users', 'provider');
+            if ($configuredProvider instanceof UserProviderInterface) {
+                $this->provider = $configuredProvider;
+            } else {
+                $db = $this->config['database'] ?? PrefabConfig::module('users', 'database');
+                if ($db instanceof PDO) {
+                    $this->database = $db;
+                    $table = $this->config['table'] ?? 'users';
+                    $map = $this->config['map'] ?? new UserMap($table);
+                    $this->provider = new PdoUserProvider($db, $map);
+                }
+            }
         }
 
-        $db = $this->config['database'] ?? PrefabConfig::module('users', 'database');
-        if ($db instanceof PDO) {
-            $this->database = $db;
-            $table = $this->config['table'] ?? 'users';
-            $map = $this->config['map'] ?? new UserMap($table);
-            $this->provider = new PdoUserProvider($db, $map);
-        }
+        $this->autoLogger ??= PrefabRuntime::get('logs');
+        $this->actorProvider ??= PrefabRuntime::get('auth');
     }
 
     public function prefabResource(string $name): mixed
@@ -90,15 +94,20 @@ final class UserManager
 
     private function result(mixed $data, array $log): OperationResult
     {
-        if ($this->events && method_exists($this->events, 'dispatch')) $this->events->dispatch('prefab.log', $log);
-        else PrefabRuntime::emitLog($log);
+        if ($this->events && method_exists($this->events, 'dispatch')) {
+            $this->events->dispatch('prefab.log', $log);
+        } elseif ($this->autoLogger && method_exists($this->autoLogger, 'record')) {
+            $this->autoLogger->record($log);
+        }
         return new OperationResult(data: $data, log: $log);
     }
 
     private function context(array $context): array
     {
         $base = ($this->context && method_exists($this->context, 'logContext')) ? $this->context->logContext() : [];
-        if (!array_key_exists('actor_id', $base)) $base['actor_id'] = PrefabRuntime::actorId();
+        if (!array_key_exists('actor_id', $base)) {
+            $base['actor_id'] = ($this->actorProvider && method_exists($this->actorProvider, 'id')) ? $this->actorProvider->id() : null;
+        }
         if (!array_key_exists('actor_type', $base) && ($base['actor_id'] ?? null) !== null) $base['actor_type'] = 'user';
         return array_replace($base, $context);
     }
