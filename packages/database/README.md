@@ -1,65 +1,132 @@
 # Tihloh Prefab Database
 
-Standalone PDO connection management for Tihloh Prefab PHP.
+Standalone, framework-independent database connection management and lightweight query building for Tihloh Prefab PHP.
 
-## Purpose
+Prefab Database is **optional**. Users, Auth, Permissions and Logs do not require it. Installing it simply gives compatible modules a shared database capability they may inherit automatically.
 
-Prefab Database centralizes database connection creation and reuse without becoming a required Core package. Install it only when a project benefits from shared or multiple named connections.
+## Supported database targets
 
-Other Prefab modules remain fully standalone. When Prefab Database is present, an unconfigured module may inherit its default connection or request a named connection.
+The first-class PDO targets are:
 
-## Basic usage
+- MySQL / MariaDB
+- PostgreSQL
+- SQLite
+- SQL Server
+
+Any PDO connection can still be supplied directly. First-class support means Prefab intentionally handles the common SQL differences needed by its query API and built-in module repositories.
+
+## Quick configuration
+
+Connection definitions may use a raw PDO DSN or a convenient driver-based configuration:
 
 ```php
 use Tihloh\Prefab\Database\Services\DatabaseManager;
 
 $database = new DatabaseManager([
     'default' => 'main',
-    'connections' => [
-        'main' => new PDO('sqlite:' . __DIR__ . '/main.sqlite'),
-    ],
-]);
 
-$pdo = $database->default();
-```
-
-## Multiple named connections
-
-```php
-$database = new DatabaseManager([
-    'default' => 'main',
-    'connections' => [
-        'main' => $mainPdo,
-        'logs' => $logPdo,
-        'reporting' => $reportingPdo,
-    ],
-]);
-
-$main = $database->connection('main');
-$logs = $database->connection('logs');
-```
-
-Connections may also be described instead of pre-created:
-
-```php
-$database = new DatabaseManager([
-    'default' => 'main',
     'connections' => [
         'main' => [
-            'dsn' => 'mysql:host=127.0.0.1;dbname=app;charset=utf8mb4',
+            'driver' => 'mysql', // mariadb is accepted too
+            'host' => '127.0.0.1',
+            'database' => 'app',
             'username' => 'app',
             'password' => 'secret',
-            'options' => [
-                PDO::ATTR_PERSISTENT => false,
-            ],
+        ],
+
+        'logs' => [
+            'driver' => 'sqlite',
+            'database' => __DIR__ . '/logs.sqlite',
         ],
     ],
 ]);
 ```
 
-All configured PDO instances are created during Prefab configuration passes. Normal feature calls therefore use cached PDO references rather than repeatedly discovering or rebuilding connections.
+PostgreSQL uses `driver => pgsql`; SQL Server uses `driver => sqlsrv`.
 
-## Automatic integration
+A ready-made PDO remains valid:
+
+```php
+$database = new DatabaseManager([
+    'connections' => [
+        'main' => $pdo,
+    ],
+]);
+```
+
+## Unified query API
+
+Common application CRUD does not need database-specific SQL:
+
+```php
+$user = $database
+    ->table('users')
+    ->where('id', 10)
+    ->first();
+
+$activeUsers = $database
+    ->table('users')
+    ->where('active', true)
+    ->orderBy('name')
+    ->limit(20)
+    ->get();
+
+$id = $database
+    ->table('users')
+    ->insertGetId([
+        'name' => 'Demo User',
+        'email' => 'demo@example.com',
+    ]);
+
+$database
+    ->table('users')
+    ->where('id', $id)
+    ->update(['name' => 'Updated User']);
+
+$database
+    ->table('users')
+    ->where('id', $id)
+    ->delete();
+```
+
+The query builder intentionally stays small. It is not an ORM and does not try to reproduce every Laravel database feature.
+
+## Raw SQL and transactions
+
+Raw SQL remains available when a project needs database-specific functionality:
+
+```php
+$rows = $database->select(
+    'SELECT * FROM users WHERE active = ?',
+    [1],
+);
+
+$affected = $database->statement(
+    'UPDATE users SET active = ? WHERE id = ?',
+    [false, 10],
+);
+
+$database->transaction(function ($db) {
+    $db->table('users')->insert([
+        'name' => 'Transactional User',
+    ]);
+});
+```
+
+## Multiple named connections
+
+```php
+$main = $database->connection('main');
+$logs = $database->connection('logs');
+
+$rows = $database
+    ->table('prefab_logs', 'logs')
+    ->orderBy('id', 'desc')
+    ->limit(20)
+    ->get();
+```
+
+## Automatic Prefab integration
 
 ```php
 $database = new DatabaseManager([
@@ -85,32 +152,43 @@ Permissions  -> main
 Logs         -> logs
 ```
 
-The Logs connection override affects Logs only.
+The Logs override affects Logs only.
 
-## Shared Prefab configuration
+## Three configuration levels
 
-The Database manager can also be configured before module declarations:
+All Prefab modules keep the same priority:
+
+```text
+1. Direct module constructor configuration
+2. Module-specific PrefabConfig
+3. Common PrefabConfig
+4. Compatible auto-discovered capability
+5. Internal default
+6. Clear error if a required resource is missing
+```
+
+Example:
 
 ```php
 PrefabConfig::set([
-    'modules' => [
-        'database' => [
-            'default' => 'main',
-            'connections' => [
-                'main' => $mainPdo,
-                'logs' => $logPdo,
-            ],
-        ],
+    'database' => $mainPdo,
 
+    'modules' => [
         'logs' => [
             'connection' => 'logs',
         ],
     ],
 ]);
-
-$database = new DatabaseManager();
-$logs = new LogManager();
 ```
+
+## Diagnostics
+
+```php
+$database->explain();
+PrefabRuntime::inspect();
+```
+
+These expose where automatic configuration came from without exposing the actual connection objects.
 
 ## Public API
 
@@ -118,28 +196,17 @@ $logs = new LogManager();
 $database->default();
 $database->defaultName();
 $database->connection('main');
-$database->get('main');
+$database->driver('main');
 $database->has('main');
 $database->names();
 $database->ping('main');
 $database->set('archive', $archivePdo);
 $database->useDefault('archive');
+
+$database->table('users');
+$database->select($sql, $bindings);
+$database->statement($sql, $bindings);
+$database->transaction($callback);
 ```
 
-## Configuration priority
-
-For modules consuming a database resource, the intended order is:
-
-```text
-module explicit database/repository
-        ↓
-module named connection
-        ↓
-Prefab Database default connection
-        ↓
-other compatible Prefab database resource
-        ↓
-configuration error if storage is required
-```
-
-No module-local override is written back into shared configuration or propagated to unrelated modules.
+Prefab Database remains a convenience block, never a Core dependency.
