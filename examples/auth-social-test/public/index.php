@@ -5,7 +5,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 use TestApp\InMemoryUserProvider;
 use TestApp\SessionSocialAccountStore;
 use TestApp\TestSocialUserResolver;
-use Tihloh\Prefab\Core\Prefab;
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Services\SocialAuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
@@ -14,24 +14,19 @@ use Tihloh\Prefab\Auth\Social\NativeSessionSocialStateStore;
 use Tihloh\Prefab\Auth\Social\SocialIdentity;
 use Tihloh\Prefab\Auth\Social\SocialProviderRegistry;
 
-$users = new InMemoryUserProvider();
-$authManager = new AuthManager($users, new NativeSessionStore());
-
 /*
- * Auth uses a custom in-memory test provider, so that unresolved piece is
- * initialized explicitly. Core discovery remains automatic for every other
- * installed module and would integrate Logs automatically if Logs were present.
+ * OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set([...]);
+ * Social provider credentials/configuration remain project-specific.
  */
-$prefab = Prefab::create(['modules' => ['auth' => $authManager]]);
-$auth = $prefab->auth();
+
+$users = new InMemoryUserProvider();
+$auth = new AuthManager($users, new NativeSessionStore());
 
 /*
- * Typical production setup when Prefab can derive Auth from Users/defaults:
- * $prefab = Prefab::create(['db' => $pdo]);
- * $auth = $prefab->auth();
- *
- * Social provider credentials/configuration remain project-specific:
- * // Google/GitHub/Microsoft provider registration goes below.
+ * This standalone social-auth demo explicitly supplies its in-memory user source.
+ * In a combined project, Auth can automatically use a compatible Prefab Users
+ * module when no Auth provider is configured.
  */
 
 $providers = new SocialProviderRegistry();
