@@ -10,12 +10,13 @@ use Throwable;
  | Prefab database interoperability contract
  |--------------------------------------------------------------------------
  |
- | This generated copy is embedded in standalone Prefab packages that provide
- | or consume database resources. The canonical source is
- | tools/database-contracts.php.
+ | This is the canonical development copy embedded as src/database.php in
+ | standalone Prefab packages that provide or consume database resources.
  |
- | The richer query builder belongs to Prefab Database itself. This shared
- | contract stays intentionally small so standalone modules remain lightweight.
+ | The contract intentionally stays small. It covers the operations Prefab
+ | modules need to share database access without forcing prefab-database as a
+ | dependency. The richer Laravel-like query builder remains an optional
+ | feature of Prefab Database itself.
  |
  */
 
@@ -33,11 +34,21 @@ if (!interface_exists(DatabaseInterface::class, false)) {
 
         public function lastInsertId(?string $name = null): string|false;
 
+        /**
+         * Legacy/project escape hatch. Prefab modules should normally use the
+         * unified methods above rather than operating on PDO directly.
+         */
         public function pdo(): PDO;
     }
 }
 
 if (!class_exists(PdoDatabaseAdapter::class, false)) {
+    /**
+     * Adapts a normal PDO connection to Prefab's database contract.
+     *
+     * This keeps every consuming module standalone: passing PDO continues to
+     * work even when prefab-database is not installed.
+     */
     final class PdoDatabaseAdapter implements DatabaseInterface
     {
         public function __construct(
