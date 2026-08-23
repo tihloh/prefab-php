@@ -15,23 +15,15 @@ use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
 /**
  * Main service API for structured Prefab activity/audit logs.
  *
- * Logs can run completely standalone with a custom repository, inherit the
- * shared Prefab database, or use its own module-local database. A local Logs
- * database never changes the configuration of Users, Auth, Permissions, or
- * other modules.
- *
- * The module stores one technical log record. Human-friendly output is created
- * on demand by HumanLogPresenter, so there is no duplicate log storage.
+ * Logs can run completely standalone with a custom repository, use an explicit
+ * database, inherit a named/default connection from Prefab Database, or fall
+ * back to compatible database resources exposed by other Prefab modules.
  */
 final class LogManager
 {
     private ?LogRepositoryInterface $repository = null;
     private array $config = [];
 
-    /**
-     * @param LogRepositoryInterface|array|null $repository Custom repository,
-     *        local module configuration, or null to resolve defaults.
-     */
     public function __construct(LogRepositoryInterface|array|null $repository = null)
     {
         if ($repository instanceof LogRepositoryInterface) {
@@ -44,13 +36,13 @@ final class LogManager
     }
 
     /**
-     * Resolve the repository during module configuration passes.
+     * Resolve storage once during module declaration/configuration passes.
      *
      * Resolution order:
      * 1. explicit repository
-     * 2. local Logs configuration
-     * 3. shared Prefab configuration
-     * 4. compatible Prefab database resource
+     * 2. explicit/local Logs database
+     * 3. named/default Prefab Database connection
+     * 4. compatible Users/Permissions database resource
      */
     public function prefabConfigure(): void
     {
@@ -68,6 +60,30 @@ final class LogManager
 
         $database = $this->config['database']
             ?? PrefabConfig::module('logs', 'database');
+
+        if (!$database instanceof PDO) {
+            $databaseManager = PrefabRuntime::get('database');
+
+            if ($databaseManager) {
+                $connectionName = $this->config['connection']
+                    ?? PrefabConfig::module('logs', 'connection');
+
+                if (
+                    is_string($connectionName)
+                    && method_exists($databaseManager, 'has')
+                    && method_exists($databaseManager, 'connection')
+                    && $databaseManager->has($connectionName)
+                ) {
+                    $database = $databaseManager->connection($connectionName);
+                } elseif (method_exists($databaseManager, 'prefabResource')) {
+                    $candidate = $databaseManager->prefabResource('database');
+
+                    if ($candidate instanceof PDO) {
+                        $database = $candidate;
+                    }
+                }
+            }
+        }
 
         if (!$database instanceof PDO) {
             foreach (['users', 'permissions'] as $source) {
@@ -94,16 +110,9 @@ final class LogManager
         }
     }
 
-    /**
-     * Store a structured log entry.
-     *
-     * @return int|string Repository-assigned log identifier.
-     */
     public function record(LogEntry|array $entry): int|string
     {
-        $entry = is_array($entry)
-            ? LogEntry::fromArray($entry)
-            : $entry;
+        $entry = is_array($entry) ? LogEntry::fromArray($entry) : $entry;
 
         if ($entry->action === '' || $entry->subjectType === '') {
             throw new InvalidArgumentException(
@@ -114,52 +123,30 @@ final class LogManager
         return $this->repo()->record($entry);
     }
 
-    /** Find one technical log record by ID. */
     public function find(int|string $id): ?array
     {
         return $this->repo()->find($id);
     }
 
-    /**
-     * Return recent technical/audit log records.
-     *
-     * @return array<int, array>
-     */
+    /** @return array<int, array> */
     public function recent(int $limit = 100, int $offset = 0): array
     {
         return $this->repo()->recent($limit, $offset);
     }
 
-    /** Return logs for one subject, such as a user or document. */
     public function forSubject(
         string $subjectType,
         int|string $subjectId,
         int $limit = 100,
     ): array {
-        return $this->repo()->forSubject(
-            $subjectType,
-            $subjectId,
-            $limit,
-        );
+        return $this->repo()->forSubject($subjectType, $subjectId, $limit);
     }
 
-    /** Return logs performed by one actor. */
-    public function forActor(
-        int|string $actorId,
-        int $limit = 100,
-    ): array {
+    public function forActor(int|string $actorId, int $limit = 100): array
+    {
         return $this->repo()->forActor($actorId, $limit);
     }
 
-    /**
-     * Return recent logs formatted for ordinary users.
-     *
-     * Raw technical records remain available through recent(). Resolvers are
-     * optional and allow the host project to convert IDs into meaningful names.
-     *
-     * @param callable|null $actorResolver fn (int|string $id): ?string
-     * @param callable|null $subjectResolver fn (string $type, int|string|null $id, array $log): ?string
-     */
     public function humanRecent(
         int $limit = 100,
         int $offset = 0,
@@ -173,9 +160,6 @@ final class LogManager
         );
     }
 
-    /**
-     * Convert one existing technical record to human-friendly output.
-     */
     public function human(
         array $log,
         ?callable $actorResolver = null,
