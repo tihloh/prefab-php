@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
+use Tihloh\Prefab\Core\Prefab;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
 use Tihloh\Prefab\Logs\Services\LogManager;
@@ -12,7 +13,25 @@ $repo=new class implements LogRepositoryInterface{
  public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['logs_test_rows'],fn($r)=>$r['subject_type']===$t&&(string)$r['subject_id']===(string)$id));}
  public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['logs_test_rows'],fn($r)=>(string)($r['actor_id']??'')===(string)$id));}
 };
-$logs=new LogManager($repo);
+$logsManager=new LogManager($repo);
+
+/*
+ * Core discovery/integration is always automatic. The test repository is
+ * session-backed, so Logs is explicitly initialized only because no database
+ * or other default LogRepository is available in this standalone example.
+ */
+$prefab=Prefab::create(['modules'=>['logs'=>$logsManager]]);
+$logs=$prefab->logs();
+
+/*
+ * Typical project:
+ * $prefab=Prefab::create(['connections'=>['default'=>$mainPdo,'logs'=>$logPdo]]);
+ * $logs=$prefab->logs();
+ *
+ * If Auth/Users/Permissions are also installed and initialized, Core connects
+ * their prefab.log events to Logs automatically.
+ */
+
 if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='add')$logs->record(['action'=>trim($_POST['event']),'subject_type'=>trim($_POST['subject_type']),'subject_id'=>trim($_POST['subject_id']),'actor_id'=>trim($_POST['actor_id']),'message'=>trim($_POST['message'])]);elseif($a==='reset'){unset($_SESSION['logs_test_rows']);header('Location:'.$_SERVER['PHP_SELF']);exit;}}
 $rows=$logs->recent();
 function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
