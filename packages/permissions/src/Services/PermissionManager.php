@@ -16,11 +16,10 @@ use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
  * Main authorization service for Prefab Permissions.
  *
  * Permissions is standalone. Definitions can be inline, PHP, or JSON. Storage
- * can be supplied explicitly, through PrefabConfig, or through the optional
- * database capability published by Prefab Database/another compatible provider.
- *
- * Effective permission priority remains:
- * user override -> group permission -> permission default.
+ * can come from direct/module/common configuration or an optional database
+ * capability. Database and connection-name settings are treated as two ways of
+ * configuring the same resource so a module-specific connection cannot be
+ * accidentally masked by a common database.
  */
 final class PermissionManager
 {
@@ -97,51 +96,7 @@ final class PermissionManager
         }
 
         if (!$this->store) {
-            $database = PrefabConfig::resolve(
-                'permissions',
-                'database',
-                $this->config,
-            );
-
-            $pdo = $database['value'] instanceof PDO ? $database['value'] : null;
-            $databaseSource = $database['source'];
-            $databaseDetails = [];
-
-            if (!$pdo) {
-                $connection = PrefabConfig::resolve(
-                    'permissions',
-                    'connection',
-                    $this->config,
-                );
-
-                if (is_string($connection['value']) && $connection['value'] !== '') {
-                    $entry = PrefabRuntime::resolveEntry(
-                        'database.connection.' . $connection['value'],
-                    );
-
-                    if ($entry && $entry['value'] instanceof PDO) {
-                        $pdo = $entry['value'];
-                        $databaseSource = 'prefab-capability';
-                        $databaseDetails = [
-                            'provider' => $entry['provider'],
-                            'connection' => $connection['value'],
-                        ];
-                    }
-                }
-            }
-
-            if (!$pdo) {
-                $entry = PrefabRuntime::resolveEntry('database');
-
-                if ($entry && $entry['value'] instanceof PDO) {
-                    $pdo = $entry['value'];
-                    $databaseSource = 'prefab-capability';
-                    $databaseDetails = [
-                        'provider' => $entry['provider'],
-                        ...($entry['meta'] ?? []),
-                    ];
-                }
-            }
+            [$pdo, $source, $details] = $this->resolveDatabase();
 
             if ($pdo) {
                 $this->database = $pdo;
@@ -160,8 +115,8 @@ final class PermissionManager
                 PrefabRuntime::recordResolution(
                     'permissions',
                     'database',
-                    $databaseSource,
-                    $databaseDetails,
+                    $source,
+                    $details,
                 );
                 PrefabRuntime::recordResolution(
                     'permissions',
@@ -197,7 +152,65 @@ final class PermissionManager
         }
     }
 
-    /** Backward-compatible resource exposure. */
+    /** @return array{0:?PDO,1:string,2:array} */
+    private function resolveDatabase(): array
+    {
+        if (($this->config['database'] ?? null) instanceof PDO) {
+            return [$this->config['database'], 'module-local', []];
+        }
+
+        if (isset($this->config['connection']) && is_string($this->config['connection'])) {
+            return $this->namedConnection($this->config['connection'], 'module-local');
+        }
+
+        $module = PrefabConfig::moduleOnly('permissions');
+
+        if (($module['database'] ?? null) instanceof PDO) {
+            return [$module['database'], 'prefab-config-module', []];
+        }
+
+        if (isset($module['connection']) && is_string($module['connection'])) {
+            return $this->namedConnection($module['connection'], 'prefab-config-module');
+        }
+
+        $common = PrefabConfig::get('database');
+
+        if ($common instanceof PDO) {
+            return [$common, 'prefab-config-common', []];
+        }
+
+        $entry = PrefabRuntime::resolveEntry('database');
+
+        if ($entry && $entry['value'] instanceof PDO) {
+            return [
+                $entry['value'],
+                'prefab-capability',
+                [
+                    'provider' => $entry['provider'],
+                    ...($entry['meta'] ?? []),
+                ],
+            ];
+        }
+
+        return [null, 'unresolved', []];
+    }
+
+    /** @return array{0:?PDO,1:string,2:array} */
+    private function namedConnection(string $name, string $source): array
+    {
+        $entry = PrefabRuntime::resolveEntry('database.connection.' . $name);
+
+        if ($entry && $entry['value'] instanceof PDO) {
+            return [
+                $entry['value'],
+                $source,
+                ['provider' => $entry['provider'], 'connection' => $name],
+            ];
+        }
+
+        return [null, $source, ['connection' => $name, 'unresolved' => true]];
+    }
+
     public function prefabResource(string $name): mixed
     {
         return match ($name) {
@@ -207,7 +220,6 @@ final class PermissionManager
         };
     }
 
-    /** Explain how this module resolved its resources/configuration. */
     public function explain(): array
     {
         return PrefabRuntime::explain('permissions');
