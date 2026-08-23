@@ -15,10 +15,9 @@ use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
 /**
  * Main service API for structured Prefab activity/audit logs.
  *
- * Logs is standalone. It can use an explicit repository/database, module/common
- * PrefabConfig, a named database capability, or the default compatible database
- * capability. Once storage is resolved, Logs publishes the `logger` capability
- * so other Prefab modules can send activity without depending on this package.
+ * Logs is standalone. Storage follows the Prefab three-level rule across the
+ * whole database resource: direct database/connection, module PrefabConfig,
+ * common PrefabConfig, then compatible capabilities.
  */
 final class LogManager
 {
@@ -61,42 +60,7 @@ final class LogManager
         }
 
         if (!$this->repository) {
-            $database = PrefabConfig::resolve('logs', 'database', $this->config);
-            $pdo = $database['value'] instanceof PDO ? $database['value'] : null;
-            $databaseSource = $database['source'];
-            $databaseDetails = [];
-
-            if (!$pdo) {
-                $connection = PrefabConfig::resolve('logs', 'connection', $this->config);
-
-                if (is_string($connection['value']) && $connection['value'] !== '') {
-                    $entry = PrefabRuntime::resolveEntry(
-                        'database.connection.' . $connection['value'],
-                    );
-
-                    if ($entry && $entry['value'] instanceof PDO) {
-                        $pdo = $entry['value'];
-                        $databaseSource = 'prefab-capability';
-                        $databaseDetails = [
-                            'provider' => $entry['provider'],
-                            'connection' => $connection['value'],
-                        ];
-                    }
-                }
-            }
-
-            if (!$pdo) {
-                $entry = PrefabRuntime::resolveEntry('database');
-
-                if ($entry && $entry['value'] instanceof PDO) {
-                    $pdo = $entry['value'];
-                    $databaseSource = 'prefab-capability';
-                    $databaseDetails = [
-                        'provider' => $entry['provider'],
-                        ...($entry['meta'] ?? []),
-                    ];
-                }
-            }
+            [$pdo, $source, $details] = $this->resolveDatabase();
 
             if ($pdo) {
                 $this->database = $pdo;
@@ -112,12 +76,7 @@ final class LogManager
                     (string) $table['value'],
                 );
 
-                PrefabRuntime::recordResolution(
-                    'logs',
-                    'database',
-                    $databaseSource,
-                    $databaseDetails,
-                );
+                PrefabRuntime::recordResolution('logs', 'database', $source, $details);
                 PrefabRuntime::recordResolution(
                     'logs',
                     'table',
@@ -136,6 +95,73 @@ final class LogManager
         if ($this->repository) {
             PrefabRuntime::provide('logger', $this, 'prefab-logs');
         }
+    }
+
+    /**
+     * Resolve a PDO while treating `database` and `connection` as two ways of
+     * configuring the same resource.
+     *
+     * @return array{0:?PDO,1:string,2:array}
+     */
+    private function resolveDatabase(): array
+    {
+        if (($this->config['database'] ?? null) instanceof PDO) {
+            return [$this->config['database'], 'module-local', []];
+        }
+
+        if (isset($this->config['connection']) && is_string($this->config['connection'])) {
+            return $this->namedConnection($this->config['connection'], 'module-local');
+        }
+
+        $module = PrefabConfig::moduleOnly('logs');
+
+        if (($module['database'] ?? null) instanceof PDO) {
+            return [$module['database'], 'prefab-config-module', []];
+        }
+
+        if (isset($module['connection']) && is_string($module['connection'])) {
+            return $this->namedConnection($module['connection'], 'prefab-config-module');
+        }
+
+        $common = PrefabConfig::get('database');
+
+        if ($common instanceof PDO) {
+            return [$common, 'prefab-config-common', []];
+        }
+
+        $entry = PrefabRuntime::resolveEntry('database');
+
+        if ($entry && $entry['value'] instanceof PDO) {
+            return [
+                $entry['value'],
+                'prefab-capability',
+                [
+                    'provider' => $entry['provider'],
+                    ...($entry['meta'] ?? []),
+                ],
+            ];
+        }
+
+        return [null, 'unresolved', []];
+    }
+
+    /** @return array{0:?PDO,1:string,2:array} */
+    private function namedConnection(string $name, string $source): array
+    {
+        $entry = PrefabRuntime::resolveEntry('database.connection.' . $name);
+
+        if ($entry && $entry['value'] instanceof PDO) {
+            return [
+                $entry['value'],
+                $source,
+                [
+                    'provider' => $entry['provider'],
+                    'connection' => $name,
+                ],
+            ];
+        }
+
+        return [null, $source, ['connection' => $name, 'unresolved' => true]];
     }
 
     /** Explain how Logs resolved storage and integrations. */
