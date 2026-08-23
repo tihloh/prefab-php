@@ -9,6 +9,7 @@ use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
+use Tihloh\Prefab\Logs\Presenters\HumanLogPresenter;
 use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
 
 final class LogManager
@@ -26,12 +27,8 @@ final class LogManager
     public function prefabConfigure(): void
     {
         if ($this->repository) return;
-
         $configured = $this->config['repository'] ?? PrefabConfig::module('logs', 'repository');
-        if ($configured instanceof LogRepositoryInterface) {
-            $this->repository = $configured;
-            return;
-        }
+        if ($configured instanceof LogRepositoryInterface) { $this->repository = $configured; return; }
 
         $db = $this->config['database'] ?? PrefabConfig::module('logs', 'database');
         if (!$db instanceof PDO) {
@@ -43,10 +40,7 @@ final class LogManager
                 }
             }
         }
-
-        if ($db instanceof PDO) {
-            $this->repository = new PdoLogRepository($db, $this->config['table'] ?? 'prefab_logs');
-        }
+        if ($db instanceof PDO) $this->repository = new PdoLogRepository($db, $this->config['table'] ?? 'prefab_logs');
     }
 
     public function record(LogEntry|array $entry): int|string
@@ -60,6 +54,17 @@ final class LogManager
     public function recent(int $limit = 100, int $offset = 0): array { return $this->repo()->recent($limit, $offset); }
     public function forSubject(string $subjectType, int|string $subjectId, int $limit = 100): array { return $this->repo()->forSubject($subjectType, $subjectId, $limit); }
     public function forActor(int|string $actorId, int $limit = 100): array { return $this->repo()->forActor($actorId, $limit); }
+
+    /** Human/ordinary-user view. Raw technical logs remain unchanged in storage. */
+    public function humanRecent(int $limit = 100, int $offset = 0, ?callable $actorResolver = null, ?callable $subjectResolver = null): array
+    {
+        return (new HumanLogPresenter())->many($this->recent($limit, $offset), $actorResolver, $subjectResolver);
+    }
+
+    public function human(array $log, ?callable $actorResolver = null, ?callable $subjectResolver = null): array
+    {
+        return (new HumanLogPresenter())->present($log, $actorResolver, $subjectResolver);
+    }
 
     private function repo(): LogRepositoryInterface
     {
