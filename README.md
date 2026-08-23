@@ -2,6 +2,39 @@
 
 Reusable, modular PHP components for rapid Lego-style development. Every module works standalone, but compatible Prefab modules automatically cooperate when they are used together.
 
+## Monorepo model
+
+`prefab-php` is the **single development repository and source of truth** for all Prefab modules.
+
+```text
+prefab-php/
+├── packages/
+│   ├── database/
+│   ├── users/
+│   ├── auth/
+│   ├── permissions/
+│   └── logs/
+├── examples/
+├── docs/
+└── tools/
+```
+
+All development, issues, pull requests, CI, examples, interoperability changes and releases originate here.
+
+For Packagist, independently installable Composer packages need their own repository root containing that package's `composer.json`. Prefab therefore uses **generated distribution mirrors** for publication only. Those mirrors are produced automatically from `packages/<module>` and are never edited directly.
+
+```text
+prefab-php (source of truth)
+        │
+        ├── packages/database ──────► prefab-database mirror ──────► Packagist
+        ├── packages/users ─────────► prefab-users mirror ─────────► Packagist
+        ├── packages/auth ──────────► prefab-auth mirror ──────────► Packagist
+        ├── packages/permissions ───► prefab-permissions mirror ───► Packagist
+        └── packages/logs ──────────► prefab-logs mirror ──────────► Packagist
+```
+
+This keeps Prefab a real monorepo for development while still allowing users to install only the module they need.
+
 ## Packages
 
 - `tihloh/prefab-database` — optional default/named PDO connection management
@@ -286,4 +319,4 @@ See `examples/database-integration-test` for a runnable project demonstrating:
 - technical and human-friendly logs;
 - direct and centralized configuration patterns.
 
-See also `docs/auto-integration.md` and each package README.
+See also `docs/auto-integration.md`, `docs/packagist-release.md`, and each package README.
