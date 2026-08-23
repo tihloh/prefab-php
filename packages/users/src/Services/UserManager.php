@@ -17,14 +17,11 @@ use Tihloh\Prefab\Users\User\PrefabUser;
  * Main service API for the Prefab Users module.
  *
  * The manager can operate with an explicitly supplied UserProviderInterface or
- * configure a PDO-backed provider from module/common Prefab configuration.
- *
- * Integration is automatic when compatible Prefab modules are present:
- * - Auth can provide the current actor for generated activity logs.
- * - Logs can receive generated CRUD activity automatically.
+ * configure a PDO-backed provider from local/shared configuration. When Prefab
+ * Database is present, Users can inherit its default or a named connection.
  *
  * Explicit constructor configuration affects this module only and never writes
- * values back into the shared Prefab configuration.
+ * values back into shared Prefab configuration.
  */
 final class UserManager
 {
@@ -36,10 +33,6 @@ final class UserManager
     private ?object $autoLogger = null;
     private ?object $actorProvider = null;
 
-    /**
-     * @param UserProviderInterface|array|null $provider A custom provider, local
-     *        module configuration array, or null to use Prefab/common defaults.
-     */
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
         if ($provider instanceof UserProviderInterface) {
@@ -52,10 +45,10 @@ final class UserManager
     }
 
     /**
-     * Resolves missing configuration and compatible module integrations.
+     * Resolve missing configuration and compatible module integrations.
      *
-     * This method is called by PrefabRuntime during module declaration passes.
-     * Normal CRUD operations use the resolved references directly afterwards.
+     * Resolution occurs during Prefab declaration/configuration passes. Normal
+     * CRUD operations use the already-resolved provider directly afterward.
      */
     public function prefabConfigure(): void
     {
@@ -69,12 +62,34 @@ final class UserManager
                 $database = $this->config['database']
                     ?? PrefabConfig::module('users', 'database');
 
+                if (!$database instanceof PDO) {
+                    $databaseManager = PrefabRuntime::get('database');
+
+                    if ($databaseManager) {
+                        $connectionName = $this->config['connection']
+                            ?? PrefabConfig::module('users', 'connection');
+
+                        if (
+                            is_string($connectionName)
+                            && method_exists($databaseManager, 'has')
+                            && method_exists($databaseManager, 'connection')
+                            && $databaseManager->has($connectionName)
+                        ) {
+                            $database = $databaseManager->connection($connectionName);
+                        } elseif (method_exists($databaseManager, 'prefabResource')) {
+                            $candidate = $databaseManager->prefabResource('database');
+
+                            if ($candidate instanceof PDO) {
+                                $database = $candidate;
+                            }
+                        }
+                    }
+                }
+
                 if ($database instanceof PDO) {
                     $this->database = $database;
-
                     $table = $this->config['table']
                         ?? PrefabConfig::module('users', 'table', 'users');
-
                     $map = $this->config['map']
                         ?? PrefabConfig::module('users', 'map');
 
@@ -98,9 +113,7 @@ final class UserManager
         $this->actorProvider ??= PrefabRuntime::get('auth');
     }
 
-    /**
-     * Exposes a resolved resource to another compatible Prefab module.
-     */
+    /** Expose resolved resources to compatible Prefab modules. */
     public function prefabResource(string $name): mixed
     {
         return match ($name) {
@@ -110,45 +123,34 @@ final class UserManager
         };
     }
 
-    /** Attach a project-specific context provider. */
     public function useContext(object $context): self
     {
         $this->context = $context;
         return $this;
     }
 
-    /** Attach an external event dispatcher. */
     public function useEvents(object $events): self
     {
         $this->events = $events;
         return $this;
     }
 
-    /** Find a user by primary identifier. */
     public function find(int|string $id): ?PrefabUser
     {
         return $this->provider()->find($id);
     }
 
-    /** Find a user by email address. */
     public function findByEmail(string $email): ?PrefabUser
     {
         return $this->provider()->findByEmail($email);
     }
 
-    /**
-     * Return users for management/list UIs.
-     *
-     * @return array<int, PrefabUser>
-     */
+    /** @return array<int, PrefabUser> */
     public function all(int $limit = 100, int $offset = 0): array
     {
         return $this->provider()->all($limit, $offset);
     }
 
-    /**
-     * Create a user and return both the user and its structured activity log.
-     */
     public function create(array $data, array $context = []): OperationResult
     {
         $user = $this->provider()->create($data);
@@ -165,11 +167,11 @@ final class UserManager
         );
     }
 
-    /**
-     * Update a user and include a field-level before/after change set.
-     */
-    public function update(int|string $id, array $data, array $context = []): OperationResult
-    {
+    public function update(
+        int|string $id,
+        array $data,
+        array $context = [],
+    ): OperationResult {
         $before = $this->provider()->find($id);
         $user = $this->provider()->update($id, $data);
 
@@ -185,7 +187,6 @@ final class UserManager
         );
     }
 
-    /** Delete a user when the configured provider allows deletion. */
     public function delete(int|string $id, array $context = []): OperationResult
     {
         $before = $this->provider()->find($id);
@@ -223,10 +224,7 @@ final class UserManager
             $this->autoLogger->record($log);
         }
 
-        return new OperationResult(
-            data: $data,
-            log: $log,
-        );
+        return new OperationResult(data: $data, log: $log);
     }
 
     private function context(array $context): array
@@ -255,48 +253,31 @@ final class UserManager
     private function createdChanges(array $data): array
     {
         $changes = [];
-
         foreach ($data as $field => $value) {
-            $changes[$field] = [
-                'old' => null,
-                'new' => $value,
-            ];
+            $changes[$field] = ['old' => null, 'new' => $value];
         }
-
         return $changes;
     }
 
     private function deletedChanges(array $data): array
     {
         $changes = [];
-
         foreach ($data as $field => $value) {
-            $changes[$field] = [
-                'old' => $value,
-                'new' => null,
-            ];
+            $changes[$field] = ['old' => $value, 'new' => null];
         }
-
         return $changes;
     }
 
     private function diff(array $before, array $after): array
     {
         $changes = [];
-        $fields = array_unique([
-            ...array_keys($before),
-            ...array_keys($after),
-        ]);
+        $fields = array_unique([...array_keys($before), ...array_keys($after)]);
 
         foreach ($fields as $field) {
             $old = $before[$field] ?? null;
             $new = $after[$field] ?? null;
-
             if ($old !== $new) {
-                $changes[$field] = [
-                    'old' => $old,
-                    'new' => $new,
-                ];
+                $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
 
