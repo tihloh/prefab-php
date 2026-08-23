@@ -1,8 +1,0 @@
-{
-  "name": "tihloh/prefab-core",
-  "description": "Lightweight integration core for automatically composing Tihloh Prefab modules.",
-  "type": "library",
-  "license": "MIT",
-  "require": {"php": "^8.2"},
-  "autoload": {"psr-4": {"Tihloh\\Prefab\\Core\\": "src/"}}
-}
