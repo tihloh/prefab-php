@@ -1,11 +1,11 @@
 <?php
 
 /**
- * Synchronize the canonical Prefab interoperability bootstrap into every
- * standalone package.
+ * Synchronize Prefab's canonical interoperability files into standalone
+ * packages.
  *
- * This is a repository-maintenance tool only. Published Prefab packages do not
- * depend on this script or on another package at runtime.
+ * This is a repository-maintenance tool only. Published packages contain their
+ * own guarded copies and never depend on tools/ or on a separate Core package.
  *
  * Usage from the repository root:
  *
@@ -13,26 +13,45 @@
  */
 
 $root = dirname(__DIR__);
-$source = $root . '/tools/prefab-bootstrap.php';
 
-$targets = [
-    $root . '/packages/database/src/prefab.php',
-    $root . '/packages/users/src/prefab.php',
-    $root . '/packages/auth/src/prefab.php',
-    $root . '/packages/permissions/src/prefab.php',
-    $root . '/packages/logs/src/prefab.php',
+$groups = [
+    [
+        'source' => $root . '/tools/prefab-bootstrap.php',
+        'targets' => [
+            $root . '/packages/database/src/prefab.php',
+            $root . '/packages/users/src/prefab.php',
+            $root . '/packages/auth/src/prefab.php',
+            $root . '/packages/permissions/src/prefab.php',
+            $root . '/packages/logs/src/prefab.php',
+        ],
+    ],
+    [
+        'source' => $root . '/tools/database-contracts.php',
+        'targets' => [
+            $root . '/packages/database/src/database.php',
+            $root . '/packages/users/src/database.php',
+            $root . '/packages/permissions/src/database.php',
+            $root . '/packages/logs/src/database.php',
+        ],
+    ],
 ];
 
-$bootstrap = file_get_contents($source);
+foreach ($groups as $group) {
+    $content = file_get_contents($group['source']);
 
-if ($bootstrap === false) {
-    throw new RuntimeException("Unable to read canonical bootstrap: {$source}");
-}
-
-foreach ($targets as $target) {
-    if (file_put_contents($target, $bootstrap) === false) {
-        throw new RuntimeException("Unable to synchronize bootstrap: {$target}");
+    if ($content === false) {
+        throw new RuntimeException(
+            "Unable to read canonical interoperability file: {$group['source']}",
+        );
     }
 
-    echo "Synced: {$target}" . PHP_EOL;
+    foreach ($group['targets'] as $target) {
+        if (file_put_contents($target, $content) === false) {
+            throw new RuntimeException(
+                "Unable to synchronize interoperability file: {$target}",
+            );
+        }
+
+        echo "Synced: {$target}" . PHP_EOL;
+    }
 }
