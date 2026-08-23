@@ -9,75 +9,41 @@ use RuntimeException;
  | Prefab interoperability bootstrap
  |--------------------------------------------------------------------------
  |
- | This is the canonical development copy of the tiny interoperability layer
- | embedded into every standalone Prefab package as src/prefab.php.
+ | This generated copy is embedded into every standalone package. This file is
+ | the canonical development source used by tools/sync-prefab-bootstrap.php.
  |
- | Published modules do NOT depend on a Core package. Each package ships the
- | generated copy and guards its declarations with class_exists(), so whichever
- | Prefab package Composer loads first provides the common runtime for that PHP
- | process. Other packages simply reuse it.
- |
+ | There is no required Core package. The first Prefab package Composer loads
+ | defines these guarded classes and the remaining packages reuse them.
  */
-
 if (!class_exists(PrefabConfig::class, false)) {
-    /**
-     * Stores optional common and per-module project configuration.
-     *
-     * Configuration has three developer-facing levels:
-     * 1. direct module configuration (handled by the module constructor),
-     * 2. module-specific PrefabConfig configuration,
-     * 3. common PrefabConfig configuration.
-     *
-     * Modules may then fall back to compatible runtime capabilities and their
-     * own internal defaults when a setting is still unresolved.
-     */
     final class PrefabConfig
     {
         private static array $common = [];
         private static array $modules = [];
 
-        /**
-         * Merge project configuration without replacing unrelated settings.
-         */
         public static function set(array $config): void
         {
             $modules = $config['modules'] ?? [];
             unset($config['modules']);
-
-            self::$common = array_replace_recursive(
-                self::$common,
-                $config,
-            );
-
+            self::$common = array_replace_recursive(self::$common, $config);
             if (is_array($modules)) {
-                self::$modules = array_replace_recursive(
-                    self::$modules,
-                    $modules,
-                );
+                self::$modules = array_replace_recursive(self::$modules, $modules);
             }
         }
 
-        /** Return one common configuration value. */
         public static function get(string $key, mixed $default = null): mixed
         {
-            return array_key_exists($key, self::$common)
-                ? self::$common[$key]
-                : $default;
+            return array_key_exists($key, self::$common) ? self::$common[$key] : $default;
         }
 
-        /**
-         * Return a module-specific value, then common value, then default.
-         */
-        public static function module(
-            string $module,
-            string $key,
-            mixed $default = null,
-        ): mixed {
+        public static function module(string $module, string $key, mixed $default = null): mixed
+        {
             return self::resolve($module, $key, default: $default)['value'];
         }
 
         /**
-         * Resolve one setting and report which configuration level supplied it.
+         * Resolve the three developer-facing configuration levels:
+         * direct module config -> module PrefabConfig -> common PrefabConfig.
          *
          * @return array{value:mixed,source:string}
          */
@@ -88,53 +54,27 @@ if (!class_exists(PrefabConfig::class, false)) {
             mixed $default = null,
         ): array {
             if (array_key_exists($key, $local)) {
-                return [
-                    'value' => $local[$key],
-                    'source' => 'module-local',
-                ];
+                return ['value' => $local[$key], 'source' => 'module-local'];
             }
-
-            if (
-                isset(self::$modules[$module])
-                && array_key_exists($key, self::$modules[$module])
-            ) {
-                return [
-                    'value' => self::$modules[$module][$key],
-                    'source' => 'prefab-config-module',
-                ];
+            if (isset(self::$modules[$module]) && array_key_exists($key, self::$modules[$module])) {
+                return ['value' => self::$modules[$module][$key], 'source' => 'prefab-config-module'];
             }
-
             if (array_key_exists($key, self::$common)) {
-                return [
-                    'value' => self::$common[$key],
-                    'source' => 'prefab-config-common',
-                ];
+                return ['value' => self::$common[$key], 'source' => 'prefab-config-common'];
             }
-
-            return [
-                'value' => $default,
-                'source' => 'internal-default',
-            ];
+            return ['value' => $default, 'source' => 'internal-default'];
         }
 
-        /**
-         * Return common settings merged with one module's settings.
-         */
         public static function moduleConfig(string $module): array
         {
-            return array_replace_recursive(
-                self::$common,
-                self::$modules[$module] ?? [],
-            );
+            return array_replace_recursive(self::$common, self::$modules[$module] ?? []);
         }
 
-        /** Return raw module-specific configuration for diagnostics/tests. */
         public static function moduleOnly(string $module): array
         {
             return self::$modules[$module] ?? [];
         }
 
-        /** Clear configuration, primarily for tests and long-running workers. */
         public static function reset(): void
         {
             self::$common = [];
@@ -144,58 +84,29 @@ if (!class_exists(PrefabConfig::class, false)) {
 }
 
 if (!class_exists(PrefabRuntime::class, false)) {
-    /**
-     * Tiny runtime used only for optional cooperation between Prefab modules.
-     *
-     * Modules register themselves and publish capabilities such as `database`,
-     * `user_provider`, `actor_provider`, or `logger`. Consumers resolve those
-     * capabilities during configuration and keep direct references afterward.
-     * Normal feature calls therefore do not repeatedly scan/discover modules.
-     */
     final class PrefabRuntime
     {
-        /** @var array<string, object> */
         private static array $modules = [];
-
-        /** @var array<string, array<string, array<string, mixed>>> */
         private static array $capabilities = [];
-
-        /** @var array<string, array<string, array<string, mixed>>> */
         private static array $resolutions = [];
-
         private static bool $configuring = false;
         private static bool $ready = false;
 
-        /**
-         * Register a module and re-run declaration-time configuration.
-         *
-         * Declaration order remains flexible. Calling ready() optionally freezes
-         * the module graph for applications that want an explicit startup end.
-         */
         public static function register(string $name, object $module): void
         {
             if (self::$ready && !isset(self::$modules[$name])) {
-                throw new RuntimeException(
-                    "Prefab runtime is ready; module '{$name}' cannot be registered afterward.",
-                );
+                throw new RuntimeException("Prefab runtime is ready; module '{$name}' cannot be registered afterward.");
             }
-
             self::$modules[$name] = $module;
             self::configureAll();
         }
 
-        /** Return a registered module by name for compatibility/debugging. */
         public static function get(string $name): ?object
         {
             return self::$modules[$name] ?? null;
         }
 
-        /**
-         * Publish or replace a capability from one provider.
-         *
-         * Higher priority wins. Equal top priorities from different providers
-         * are considered ambiguous and require explicit project configuration.
-         */
+        /** Publish one optional capability without creating a package dependency. */
         public static function provide(
             string $capability,
             mixed $value,
@@ -207,7 +118,6 @@ if (!class_exists(PrefabRuntime::class, false)) {
                 unset(self::$capabilities[$capability][$provider]);
                 return;
             }
-
             self::$capabilities[$capability][$provider] = [
                 'value' => $value,
                 'provider' => $provider,
@@ -216,51 +126,31 @@ if (!class_exists(PrefabRuntime::class, false)) {
             ];
         }
 
-        /**
-         * Resolve a capability and include provider metadata.
-         *
-         * @return array{value:mixed,provider:string,priority:int,meta:array}|null
-         */
+        /** Resolve one capability and fail instead of guessing on equal-priority conflicts. */
         public static function resolveEntry(
             string $capability,
             ?string $preferredProvider = null,
         ): ?array {
             $providers = self::$capabilities[$capability] ?? [];
-
             if ($preferredProvider !== null) {
                 return $providers[$preferredProvider] ?? null;
             }
-
             if ($providers === []) {
                 return null;
             }
-
-            uasort(
-                $providers,
-                fn (array $a, array $b): int => $b['priority'] <=> $a['priority'],
-            );
-
+            uasort($providers, fn (array $a, array $b): int => $b['priority'] <=> $a['priority']);
             $top = reset($providers);
-            $topPriority = $top['priority'];
-            $ties = array_filter(
-                $providers,
-                fn (array $entry): bool => $entry['priority'] === $topPriority,
-            );
-
+            $ties = array_filter($providers, fn (array $entry): bool => $entry['priority'] === $top['priority']);
             if (count($ties) > 1) {
-                $names = implode(', ', array_keys($ties));
-
                 throw new RuntimeException(
-                    "Ambiguous Prefab capability '{$capability}'. "
-                    . "Providers with equal priority: {$names}. "
-                    . 'Configure the consuming module explicitly.',
+                    "Ambiguous Prefab capability '{$capability}'. Providers with equal priority: "
+                    . implode(', ', array_keys($ties))
+                    . '. Configure the consuming module explicitly.',
                 );
             }
-
             return $top;
         }
 
-        /** Resolve only the capability value. */
         public static function resolve(
             string $capability,
             ?string $preferredProvider = null,
@@ -268,37 +158,26 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::resolveEntry($capability, $preferredProvider)['value'] ?? null;
         }
 
-        /**
-         * Record why a module resolved a resource/setting to aid diagnostics.
-         */
+        /** Record why a setting/resource resolved the way it did. */
         public static function recordResolution(
             string $module,
             string $resource,
             string $source,
             array $details = [],
         ): void {
-            self::$resolutions[$module][$resource] = [
-                'source' => $source,
-                ...$details,
-            ];
+            self::$resolutions[$module][$resource] = ['source' => $source, ...$details];
         }
 
-        /** Return one module's resolved integration/configuration explanation. */
         public static function explain(string $module): array
         {
             return self::$resolutions[$module] ?? [];
         }
 
-        /**
-         * Return runtime diagnostics without exposing capability object values.
-         */
+        /** Return diagnostics without exposing actual capability object values. */
         public static function inspect(): array
         {
             $capabilities = [];
-
             foreach (self::$capabilities as $name => $providers) {
-                $capabilities[$name] = [];
-
                 foreach ($providers as $provider => $entry) {
                     $capabilities[$name][$provider] = [
                         'priority' => $entry['priority'],
@@ -306,29 +185,21 @@ if (!class_exists(PrefabRuntime::class, false)) {
                     ];
                 }
             }
-
             return [
                 'ready' => self::$ready,
-                'modules' => array_map(
-                    fn (object $module): string => $module::class,
-                    self::$modules,
-                ),
+                'modules' => array_map(fn (object $module): string => $module::class, self::$modules),
                 'capabilities' => $capabilities,
                 'resolutions' => self::$resolutions,
             ];
         }
 
-        /**
-         * Re-run configuration for all currently declared modules.
-         */
+        /** Reconfigure only while modules are being declared, not on feature calls. */
         public static function configureAll(): void
         {
             if (self::$configuring) {
                 return;
             }
-
             self::$configuring = true;
-
             try {
                 foreach (self::$modules as $module) {
                     if (method_exists($module, 'prefabConfigure')) {
@@ -340,11 +211,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             }
         }
 
-        /**
-         * Optional explicit end of startup/configuration.
-         *
-         * Normal Prefab usage does not require this method.
-         */
+        /** Optional explicit end-of-startup boundary. */
         public static function ready(): void
         {
             self::configureAll();
@@ -356,27 +223,20 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$ready;
         }
 
-        /** Send an activity payload to the discovered logger capability. */
         public static function emitLog(array $entry): void
         {
             $logger = self::resolve('logger');
-
             if ($logger && method_exists($logger, 'record')) {
                 $logger->record($entry);
             }
         }
 
-        /** Return the current actor ID through the actor-provider capability. */
         public static function actorId(): int|string|null
         {
             $actor = self::resolve('actor_provider');
-
-            return ($actor && method_exists($actor, 'id'))
-                ? $actor->id()
-                : null;
+            return ($actor && method_exists($actor, 'id')) ? $actor->id() : null;
         }
 
-        /** Reset runtime state for tests or long-running workers. */
         public static function reset(): void
         {
             self::$modules = [];
