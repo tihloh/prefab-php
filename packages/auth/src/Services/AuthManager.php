@@ -19,6 +19,7 @@ final class AuthManager
     private array $config = [];
     private ?object $context = null;
     private ?object $events = null;
+    private ?object $autoLogger = null;
 
     public function __construct(AuthUserProviderInterface|array|null $users = null, ?AuthSessionStoreInterface $session = null)
     {
@@ -46,6 +47,8 @@ final class AuthManager
                 if ($prefabUsers) $this->users = new PrefabUsersAuthProvider($prefabUsers);
             }
         }
+
+        $this->autoLogger ??= PrefabRuntime::get('logs');
     }
 
     public function useContext(object $context): self { $this->context=$context; return $this; }
@@ -96,7 +99,7 @@ final class AuthManager
     {
         if($log){
             if($this->events&&method_exists($this->events,'dispatch'))$this->events->dispatch('prefab.log',$log);
-            else PrefabRuntime::emitLog($log);
+            elseif($this->autoLogger&&method_exists($this->autoLogger,'record'))$this->autoLogger->record($log);
         }
         return new AuthResult($success,$user,$log,$error);
     }
