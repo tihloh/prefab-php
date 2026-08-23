@@ -1,0 +1,25 @@
+# Composer dependencies
+/vendor/
+**/vendor/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Runtime / generated storage
+/storage/
+**/storage/
+
+# IDE / editor
+*.code-workspace
+.vscode/
+.idea/
+
+# Local Docker configuration
+docker-compose.yml
+**/docker-compose.yml
+
+# OS-generated files
+.DS_Store
+Thumbs.db
