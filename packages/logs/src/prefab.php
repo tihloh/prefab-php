@@ -9,18 +9,13 @@ use RuntimeException;
  | Prefab interoperability bootstrap
  |--------------------------------------------------------------------------
  |
- | This is the canonical development copy of the tiny interoperability layer
- | embedded into every standalone Prefab package as src/prefab.php.
+ | This generated copy is embedded into every standalone package. This file is
+ | the canonical development source used by tools/sync-prefab-bootstrap.php.
  |
- | Published modules do NOT depend on a Core package. Each package ships the
- | generated copy and guards its declarations with class_exists(), so whichever
- | Prefab package Composer loads first provides the common runtime for that PHP
- | process. Other packages simply reuse it.
- |
+ | There is no required Core package. The first Prefab package Composer loads
+ | defines these guarded classes and the remaining packages reuse them.
  */
-
 if (!class_exists(PrefabConfig::class, false)) {
-    /** Stores optional common and per-module project configuration. */
     final class PrefabConfig
     {
         private static array $common = [];
@@ -38,9 +33,7 @@ if (!class_exists(PrefabConfig::class, false)) {
 
         public static function get(string $key, mixed $default = null): mixed
         {
-            return array_key_exists($key, self::$common)
-                ? self::$common[$key]
-                : $default;
+            return array_key_exists($key, self::$common) ? self::$common[$key] : $default;
         }
 
         public static function module(string $module, string $key, mixed $default = null): mixed
@@ -48,7 +41,12 @@ if (!class_exists(PrefabConfig::class, false)) {
             return self::resolve($module, $key, default: $default)['value'];
         }
 
-        /** @return array{value:mixed,source:string} */
+        /**
+         * Resolve the three developer-facing configuration levels:
+         * direct module config -> module PrefabConfig -> common PrefabConfig.
+         *
+         * @return array{value:mixed,source:string}
+         */
         public static function resolve(
             string $module,
             string $key,
@@ -86,7 +84,6 @@ if (!class_exists(PrefabConfig::class, false)) {
 }
 
 if (!class_exists(PrefabRuntime::class, false)) {
-    /** Tiny runtime for optional cooperation between standalone Prefab modules. */
     final class PrefabRuntime
     {
         private static array $modules = [];
@@ -98,9 +95,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
         public static function register(string $name, object $module): void
         {
             if (self::$ready && !isset(self::$modules[$name])) {
-                throw new RuntimeException(
-                    "Prefab runtime is ready; module '{$name}' cannot be registered afterward.",
-                );
+                throw new RuntimeException("Prefab runtime is ready; module '{$name}' cannot be registered afterward.");
             }
             self::$modules[$name] = $module;
             self::configureAll();
@@ -111,6 +106,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$modules[$name] ?? null;
         }
 
+        /** Publish one optional capability without creating a package dependency. */
         public static function provide(
             string $capability,
             mixed $value,
@@ -130,6 +126,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             ];
         }
 
+        /** Resolve one capability and fail instead of guessing on equal-priority conflicts. */
         public static function resolveEntry(
             string $capability,
             ?string $preferredProvider = null,
@@ -143,10 +140,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             }
             uasort($providers, fn (array $a, array $b): int => $b['priority'] <=> $a['priority']);
             $top = reset($providers);
-            $ties = array_filter(
-                $providers,
-                fn (array $entry): bool => $entry['priority'] === $top['priority'],
-            );
+            $ties = array_filter($providers, fn (array $entry): bool => $entry['priority'] === $top['priority']);
             if (count($ties) > 1) {
                 throw new RuntimeException(
                     "Ambiguous Prefab capability '{$capability}'. Providers with equal priority: "
@@ -164,6 +158,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::resolveEntry($capability, $preferredProvider)['value'] ?? null;
         }
 
+        /** Record why a setting/resource resolved the way it did. */
         public static function recordResolution(
             string $module,
             string $resource,
@@ -178,6 +173,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$resolutions[$module] ?? [];
         }
 
+        /** Return diagnostics without exposing actual capability object values. */
         public static function inspect(): array
         {
             $capabilities = [];
@@ -197,6 +193,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             ];
         }
 
+        /** Reconfigure only while modules are being declared, not on feature calls. */
         public static function configureAll(): void
         {
             if (self::$configuring) {
@@ -214,6 +211,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             }
         }
 
+        /** Optional explicit end-of-startup boundary. */
         public static function ready(): void
         {
             self::configureAll();
