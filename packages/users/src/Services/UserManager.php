@@ -4,6 +4,8 @@ namespace Tihloh\Prefab\Users\Services;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Users\Contracts\UserFactoryInterface;
@@ -16,14 +18,15 @@ use Tihloh\Prefab\Users\User\PrefabUser;
 /**
  * Main service API for Prefab Users.
  *
- * Prefab Users is standalone. It can use an explicitly supplied provider,
- * direct/module/common database configuration, or an automatically discovered
- * database capability. Resolved resources are cached for normal CRUD use.
+ * Prefab Users remains standalone. It can use a custom provider, plain PDO,
+ * Prefab Database, or any framework adapter implementing DatabaseInterface.
+ * Plain PDO is normalized automatically, so existing applications do not need
+ * to change their configuration style.
  */
 final class UserManager
 {
     private ?UserProviderInterface $provider = null;
-    private ?PDO $database = null;
+    private ?DatabaseInterface $database = null;
     private array $config = [];
     private ?object $context = null;
     private ?object $events = null;
@@ -47,11 +50,15 @@ final class UserManager
         PrefabRuntime::register('users', $this);
     }
 
-    /** Resolve missing resources and publish the user-provider capability. */
+    /** Resolve missing resources and publish reusable capabilities. */
     public function prefabConfigure(): void
     {
         if (!$this->provider) {
-            $provider = PrefabConfig::resolve('users', 'provider', $this->config);
+            $provider = PrefabConfig::resolve(
+                'users',
+                'provider',
+                $this->config,
+            );
 
             if ($provider['value'] instanceof UserProviderInterface) {
                 $this->provider = $provider['value'];
@@ -65,22 +72,40 @@ final class UserManager
         }
 
         if (!$this->provider) {
-            [$pdo, $source, $details] = $this->resolveDatabase();
+            [$database, $source, $details] = $this->resolveDatabase();
 
-            if ($pdo) {
-                $this->database = $pdo;
-                PrefabRuntime::recordResolution('users', 'database', $source, $details);
+            if ($database) {
+                $this->database = $database;
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'database',
+                    $source,
+                    $details,
+                );
 
-                $table = PrefabConfig::resolve('users', 'table', $this->config, 'users');
-                $map = PrefabConfig::resolve('users', 'map', $this->config);
-                $factory = PrefabConfig::resolve('users', 'factory', $this->config);
+                $table = PrefabConfig::resolve(
+                    'users',
+                    'table',
+                    $this->config,
+                    'users',
+                );
+                $map = PrefabConfig::resolve(
+                    'users',
+                    'map',
+                    $this->config,
+                );
+                $factory = PrefabConfig::resolve(
+                    'users',
+                    'factory',
+                    $this->config,
+                );
 
                 $userMap = $map['value'] instanceof UserMap
                     ? $map['value']
                     : new UserMap((string) $table['value']);
 
                 $this->provider = new PdoUserProvider(
-                    $pdo,
+                    $database,
                     $userMap,
                     $factory['value'] instanceof UserFactoryInterface
                         ? $factory['value']
@@ -90,20 +115,26 @@ final class UserManager
                 PrefabRuntime::recordResolution(
                     'users',
                     'table',
-                    $map['value'] instanceof UserMap ? $map['source'] : $table['source'],
+                    $map['value'] instanceof UserMap
+                        ? $map['source']
+                        : $table['source'],
                     ['table' => $userMap->table],
                 );
                 PrefabRuntime::recordResolution(
                     'users',
                     'user_provider',
-                    'pdo-provider',
+                    'database-provider',
                     ['provider' => PdoUserProvider::class],
                 );
             }
         }
 
         if ($this->provider) {
-            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
+            PrefabRuntime::provide(
+                'user_provider',
+                $this->provider,
+                'prefab-users',
+            );
         }
 
         if ($this->database) {
@@ -112,7 +143,10 @@ final class UserManager
                 $this->database,
                 'prefab-users',
                 priority: -10,
-                meta: ['role' => 'users-database'],
+                meta: [
+                    'role' => 'users-database',
+                    'driver' => $this->database->driver(),
+                ],
             );
         }
 
@@ -145,38 +179,68 @@ final class UserManager
         }
     }
 
-    /** @return array{0:?PDO,1:string,2:array} */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function resolveDatabase(): array
     {
-        if (($this->config['database'] ?? null) instanceof PDO) {
-            return [$this->config['database'], 'module-local', []];
+        $localDatabase = $this->asDatabase($this->config['database'] ?? null);
+
+        if ($localDatabase) {
+            return [
+                $localDatabase,
+                'module-local',
+                ['driver' => $localDatabase->driver()],
+            ];
         }
 
-        if (isset($this->config['connection']) && is_string($this->config['connection'])) {
-            return $this->namedConnection($this->config['connection'], 'module-local');
+        if (
+            isset($this->config['connection'])
+            && is_string($this->config['connection'])
+        ) {
+            return $this->namedConnection(
+                $this->config['connection'],
+                'module-local',
+            );
         }
 
         $module = PrefabConfig::moduleOnly('users');
+        $moduleDatabase = $this->asDatabase($module['database'] ?? null);
 
-        if (($module['database'] ?? null) instanceof PDO) {
-            return [$module['database'], 'prefab-config-module', []];
+        if ($moduleDatabase) {
+            return [
+                $moduleDatabase,
+                'prefab-config-module',
+                ['driver' => $moduleDatabase->driver()],
+            ];
         }
 
-        if (isset($module['connection']) && is_string($module['connection'])) {
-            return $this->namedConnection($module['connection'], 'prefab-config-module');
+        if (
+            isset($module['connection'])
+            && is_string($module['connection'])
+        ) {
+            return $this->namedConnection(
+                $module['connection'],
+                'prefab-config-module',
+            );
         }
 
-        $common = PrefabConfig::get('database');
+        $common = $this->asDatabase(PrefabConfig::get('database'));
 
-        if ($common instanceof PDO) {
-            return [$common, 'prefab-config-common', []];
+        if ($common) {
+            return [
+                $common,
+                'prefab-config-common',
+                ['driver' => $common->driver()],
+            ];
         }
 
         $entry = PrefabRuntime::resolveEntry('database');
+        $capability = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $capability) {
             return [
-                $entry['value'],
+                $capability,
                 'prefab-capability',
                 [
                     'provider' => $entry['provider'],
@@ -188,20 +252,47 @@ final class UserManager
         return [null, 'unresolved', []];
     }
 
-    /** @return array{0:?PDO,1:string,2:array} */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function namedConnection(string $name, string $source): array
     {
-        $entry = PrefabRuntime::resolveEntry('database.connection.' . $name);
+        $entry = PrefabRuntime::resolveEntry(
+            'database.connection.' . $name,
+        );
+        $database = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $database) {
             return [
-                $entry['value'],
+                $database,
                 $source,
-                ['provider' => $entry['provider'], 'connection' => $name],
+                [
+                    'provider' => $entry['provider'],
+                    'connection' => $name,
+                    'driver' => $database->driver(),
+                ],
             ];
         }
 
-        return [null, $source, ['connection' => $name, 'unresolved' => true]];
+        return [
+            null,
+            $source,
+            [
+                'connection' => $name,
+                'unresolved' => true,
+            ],
+        ];
+    }
+
+    private function asDatabase(mixed $value): ?DatabaseInterface
+    {
+        if ($value instanceof DatabaseInterface) {
+            return $value;
+        }
+
+        return $value instanceof PDO
+            ? new PdoDatabaseAdapter($value)
+            : null;
     }
 
     public function prefabResource(string $name): mixed
@@ -276,7 +367,10 @@ final class UserManager
                 'user.updated',
                 $user->id,
                 "User {$user->name} was updated.",
-                $this->diff($before?->toArray() ?? [], $user->toArray()),
+                $this->diff(
+                    $before?->toArray() ?? [],
+                    $user->toArray(),
+                ),
                 $context,
             ),
         );
@@ -294,7 +388,9 @@ final class UserManager
                 'user.deleted',
                 $id,
                 "User {$name} was deleted.",
-                $before ? $this->deletedChanges($before->toArray()) : [],
+                $before
+                    ? $this->deletedChanges($before->toArray())
+                    : [],
                 $context,
             ),
         );
@@ -315,18 +411,25 @@ final class UserManager
     {
         if ($this->events && method_exists($this->events, 'dispatch')) {
             $this->events->dispatch('prefab.log', $log);
-        } elseif ($this->autoLogger && method_exists($this->autoLogger, 'record')) {
+        } elseif (
+            $this->autoLogger
+            && method_exists($this->autoLogger, 'record')
+        ) {
             $this->autoLogger->record($log);
         }
 
-        return new OperationResult(data: $data, log: $log);
+        return new OperationResult(
+            data: $data,
+            log: $log,
+        );
     }
 
     private function context(array $context): array
     {
-        $base = ($this->context && method_exists($this->context, 'logContext'))
-            ? $this->context->logContext()
-            : [];
+        $base = (
+            $this->context
+            && method_exists($this->context, 'logContext')
+        ) ? $this->context->logContext() : [];
 
         if (!array_key_exists('actor_id', $base)) {
             $base['actor_id'] = (
@@ -335,7 +438,10 @@ final class UserManager
             ) ? $this->actorProvider->id() : null;
         }
 
-        if (!array_key_exists('actor_type', $base) && ($base['actor_id'] ?? null) !== null) {
+        if (
+            !array_key_exists('actor_type', $base)
+            && ($base['actor_id'] ?? null) !== null
+        ) {
             $base['actor_type'] = 'user';
         }
 
@@ -347,7 +453,10 @@ final class UserManager
         $changes = [];
 
         foreach ($data as $field => $value) {
-            $changes[$field] = ['old' => null, 'new' => $value];
+            $changes[$field] = [
+                'old' => null,
+                'new' => $value,
+            ];
         }
 
         return $changes;
@@ -358,7 +467,10 @@ final class UserManager
         $changes = [];
 
         foreach ($data as $field => $value) {
-            $changes[$field] = ['old' => $value, 'new' => null];
+            $changes[$field] = [
+                'old' => $value,
+                'new' => null,
+            ];
         }
 
         return $changes;
@@ -367,14 +479,20 @@ final class UserManager
     private function diff(array $before, array $after): array
     {
         $changes = [];
-        $fields = array_unique([...array_keys($before), ...array_keys($after)]);
+        $fields = array_unique([
+            ...array_keys($before),
+            ...array_keys($after),
+        ]);
 
         foreach ($fields as $field) {
             $old = $before[$field] ?? null;
             $new = $after[$field] ?? null;
 
             if ($old !== $new) {
-                $changes[$field] = ['old' => $old, 'new' => $new];
+                $changes[$field] = [
+                    'old' => $old,
+                    'new' => $new,
+                ];
             }
         }
 
