@@ -1,14 +1,11 @@
 {
   "name": "tihloh/prefab-permissions",
-  "description": "Framework-independent permissions and authorization prefab for PHP with optional Laravel integration.",
+  "description": "Standalone Prefab permissions module.",
   "type": "library",
   "license": "MIT",
-  "require": {
-    "php": "^8.2"
-  },
+  "require": {"php": ">=8.1"},
   "autoload": {
-    "psr-4": {
-      "Tihloh\\Prefab\\Permissions\\": "src/"
-    }
+    "psr-4": {"Tihloh\\Prefab\\Permissions\\": "src/"},
+    "files": ["src/prefab.php"]
   }
 }
