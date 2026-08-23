@@ -1,6 +1,7 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
 
+use Tihloh\Prefab\Core\Prefab;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
@@ -39,19 +40,19 @@ $userProvider = new class implements UserProviderInterface {
     public function update(int|string $id,array $data): PrefabUser { $i=(int)$id; $_SESSION['combined_users'][$i]=array_merge($_SESSION['combined_users'][$i],$data); return $this->make($_SESSION['combined_users'][$i]); }
     public function delete(int|string $id): bool { $i=(int)$id; if(!isset($_SESSION['combined_users'][$i])) return false; unset($_SESSION['combined_users'][$i]); return true; }
 };
-$users=new UserManager($userProvider);
-$authProvider=new class($users) implements AuthUserProviderInterface {
+$usersManager=new UserManager($userProvider);
+$authProvider=new class($usersManager) implements AuthUserProviderInterface {
     public function __construct(private UserManager $users){}
     public function findByIdentifier(string $identifier): ?AuthenticatableUserInterface { $u=$this->users->findByEmail($identifier); return $u instanceof AuthenticatableUserInterface?$u:null; }
     public function findById(int|string $id): ?AuthenticatableUserInterface { $u=$this->users->find($id); return $u instanceof AuthenticatableUserInterface?$u:null; }
 };
-$auth=new AuthManager($authProvider,new NativeSessionStore('combined_test_user'));
+$authManager=new AuthManager($authProvider,new NativeSessionStore('combined_test_user'));
 $permissionStore=new class implements PermissionStoreInterface {
     public function get(string $t,int|string $i):array{return $_SESSION['combined_permissions'][$t][(string)$i]??[];}
     public function put(string $t,int|string $i,array $p):void{$_SESSION['combined_permissions'][$t][(string)$i]=$p;}
     public function remove(string $t,int|string $i):void{unset($_SESSION['combined_permissions'][$t][(string)$i]);}
 };
-$permissions=new PermissionManager(new PermissionDefinitions([
+$permissionsManager=new PermissionManager(new PermissionDefinitions([
     'documents.view'=>['name'=>'View Documents','description'=>'Can view documents','default'=>true],
     'documents.approve'=>['name'=>'Approve Documents','description'=>'Can approve documents','default'=>false],
 ]),$permissionStore);
@@ -62,25 +63,60 @@ $logRepo=new class implements LogRepositoryInterface {
     public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['combined_logs'],fn($r)=>$r['subject_type']===$t&&(string)$r['subject_id']===(string)$id));}
     public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['combined_logs'],fn($r)=>(string)($r['actor_id']??'')===(string)$id));}
 };
-$logs=new LogManager($logRepo);
+$logsManager=new LogManager($logRepo);
+
+/*
+ * CORE BEHAVIOR
+ * - Discovery/integration is always automatic.
+ * - This demo explicitly supplies the four managers only because its stores are
+ *   custom PHP-session adapters instead of normal project/database defaults.
+ * - Core automatically connects Auth -> Context and Users/Auth/Permissions -> Logs.
+ * - No manual register() chain and no manual $logs->record($result->log).
+ */
+$prefab=Prefab::create(['modules'=>[
+    'users'=>$usersManager,
+    'auth'=>$authManager,
+    'permissions'=>$permissionsManager,
+    'logs'=>$logsManager,
+]]);
+$users=$prefab->users();
+$auth=$prefab->auth();
+$permissions=$prefab->permissions();
+$logs=$prefab->logs();
+
+/*
+ * Intended normal project when default resources exist:
+ *
+ * $prefab=Prefab::create(['db'=>$pdo]);
+ *
+ * Or split databases:
+ * $prefab=Prefab::create(['connections'=>[
+ *     'default'=>$mainPdo,
+ *     'logs'=>$logPdo,
+ * ]]);
+ *
+ * Explicit initialization is only needed for a custom/unresolved piece:
+ * $prefab=Prefab::create(['modules'=>['users'=>$customUsers]]);
+ * // Auth/Permissions/Logs still remain automatically discoverable/integrated.
+ */
 
 $flash=null;
 if($_SERVER['REQUEST_METHOD']==='POST'){
     $action=$_POST['action']??'';
     if($action==='create_user'){
-        $r=$users->create(['name'=>trim($_POST['name']??''),'email'=>trim($_POST['email']??''),'password'=>$_POST['password']??'password123'],['actor_id'=>$auth->id()]); $logs->record($r->log); $flash='User created.';
+        $users->create(['name'=>trim($_POST['name']??''),'email'=>trim($_POST['email']??''),'password'=>$_POST['password']??'password123']); $flash='User created.';
     } elseif($action==='rename_user'){
-        $r=$users->update((int)$_POST['user_id'],['name'=>trim($_POST['name']??'')],['actor_id'=>$auth->id()]); $logs->record($r->log); $flash='User updated.';
+        $users->update((int)$_POST['user_id'],['name'=>trim($_POST['name']??'')]); $flash='User updated.';
     } elseif($action==='delete_user'){
-        $r=$users->delete((int)$_POST['user_id'],['actor_id'=>$auth->id()]); $logs->record($r->log); $flash='User deleted.';
+        $users->delete((int)$_POST['user_id']); $flash='User deleted.';
     } elseif($action==='login'){
-        $r=$auth->attempt(trim($_POST['email']??''),$_POST['password']??''); if($r->log)$logs->record($r->log); $flash=$r->success?'Logged in.':'Login failed.';
+        $r=$auth->attempt(trim($_POST['email']??''),$_POST['password']??''); $flash=$r->success?'Logged in.':'Login failed.';
     } elseif($action==='logout'){
-        $r=$auth->logout(); if($r->log)$logs->record($r->log); $flash='Logged out.';
+        $auth->logout(); $flash='Logged out.';
     } elseif(in_array($action,['allow','deny','clear'],true)){
         $uid=(int)$_POST['user_id']; $perm=(string)$_POST['permission'];
-        $r=$action==='clear'?$permissions->clear('user',$uid,$perm):$permissions->set('user',$uid,$perm,$action==='allow');
-        if(is_object($r) && property_exists($r,'log') && $r->log)$logs->record($r->log); $flash='Permission updated.';
+        $action==='clear'?$permissions->clear('user',$uid,$perm):$permissions->set('user',$uid,$perm,$action==='allow');
+        $flash='Permission updated.';
     } elseif($action==='reset'){
         foreach(['combined_users','combined_permissions','combined_logs','combined_test_user'] as $k) unset($_SESSION[$k]); header('Location: '.$_SERVER['PHP_SELF']); exit;
     }
@@ -101,5 +137,5 @@ function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8
 </div><div class="col-lg-8">
 <div class="card mb-4"><div class="card-header fw-semibold">Users</div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th></th></tr></thead><tbody><?php foreach($users->all() as $u):?><tr><td><?=e($u->id)?></td><td><?=e($u->name)?></td><td><?=e($u->email)?></td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="?user=<?=e($u->id)?>">Manage</a></td></tr><?php endforeach;?></tbody></table></div></div>
 <?php if($selected):?><div class="card mb-4"><div class="card-header fw-semibold">Manage <?=e($selected->name)?></div><div class="card-body"><form method="post" class="row g-2 mb-3"><input type="hidden" name="action" value="rename_user"><input type="hidden" name="user_id" value="<?=e($selected->id)?>"><div class="col"><input class="form-control" name="name" value="<?=e($selected->name)?>"></div><div class="col-auto"><button class="btn btn-outline-primary">Rename</button></div></form><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Permission</th><th>Effective</th><th>Source</th><th>Override</th></tr></thead><tbody><?php foreach($permissions->definitions() as $pid=>$def): $r=$resolved[$pid];?><tr><td><code><?=e($pid)?></code></td><td><span class="badge text-bg-<?=$r->allowed?'success':'danger'?>"><?=$r->allowed?'ALLOW':'DENY'?></span></td><td><?=e($r->source)?></td><td><form method="post" class="btn-group btn-group-sm"><input type="hidden" name="user_id" value="<?=e($selected->id)?>"><input type="hidden" name="permission" value="<?=e($pid)?>"><button name="action" value="allow" class="btn btn-outline-success">Allow</button><button name="action" value="deny" class="btn btn-outline-danger">Deny</button><button name="action" value="clear" class="btn btn-outline-secondary">Clear</button></form></td></tr><?php endforeach;?></tbody></table></div><form method="post" onsubmit="return confirm('Delete this user?')"><input type="hidden" name="action" value="delete_user"><input type="hidden" name="user_id" value="<?=e($selected->id)?>"><button class="btn btn-sm btn-danger">Delete User</button></form></div></div><?php endif;?>
-<div class="card"><div class="card-header fw-semibold">Activity Logs <span class="badge text-bg-secondary"><?=count($recentLogs)?></span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>#</th><th>Action</th><th>Subject</th><th>Message</th></tr></thead><tbody><?php foreach($recentLogs as $row):?><tr><td><?=e($row['id'])?></td><td><code><?=e($row['action'])?></code></td><td><?=e($row['subject_type'])?> #<?=e($row['subject_id'])?></td><td><?=e($row['message']??'')?></td></tr><?php endforeach;?></tbody></table></div></div>
+<div class="card"><div class="card-header fw-semibold">Activity Logs <span class="badge text-bg-secondary"><?=count($recentLogs)?></span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>#</th><th>Action</th><th>Actor</th><th>Subject</th><th>Message</th></tr></thead><tbody><?php foreach($recentLogs as $row):?><tr><td><?=e($row['id'])?></td><td><code><?=e($row['action'])?></code></td><td><?=e(($row['actor_type']??'user').' #'.($row['actor_id']??'—'))?></td><td><?=e($row['subject_type'])?> #<?=e($row['subject_id'])?></td><td><?=e($row['message']??'')?></td></tr><?php endforeach;?></tbody></table></div></div>
 </div></div></main></body></html>
