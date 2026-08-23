@@ -20,8 +20,8 @@ use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
  * 2. group permissions
  * 3. permission definition default
  *
- * Permission definitions may be an inline array, a PHP template path, a JSON
- * template path, or a PermissionDefinitions object.
+ * Storage may be explicit, use a named/default Prefab Database connection, or
+ * inherit a compatible database resource from Prefab Users.
  */
 final class PermissionManager
 {
@@ -32,10 +32,6 @@ final class PermissionManager
     private ?object $context = null;
     private ?object $events = null;
 
-    /**
-     * @param PermissionDefinitions|array|string|null $definitions Permission
-     *        definitions object/file, local module configuration array, or null.
-     */
     public function __construct(
         PermissionDefinitions|array|string|null $definitions = null,
         ?PermissionStoreInterface $store = null,
@@ -45,8 +41,6 @@ final class PermissionManager
         } elseif (is_string($definitions)) {
             $this->config = ['definitions' => $definitions];
         } elseif (is_array($definitions)) {
-            // Constructor arrays remain module configuration arrays for backward
-            // compatibility. Put inline definitions under ['definitions' => [...]].
             $this->config = $definitions;
         }
 
@@ -57,7 +51,7 @@ final class PermissionManager
         PrefabRuntime::register('permissions', $this);
     }
 
-    /** Resolve definitions, storage, and compatible database resources. */
+    /** Resolve definitions and storage during Prefab configuration passes. */
     public function prefabConfigure(): void
     {
         if (!$this->definitions) {
@@ -87,10 +81,38 @@ final class PermissionManager
             ?? PrefabConfig::module('permissions', 'database');
 
         if (!$database instanceof PDO) {
+            $databaseManager = PrefabRuntime::get('database');
+
+            if ($databaseManager) {
+                $connectionName = $this->config['connection']
+                    ?? PrefabConfig::module('permissions', 'connection');
+
+                if (
+                    is_string($connectionName)
+                    && method_exists($databaseManager, 'has')
+                    && method_exists($databaseManager, 'connection')
+                    && $databaseManager->has($connectionName)
+                ) {
+                    $database = $databaseManager->connection($connectionName);
+                } elseif (method_exists($databaseManager, 'prefabResource')) {
+                    $candidate = $databaseManager->prefabResource('database');
+
+                    if ($candidate instanceof PDO) {
+                        $database = $candidate;
+                    }
+                }
+            }
+        }
+
+        if (!$database instanceof PDO) {
             $users = PrefabRuntime::get('users');
 
             if ($users && method_exists($users, 'prefabResource')) {
-                $database = $users->prefabResource('database');
+                $candidate = $users->prefabResource('database');
+
+                if ($candidate instanceof PDO) {
+                    $database = $candidate;
+                }
             }
         }
 
@@ -103,7 +125,6 @@ final class PermissionManager
         }
     }
 
-    /** Expose compatible resolved resources to other Prefab modules. */
     public function prefabResource(string $name): mixed
     {
         return match ($name) {
@@ -113,21 +134,18 @@ final class PermissionManager
         };
     }
 
-    /** Attach a project-specific logging/request context provider. */
     public function useContext(object $context): self
     {
         $this->context = $context;
         return $this;
     }
 
-    /** Attach an external event dispatcher. */
     public function useEvents(object $events): self
     {
         $this->events = $events;
         return $this;
     }
 
-    /** Check whether a subject currently has a permission. */
     public function can(
         PermissionSubjectInterface|int|string $subject,
         string $permission,
@@ -136,7 +154,6 @@ final class PermissionManager
         return $this->resolve($subject, $permission, $groupIds)->allowed;
     }
 
-    /** Resolve an effective permission and report its inheritance source. */
     public function resolve(
         PermissionSubjectInterface|int|string $subject,
         string $permission,
@@ -179,8 +196,6 @@ final class PermissionManager
             }
         }
 
-        // An explicit allow from any group currently wins over group denies.
-        // A user override still has higher priority than every group decision.
         if ($allowingGroups !== []) {
             return new PermissionResult(true, 'group', $allowingGroups, $denyingGroups);
         }
@@ -192,7 +207,6 @@ final class PermissionManager
         return new PermissionResult($definitions->default($permission), 'default');
     }
 
-    /** Return raw overrides assigned to a user/group subject. */
     public function overridesFor(string $type, int|string $id): array
     {
         return $this->store()->get($type, $id);
@@ -212,7 +226,6 @@ final class PermissionManager
         return $results;
     }
 
-    /** Set an explicit allow/deny override for a user or group. */
     public function set(
         string $type,
         int|string $id,
@@ -244,7 +257,6 @@ final class PermissionManager
         );
     }
 
-    /** Remove one explicit override so inheritance/default resolution applies. */
     public function clear(
         string $type,
         int|string $id,
@@ -279,19 +291,16 @@ final class PermissionManager
         );
     }
 
-    /** Remove all explicit overrides for a subject. */
     public function clearAll(string $type, int|string $id): void
     {
         $this->store()->remove($type, $id);
     }
 
-    /** @return array<string, array<string, mixed>> */
     public function definitions(): array
     {
         return $this->defs()->all();
     }
 
-    /** @return array<string, mixed>|null */
     public function definition(string $permission): ?array
     {
         return $this->defs()->get($permission);
@@ -342,10 +351,9 @@ final class PermissionManager
         ?bool $new,
         array $context,
     ): array {
-        $base = (
-            $this->context
-            && method_exists($this->context, 'logContext')
-        ) ? $this->context->logContext() : [];
+        $base = ($this->context && method_exists($this->context, 'logContext'))
+            ? $this->context->logContext()
+            : [];
 
         if (!array_key_exists('actor_id', $base)) {
             $base['actor_id'] = PrefabRuntime::actorId();
@@ -375,10 +383,7 @@ final class PermissionManager
             'actor_id' => $context['actor_id'] ?? null,
             'message' => "Permission {$permission} was {$verb} {$type} {$id}.",
             'changes' => [
-                $permission => [
-                    'old' => $old,
-                    'new' => $new,
-                ],
+                $permission => ['old' => $old, 'new' => $new],
             ],
             'metadata' => array_merge(
                 [
