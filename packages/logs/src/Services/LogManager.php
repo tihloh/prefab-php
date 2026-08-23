@@ -5,6 +5,8 @@ namespace Tihloh\Prefab\Logs\Services;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
@@ -15,14 +17,13 @@ use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
 /**
  * Main service API for structured Prefab activity/audit logs.
  *
- * Logs is standalone. Storage follows the Prefab three-level rule across the
- * whole database resource: direct database/connection, module PrefabConfig,
- * common PrefabConfig, then compatible capabilities.
+ * Logs remains standalone. Storage may be a custom repository, plain PDO,
+ * Prefab Database, or any compatible DatabaseInterface implementation.
  */
 final class LogManager
 {
     private ?LogRepositoryInterface $repository = null;
-    private ?PDO $database = null;
+    private ?DatabaseInterface $database = null;
     private array $config = [];
 
     public function __construct(LogRepositoryInterface|array|null $repository = null)
@@ -46,7 +47,11 @@ final class LogManager
     public function prefabConfigure(): void
     {
         if (!$this->repository) {
-            $repository = PrefabConfig::resolve('logs', 'repository', $this->config);
+            $repository = PrefabConfig::resolve(
+                'logs',
+                'repository',
+                $this->config,
+            );
 
             if ($repository['value'] instanceof LogRepositoryInterface) {
                 $this->repository = $repository['value'];
@@ -60,10 +65,10 @@ final class LogManager
         }
 
         if (!$this->repository) {
-            [$pdo, $source, $details] = $this->resolveDatabase();
+            [$database, $source, $details] = $this->resolveDatabase();
 
-            if ($pdo) {
-                $this->database = $pdo;
+            if ($database) {
+                $this->database = $database;
                 $table = PrefabConfig::resolve(
                     'logs',
                     'table',
@@ -72,11 +77,16 @@ final class LogManager
                 );
 
                 $this->repository = new PdoLogRepository(
-                    $pdo,
+                    $database,
                     (string) $table['value'],
                 );
 
-                PrefabRuntime::recordResolution('logs', 'database', $source, $details);
+                PrefabRuntime::recordResolution(
+                    'logs',
+                    'database',
+                    $source,
+                    $details,
+                );
                 PrefabRuntime::recordResolution(
                     'logs',
                     'table',
@@ -86,54 +96,87 @@ final class LogManager
                 PrefabRuntime::recordResolution(
                     'logs',
                     'repository',
-                    'pdo-repository',
+                    'database-repository',
                     ['provider' => PdoLogRepository::class],
                 );
             }
         }
 
         if ($this->repository) {
-            PrefabRuntime::provide('logger', $this, 'prefab-logs');
+            PrefabRuntime::provide(
+                'logger',
+                $this,
+                'prefab-logs',
+            );
         }
     }
 
-    /**
-     * Resolve a PDO while treating `database` and `connection` as two ways of
-     * configuring the same resource.
-     *
-     * @return array{0:?PDO,1:string,2:array}
-     */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function resolveDatabase(): array
     {
-        if (($this->config['database'] ?? null) instanceof PDO) {
-            return [$this->config['database'], 'module-local', []];
+        $localDatabase = $this->asDatabase(
+            $this->config['database'] ?? null,
+        );
+
+        if ($localDatabase) {
+            return [
+                $localDatabase,
+                'module-local',
+                ['driver' => $localDatabase->driver()],
+            ];
         }
 
-        if (isset($this->config['connection']) && is_string($this->config['connection'])) {
-            return $this->namedConnection($this->config['connection'], 'module-local');
+        if (
+            isset($this->config['connection'])
+            && is_string($this->config['connection'])
+        ) {
+            return $this->namedConnection(
+                $this->config['connection'],
+                'module-local',
+            );
         }
 
         $module = PrefabConfig::moduleOnly('logs');
+        $moduleDatabase = $this->asDatabase(
+            $module['database'] ?? null,
+        );
 
-        if (($module['database'] ?? null) instanceof PDO) {
-            return [$module['database'], 'prefab-config-module', []];
+        if ($moduleDatabase) {
+            return [
+                $moduleDatabase,
+                'prefab-config-module',
+                ['driver' => $moduleDatabase->driver()],
+            ];
         }
 
-        if (isset($module['connection']) && is_string($module['connection'])) {
-            return $this->namedConnection($module['connection'], 'prefab-config-module');
+        if (
+            isset($module['connection'])
+            && is_string($module['connection'])
+        ) {
+            return $this->namedConnection(
+                $module['connection'],
+                'prefab-config-module',
+            );
         }
 
-        $common = PrefabConfig::get('database');
+        $common = $this->asDatabase(PrefabConfig::get('database'));
 
-        if ($common instanceof PDO) {
-            return [$common, 'prefab-config-common', []];
+        if ($common) {
+            return [
+                $common,
+                'prefab-config-common',
+                ['driver' => $common->driver()],
+            ];
         }
 
         $entry = PrefabRuntime::resolveEntry('database');
+        $capability = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $capability) {
             return [
-                $entry['value'],
+                $capability,
                 'prefab-capability',
                 [
                     'provider' => $entry['provider'],
@@ -145,23 +188,47 @@ final class LogManager
         return [null, 'unresolved', []];
     }
 
-    /** @return array{0:?PDO,1:string,2:array} */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function namedConnection(string $name, string $source): array
     {
-        $entry = PrefabRuntime::resolveEntry('database.connection.' . $name);
+        $entry = PrefabRuntime::resolveEntry(
+            'database.connection.' . $name,
+        );
+        $database = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $database) {
             return [
-                $entry['value'],
+                $database,
                 $source,
                 [
                     'provider' => $entry['provider'],
                     'connection' => $name,
+                    'driver' => $database->driver(),
                 ],
             ];
         }
 
-        return [null, $source, ['connection' => $name, 'unresolved' => true]];
+        return [
+            null,
+            $source,
+            [
+                'connection' => $name,
+                'unresolved' => true,
+            ],
+        ];
+    }
+
+    private function asDatabase(mixed $value): ?DatabaseInterface
+    {
+        if ($value instanceof DatabaseInterface) {
+            return $value;
+        }
+
+        return $value instanceof PDO
+            ? new PdoDatabaseAdapter($value)
+            : null;
     }
 
     /** Explain how Logs resolved storage and integrations. */
@@ -172,7 +239,9 @@ final class LogManager
 
     public function record(LogEntry|array $entry): int|string
     {
-        $entry = is_array($entry) ? LogEntry::fromArray($entry) : $entry;
+        $entry = is_array($entry)
+            ? LogEntry::fromArray($entry)
+            : $entry;
 
         if ($entry->action === '' || $entry->subjectType === '') {
             throw new InvalidArgumentException(
@@ -199,11 +268,17 @@ final class LogManager
         int|string $subjectId,
         int $limit = 100,
     ): array {
-        return $this->repo()->forSubject($subjectType, $subjectId, $limit);
+        return $this->repo()->forSubject(
+            $subjectType,
+            $subjectId,
+            $limit,
+        );
     }
 
-    public function forActor(int|string $actorId, int $limit = 100): array
-    {
+    public function forActor(
+        int|string $actorId,
+        int $limit = 100,
+    ): array {
         return $this->repo()->forActor($actorId, $limit);
     }
 
