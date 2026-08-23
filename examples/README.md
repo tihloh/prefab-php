@@ -8,10 +8,11 @@ The examples demonstrate these rules:
 
 - every Prefab module is standalone; there is no required Core package
 - `PrefabConfig::set(...)` is optional shared project configuration declared before modules
-- explicit module configuration overrides shared configuration
+- explicit module configuration overrides shared configuration only for that module
 - unconfigured compatible modules integrate automatically during module declarations
 - after declarations complete, normal feature calls use resolved references and do not repeat discovery
 - one module can use a different database/config without disabling its integration with the others
+- project-owned tables stay project-owned; Prefab modules create only their own required storage tables
 
 ## Standalone module tests
 
@@ -30,7 +31,8 @@ The examples demonstrate these rules:
 
 ## Full integration
 
-- `combined-test` — Users + Auth + Permissions + Logs in one interactive app with automatic actor/log integration
+- `combined-test` — Users + Auth + Permissions + Logs in one interactive session/in-memory app
+- `database-integration-test` — real SQLite integration: project-owned `app_users`, Prefab Permissions table in `main.sqlite`, and Prefab Logs table in separate `logs.sqlite`
 
 ## Run any example
 
@@ -48,4 +50,6 @@ php -S 127.0.0.1:8080 -t public
 
 Then open `http://127.0.0.1:8080`.
 
-The examples intentionally use session/in-memory adapters where possible so they run without configuring a database. Production projects can use PDO/Laravel/custom implementations while keeping the same Prefab APIs.
+The database integration example requires PDO SQLite (`pdo_sqlite`). It creates `data/main.sqlite` and `data/logs.sqlite` locally; those generated database files are ignored by Git.
+
+The other examples intentionally use session/in-memory adapters where possible so they run without configuring a database. Production projects can use PDO/Laravel/custom implementations while keeping the same Prefab APIs.
