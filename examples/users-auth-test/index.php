@@ -1,17 +1,26 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
-use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
+
+/*
+ * OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$pdo]);
+ *
+ * Users and Auth are separate standalone modules. Because Auth below has no
+ * provider configured, it automatically uses the compatible Prefab Users module.
+ */
+
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();
 $_SESSION['ua_user']??=['id'=>1,'name'=>'Demo User','email'=>'demo@example.com','active'=>true,'hash'=>password_hash('password123',PASSWORD_DEFAULT)];
 class ProjectUser extends PrefabUser implements AuthenticatableUserInterface{public function __construct(int|string $id,?string $name,?string $email,bool $active,private string $hash){parent::__construct($id,$name,$email,$active);}public function authId():int|string{return $this->id;}public function authPasswordHash():?string{return $this->hash;}public function authIsActive():bool{return $this->active;}}
-$provider=new class implements UserProviderInterface,AuthUserProviderInterface{
+$provider=new class implements UserProviderInterface{
  private function make():ProjectUser{$r=$_SESSION['ua_user'];return new ProjectUser($r['id'],$r['name'],$r['email'],$r['active'],$r['hash']);}
  public function find(int|string $id):?PrefabUser{$u=$this->make();return (string)$id===(string)$u->id?$u:null;}
  public function findByEmail(string $email):?PrefabUser{$u=$this->make();return strcasecmp($email,$u->email??'')===0?$u:null;}
@@ -19,25 +28,18 @@ $provider=new class implements UserProviderInterface,AuthUserProviderInterface{
  public function create(array $data):PrefabUser{throw new RuntimeException('Not used in this test');}
  public function update(int|string $id,array $data):PrefabUser{$_SESSION['ua_user']=array_merge($_SESSION['ua_user'],$data);return $this->make();}
  public function delete(int|string $id):bool{return false;}
- public function findByIdentifier(string $identifier):?AuthenticatableUserInterface{$u=$this->make();return strcasecmp($identifier,$u->email??'')===0?$u:null;}
- public function findById(int|string $id):?AuthenticatableUserInterface{$u=$this->make();return (string)$id===(string)$u->id?$u:null;}
 };
-$usersManager=new UserManager($provider);
-$authManager=new AuthManager($provider,new NativeSessionStore('users_auth_test'));
+
+$users=new UserManager($provider);
+$auth=new AuthManager(['session'=>new NativeSessionStore('users_auth_test')]);
 
 /*
- * This test has custom session storage, so those concrete managers are supplied.
- * Core still owns discovery/integration. Explicitly providing these modules does
- * NOT disable discovery of any other installed Prefab module.
- */
-$prefab=Prefab::create(['modules'=>['users'=>$usersManager,'auth'=>$authManager]]);
-$users=$prefab->users();
-$auth=$prefab->auth();
-
-/*
- * With standard project resources the intended normal setup is simply:
- * $prefab=Prefab::create(['db'=>$pdo]);
- * // Users is discovered; Auth can use the compatible initialized Users source.
+ * The important part is that Auth has NO provider argument. On declaration it
+ * sees Prefab Users and resolves a direct adapter once. Feature calls do not
+ * repeat discovery.
+ *
+ * To override only Auth:
+ * $auth = new AuthManager($customAuthProvider, $customSession);
  */
 
 $msg=null;if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='login'){$r=$auth->attempt($_POST['email']??'',$_POST['password']??'');$msg=$r->success?'Login successful':'Login failed';}elseif($a==='logout'){$auth->logout();$msg='Logged out';}elseif($a==='rename'){$users->update(1,['name'=>trim($_POST['name'])]);$msg='User renamed';}}
