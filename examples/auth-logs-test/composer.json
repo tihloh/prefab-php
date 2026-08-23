@@ -1,10 +1,9 @@
 {
   "name":"tihloh/prefab-auth-logs-test","type":"project",
   "repositories":[
-    {"type":"path","url":"../../packages/core","options":{"symlink":true}},
     {"type":"path","url":"../../packages/auth","options":{"symlink":true}},
     {"type":"path","url":"../../packages/logs","options":{"symlink":true}}
   ],
-  "require":{"php":">=8.2","tihloh/prefab-core":"@dev","tihloh/prefab-auth":"@dev","tihloh/prefab-logs":"@dev"},
+  "require":{"php":">=8.1","tihloh/prefab-auth":"@dev","tihloh/prefab-logs":"@dev"},
   "minimum-stability":"dev","prefer-stable":true
 }
