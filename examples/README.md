@@ -2,13 +2,15 @@
 
 Each example is an independent Composer project using local path repositories from `packages/`.
 
-Every example folder now includes a `prefab-options.php.example` file. It is intentionally commented and explains:
+The initialization/options explanation is kept directly inside each example's `index.php` (or `public/index.php` for the social-auth example) so the sample is self-contained.
 
-- automatic module discovery is always on when Core is used
-- explicit initialization is only needed for unresolved/custom pieces
-- explicit initialization never disables discovery of other modules
-- relevant module-specific factory/instance examples
-- multi-database configuration where applicable
+The examples demonstrate these rules:
+
+- Prefab Core discovery/integration is always automatic.
+- Explicit initialization is only used for a module/piece Core cannot infer from another initialized module or default project resource.
+- Explicit initialization never disables discovery/integration of other modules.
+- Combo examples let Core perform the integration instead of manually forwarding log payloads.
+- Multiple database and custom factory examples are included as commented alternatives where relevant.
 
 ## Standalone module tests
 
@@ -20,14 +22,14 @@ Every example folder now includes a `prefab-options.php.example` file. It is int
 
 ## Pairwise integration tests
 
-- `users-auth-test` — one project user object used by Users/Auth concepts
-- `users-permissions-test` — project user implements permission subject and resolves permissions
-- `auth-logs-test` — Auth activity consumed by LogManager
-- `permissions-logs-test` — permission mutation activity consumed by LogManager
+- `users-auth-test` — Users + Auth composed through Prefab Core
+- `users-permissions-test` — Users + Permissions composed through Prefab Core
+- `auth-logs-test` — Auth log events are recorded automatically by Logs through Core
+- `permissions-logs-test` — permission mutation events are recorded automatically by Logs through Core
 
 ## Full integration
 
-- `combined-test` — Users + Auth + Permissions + Logs in one interactive app
+- `combined-test` — Users + Auth + Permissions + Logs in one interactive app; Core supplies actor context and automatic logging
 
 ## Run any example
 
@@ -37,6 +39,12 @@ composer install
 php -S 127.0.0.1:8080
 ```
 
+For `auth-social-test`, run from that folder with:
+
+```bash
+php -S 127.0.0.1:8080 -t public
+```
+
 Then open `http://127.0.0.1:8080`.
 
-The examples intentionally use session/in-memory adapters where possible so they are easy to run without configuring a database. Production projects can replace those adapters with PDO/Laravel implementations while keeping the same Prefab service APIs.
+The examples intentionally use session/in-memory adapters where possible so they are easy to run without configuring a database. Production projects can replace those adapters with PDO/Laravel implementations while keeping the same Prefab APIs.
