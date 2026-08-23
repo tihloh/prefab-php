@@ -1,12 +1,11 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
 
-use Tihloh\Prefab\Core\Prefab;
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
-use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
@@ -16,6 +15,22 @@ use Tihloh\Prefab\Permissions\Services\PermissionManager;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
 use Tihloh\Prefab\Logs\Services\LogManager;
+
+/*
+ * OPTIONAL COMMON CONFIGURATION
+ * Declare shared resources BEFORE the modules. Every module remains standalone.
+ * A module-specific constructor/config value overrides the shared value.
+ *
+ * PrefabConfig::set([
+ *     'database' => $mainPdo,
+ *     'modules' => [
+ *         'logs' => ['database' => $logPdo], // optional separate DB
+ *     ],
+ * ]);
+ *
+ * If nothing is declared here, each module uses its own internal defaults and
+ * automatically integrates with compatible Prefab modules that are declared.
+ */
 
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 $_SESSION['combined_users'] ??= [1=>['id'=>1,'name'=>'Demo User','email'=>'demo@example.com','active'=>true,'hash'=>password_hash('password123',PASSWORD_DEFAULT),'groups'=>[10]]];
@@ -40,22 +55,13 @@ $userProvider = new class implements UserProviderInterface {
     public function update(int|string $id,array $data): PrefabUser { $i=(int)$id; $_SESSION['combined_users'][$i]=array_merge($_SESSION['combined_users'][$i],$data); return $this->make($_SESSION['combined_users'][$i]); }
     public function delete(int|string $id): bool { $i=(int)$id; if(!isset($_SESSION['combined_users'][$i])) return false; unset($_SESSION['combined_users'][$i]); return true; }
 };
-$usersManager=new UserManager($userProvider);
-$authProvider=new class($usersManager) implements AuthUserProviderInterface {
-    public function __construct(private UserManager $users){}
-    public function findByIdentifier(string $identifier): ?AuthenticatableUserInterface { $u=$this->users->findByEmail($identifier); return $u instanceof AuthenticatableUserInterface?$u:null; }
-    public function findById(int|string $id): ?AuthenticatableUserInterface { $u=$this->users->find($id); return $u instanceof AuthenticatableUserInterface?$u:null; }
-};
-$authManager=new AuthManager($authProvider,new NativeSessionStore('combined_test_user'));
+
 $permissionStore=new class implements PermissionStoreInterface {
     public function get(string $t,int|string $i):array{return $_SESSION['combined_permissions'][$t][(string)$i]??[];}
     public function put(string $t,int|string $i,array $p):void{$_SESSION['combined_permissions'][$t][(string)$i]=$p;}
     public function remove(string $t,int|string $i):void{unset($_SESSION['combined_permissions'][$t][(string)$i]);}
 };
-$permissionsManager=new PermissionManager(new PermissionDefinitions([
-    'documents.view'=>['name'=>'View Documents','description'=>'Can view documents','default'=>true],
-    'documents.approve'=>['name'=>'Approve Documents','description'=>'Can approve documents','default'=>false],
-]),$permissionStore);
+
 $logRepo=new class implements LogRepositoryInterface {
     public function record(LogEntry $e):int|string{$id=count($_SESSION['combined_logs'])+1;$_SESSION['combined_logs'][$id]=['id'=>$id]+$e->toArray();return $id;}
     public function find(int|string $id):?array{return $_SESSION['combined_logs'][(int)$id]??null;}
@@ -63,41 +69,36 @@ $logRepo=new class implements LogRepositoryInterface {
     public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['combined_logs'],fn($r)=>$r['subject_type']===$t&&(string)$r['subject_id']===(string)$id));}
     public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['combined_logs'],fn($r)=>(string)($r['actor_id']??'')===(string)$id));}
 };
-$logsManager=new LogManager($logRepo);
 
 /*
- * CORE BEHAVIOR
- * - Discovery/integration is always automatic.
- * - This demo explicitly supplies the four managers only because its stores are
- *   custom PHP-session adapters instead of normal project/database defaults.
- * - Core automatically connects Auth -> Context and Users/Auth/Permissions -> Logs.
- * - No manual register() chain and no manual $logs->record($result->log).
+ * MODULE DECLARATIONS
+ * No Core object and no register() chain.
+ *
+ * Users is explicitly given a session-backed provider for this demo.
+ * Auth has no user provider: it automatically inherits the compatible Users module.
+ * Permissions/Logs use custom session stores only because this demo has no database.
+ * The last declaration completes the automatic configuration pass; normal feature
+ * calls below use already-resolved references and do not rediscover modules.
  */
-$prefab=Prefab::create(['modules'=>[
-    'users'=>$usersManager,
-    'auth'=>$authManager,
-    'permissions'=>$permissionsManager,
-    'logs'=>$logsManager,
-]]);
-$users=$prefab->users();
-$auth=$prefab->auth();
-$permissions=$prefab->permissions();
-$logs=$prefab->logs();
+$users = new UserManager($userProvider);
+$auth = new AuthManager(['session' => new NativeSessionStore('combined_test_user')]);
+$permissions = new PermissionManager(new PermissionDefinitions([
+    'documents.view'=>['name'=>'View Documents','description'=>'Can view documents','default'=>true],
+    'documents.approve'=>['name'=>'Approve Documents','description'=>'Can approve documents','default'=>false],
+]), $permissionStore);
+$logs = new LogManager($logRepo);
 
 /*
- * Intended normal project when default resources exist:
+ * Normal database-backed project can be much shorter:
  *
- * $prefab=Prefab::create(['db'=>$pdo]);
+ * PrefabConfig::set(['database' => $pdo]);
+ * $users = new UserManager();
+ * $auth = new AuthManager();
+ * $permissions = new PermissionManager(['definitions' => $definitions]);
+ * $logs = new LogManager();
  *
- * Or split databases:
- * $prefab=Prefab::create(['connections'=>[
- *     'default'=>$mainPdo,
- *     'logs'=>$logPdo,
- * ]]);
- *
- * Explicit initialization is only needed for a custom/unresolved piece:
- * $prefab=Prefab::create(['modules'=>['users'=>$customUsers]]);
- * // Auth/Permissions/Logs still remain automatically discoverable/integrated.
+ * Override only an exception:
+ * $logs = new LogManager(['database' => $separateLogPdo]);
  */
 
 $flash=null;
