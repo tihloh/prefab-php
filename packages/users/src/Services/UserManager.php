@@ -6,6 +6,7 @@ use PDO;
 use RuntimeException;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
+use Tihloh\Prefab\Users\Contracts\UserFactoryInterface;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\DTOs\OperationResult;
 use Tihloh\Prefab\Users\Mapping\UserMap;
@@ -39,9 +40,15 @@ final class UserManager
                 $db = $this->config['database'] ?? PrefabConfig::module('users', 'database');
                 if ($db instanceof PDO) {
                     $this->database = $db;
-                    $table = $this->config['table'] ?? 'users';
-                    $map = $this->config['map'] ?? new UserMap($table);
-                    $this->provider = new PdoUserProvider($db, $map);
+                    $table = $this->config['table'] ?? PrefabConfig::module('users', 'table', 'users');
+                    $map = $this->config['map'] ?? PrefabConfig::module('users', 'map');
+                    if (!$map instanceof UserMap) $map = new UserMap((string)$table);
+                    $factory = $this->config['factory'] ?? PrefabConfig::module('users', 'factory');
+                    $this->provider = new PdoUserProvider(
+                        $db,
+                        $map,
+                        $factory instanceof UserFactoryInterface ? $factory : null,
+                    );
                 }
             }
         }
