@@ -7,19 +7,20 @@ use PDO;
 use PDOException;
 use RuntimeException;
 use Throwable;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 
 /**
  * Standalone manager for one or more named PDO connections.
  *
- * Prefab Database is optional. Other Prefab modules may consume its published
- * database capabilities automatically, but they never require this package.
- *
- * Connection definitions accept either a ready PDO/DSN or a convenient
- * Laravel-like driver configuration for mysql/mariadb, pgsql, sqlite/sqlsrv.
+ * DatabaseManager implements Prefab's minimal DatabaseInterface directly while
+ * also exposing the richer table() query builder and named-connection API.
+ * Other Prefab modules therefore consume the same contract whether the project
+ * supplies Prefab Database, plain PDO, or a future framework adapter.
  */
-final class DatabaseManager
+final class DatabaseManager implements DatabaseInterface
 {
     /** @var array<string, PDO> */
     private array $connections = [];
@@ -52,6 +53,7 @@ final class DatabaseManager
             $this->defaultConnection,
         );
         $this->defaultConnection = (string) $default['value'];
+
         PrefabRuntime::recordResolution(
             'database',
             'default_connection',
@@ -59,7 +61,13 @@ final class DatabaseManager
             ['name' => $this->defaultConnection],
         );
 
-        $configured = PrefabConfig::resolve('database', 'connections', $this->config, []);
+        $configured = PrefabConfig::resolve(
+            'database',
+            'connections',
+            $this->config,
+            [],
+        );
+
         if (is_array($configured['value'])) {
             foreach ($configured['value'] as $name => $definition) {
                 if ($definition instanceof PDO || is_array($definition)) {
@@ -69,13 +77,19 @@ final class DatabaseManager
         }
 
         /* Backward-compatible shorthand: PrefabConfig::set(['database' => $pdo]). */
-        $database = PrefabConfig::resolve('database', 'database', $this->config);
+        $database = PrefabConfig::resolve(
+            'database',
+            'database',
+            $this->config,
+        );
+
         if (
             $database['value'] instanceof PDO
             && !isset($this->definitions[$this->defaultConnection])
             && !isset($this->connections[$this->defaultConnection])
         ) {
             $this->definitions[$this->defaultConnection] = $database['value'];
+
             PrefabRuntime::recordResolution(
                 'database',
                 'database',
@@ -85,11 +99,18 @@ final class DatabaseManager
         }
 
         foreach ($this->definitions as $name => $definition) {
-            $this->connections[$name] ??= $this->createConnection($name, $definition);
+            $this->connections[$name] ??= $this->createConnection(
+                $name,
+                $definition,
+            );
         }
 
-        if ($this->connections !== [] && !isset($this->connections[$this->defaultConnection])) {
+        if (
+            $this->connections !== []
+            && !isset($this->connections[$this->defaultConnection])
+        ) {
             $this->defaultConnection = (string) array_key_first($this->connections);
+
             PrefabRuntime::recordResolution(
                 'database',
                 'default_connection',
@@ -102,40 +123,58 @@ final class DatabaseManager
             return;
         }
 
+        /* The default capability is the unified manager, not raw PDO. */
         PrefabRuntime::provide(
             'database',
-            $this->default(),
+            $this,
             'prefab-database',
-            meta: ['connection' => $this->defaultConnection, 'driver' => $this->driver()],
+            meta: [
+                'connection' => $this->defaultConnection,
+                'driver' => $this->driver(),
+            ],
         );
-        PrefabRuntime::provide('database_manager', $this, 'prefab-database');
 
+        PrefabRuntime::provide(
+            'database_manager',
+            $this,
+            'prefab-database',
+        );
+
+        /* Named capabilities expose the same contract through tiny PDO adapters. */
         foreach ($this->connections as $name => $connection) {
             PrefabRuntime::provide(
                 'database.connection.' . $name,
-                $connection,
+                new PdoDatabaseAdapter($connection),
                 'prefab-database',
-                meta: ['connection' => $name, 'driver' => $this->driver($name)],
+                meta: [
+                    'connection' => $name,
+                    'driver' => $this->driver($name),
+                ],
             );
         }
     }
 
+    /** Return the underlying PDO for a named/default connection. */
     public function connection(?string $name = null): PDO
     {
         $name ??= $this->defaultConnection;
 
         if (!isset($this->connections[$name])) {
-            throw new RuntimeException("Database connection '{$name}' is not configured.");
+            throw new RuntimeException(
+                "Database connection '{$name}' is not configured.",
+            );
         }
 
         return $this->connections[$name];
     }
 
+    /** Backward-compatible alias for connection(). */
     public function get(?string $name = null): PDO
     {
         return $this->connection($name);
     }
 
+    /** Return the default raw PDO connection. */
     public function default(): PDO
     {
         return $this->connection();
@@ -146,9 +185,12 @@ final class DatabaseManager
         return $this->defaultConnection;
     }
 
+    /** DatabaseInterface driver for default connection; optional name for manager callers. */
     public function driver(?string $name = null): string
     {
-        $driver = strtolower((string) $this->connection($name)->getAttribute(PDO::ATTR_DRIVER_NAME));
+        $driver = strtolower(
+            (string) $this->connection($name)->getAttribute(PDO::ATTR_DRIVER_NAME),
+        );
 
         return $driver === 'dblib' ? 'sqlsrv' : $driver;
     }
@@ -164,36 +206,43 @@ final class DatabaseManager
         return array_keys($this->connections);
     }
 
-    /** Start a lightweight portable query builder on a connection. */
+    /** Start the optional richer query builder on a connection. */
     public function table(string $table, ?string $connection = null): QueryBuilder
     {
-        return new QueryBuilder($this->connection($connection), $table);
+        return new QueryBuilder(
+            $this->connection($connection),
+            $table,
+        );
     }
 
     /** Execute a parameterized SELECT and return associative rows. */
-    public function select(string $sql, array $bindings = [], ?string $connection = null): array
-    {
-        $stmt = $this->connection($connection)->prepare($sql);
-        $stmt->execute($bindings);
+    public function select(
+        string $sql,
+        array $bindings = [],
+        ?string $connection = null,
+    ): array {
+        $statement = $this->connection($connection)->prepare($sql);
+        $statement->execute($bindings);
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /** Execute a parameterized SQL statement and return affected rows. */
-    public function statement(string $sql, array $bindings = [], ?string $connection = null): int
-    {
-        $stmt = $this->connection($connection)->prepare($sql);
-        $stmt->execute($bindings);
+    /** Execute a parameterized SQL statement. */
+    public function statement(
+        string $sql,
+        array $bindings = [],
+        ?string $connection = null,
+    ): bool {
+        $statement = $this->connection($connection)->prepare($sql);
 
-        return $stmt->rowCount();
+        return $statement->execute($bindings);
     }
 
-    /**
-     * Execute a callback atomically on one connection.
-     * The callback receives this manager and the active PDO connection.
-     */
-    public function transaction(callable $callback, ?string $connection = null): mixed
-    {
+    /** Execute a callback atomically on one connection. */
+    public function transaction(
+        callable $callback,
+        ?string $connection = null,
+    ): mixed {
         $pdo = $this->connection($connection);
         $pdo->beginTransaction();
 
@@ -206,28 +255,50 @@ final class DatabaseManager
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+
             throw $exception;
         }
+    }
+
+    /** DatabaseInterface insert-ID operation for the default connection. */
+    public function lastInsertId(?string $name = null): string|false
+    {
+        return $this->connection()->lastInsertId($name);
+    }
+
+    /** DatabaseInterface PDO escape hatch for the default connection. */
+    public function pdo(): PDO
+    {
+        return $this->default();
     }
 
     public function set(string $name, PDO|array $definition): self
     {
         $this->definitions[$name] = $definition;
-        $this->connections[$name] = $this->createConnection($name, $definition);
+        $this->connections[$name] = $this->createConnection(
+            $name,
+            $definition,
+        );
 
         PrefabRuntime::provide(
             'database.connection.' . $name,
-            $this->connections[$name],
+            new PdoDatabaseAdapter($this->connections[$name]),
             'prefab-database',
-            meta: ['connection' => $name, 'driver' => $this->driver($name)],
+            meta: [
+                'connection' => $name,
+                'driver' => $this->driver($name),
+            ],
         );
 
         if ($name === $this->defaultConnection) {
             PrefabRuntime::provide(
                 'database',
-                $this->connections[$name],
+                $this,
                 'prefab-database',
-                meta: ['connection' => $name, 'driver' => $this->driver($name)],
+                meta: [
+                    'connection' => $name,
+                    'driver' => $this->driver($name),
+                ],
             );
         }
 
@@ -237,16 +308,23 @@ final class DatabaseManager
     public function useDefault(string $name): self
     {
         if (!$this->has($name)) {
-            throw new InvalidArgumentException("Unknown database connection '{$name}'.");
+            throw new InvalidArgumentException(
+                "Unknown database connection '{$name}'.",
+            );
         }
 
         $this->defaultConnection = $name;
+
         PrefabRuntime::provide(
             'database',
-            $this->connections[$name],
+            $this,
             'prefab-database',
-            meta: ['connection' => $name, 'driver' => $this->driver($name)],
+            meta: [
+                'connection' => $name,
+                'driver' => $this->driver($name),
+            ],
         );
+
         PrefabRuntime::recordResolution(
             'database',
             'default_connection',
@@ -267,16 +345,23 @@ final class DatabaseManager
         }
     }
 
+    /** Backward-compatible direct resource access. */
     public function prefabResource(string $name): mixed
     {
         if ($name === 'database_manager') {
             return $this;
         }
+
         if ($name === 'database') {
-            return $this->connections !== [] ? $this->default() : null;
+            return $this->connections !== [] ? $this : null;
         }
+
         if (str_starts_with($name, 'connection:')) {
-            return $this->connections[substr($name, strlen('connection:'))] ?? null;
+            $connection = substr($name, strlen('connection:'));
+
+            return isset($this->connections[$connection])
+                ? new PdoDatabaseAdapter($this->connections[$connection])
+                : null;
         }
 
         return null;
@@ -288,22 +373,36 @@ final class DatabaseManager
     }
 
     /** @param PDO|array<string, mixed> $definition */
-    private function createConnection(string $name, PDO|array $definition): PDO
-    {
+    private function createConnection(
+        string $name,
+        PDO|array $definition,
+    ): PDO {
         if ($definition instanceof PDO) {
             return $definition;
         }
 
         $dsn = $definition['dsn'] ?? $this->buildDsn($name, $definition);
-        $username = isset($definition['username']) ? (string) $definition['username'] : null;
-        $password = isset($definition['password']) ? (string) $definition['password'] : null;
-        $options = is_array($definition['options'] ?? null) ? $definition['options'] : [];
+        $username = isset($definition['username'])
+            ? (string) $definition['username']
+            : null;
+        $password = isset($definition['password'])
+            ? (string) $definition['password']
+            : null;
+        $options = is_array($definition['options'] ?? null)
+            ? $definition['options']
+            : [];
+
         $options += [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ];
 
-        return new PDO($dsn, $username, $password, $options);
+        return new PDO(
+            $dsn,
+            $username,
+            $password,
+            $options,
+        );
     }
 
     /** Build a PDO DSN from a convenient driver-based connection definition. */
@@ -314,9 +413,13 @@ final class DatabaseManager
 
         if ($driver === 'sqlite') {
             $database = (string) ($definition['database'] ?? '');
+
             if ($database === '') {
-                throw new InvalidArgumentException("SQLite connection '{$name}' requires database path.");
+                throw new InvalidArgumentException(
+                    "SQLite connection '{$name}' requires database path.",
+                );
             }
+
             return 'sqlite:' . $database;
         }
 
@@ -325,7 +428,9 @@ final class DatabaseManager
         $port = $definition['port'] ?? null;
 
         if ($database === '') {
-            throw new InvalidArgumentException("Database connection '{$name}' requires database name.");
+            throw new InvalidArgumentException(
+                "Database connection '{$name}' requires database name.",
+            );
         }
 
         return match ($driver) {
@@ -349,7 +454,8 @@ final class DatabaseManager
                 $database,
             ),
             default => throw new InvalidArgumentException(
-                "Connection '{$name}' needs a DSN or supported driver: mysql/mariadb, pgsql, sqlite, sqlsrv.",
+                "Connection '{$name}' needs a DSN or supported driver: "
+                . 'mysql/mariadb, pgsql, sqlite, sqlsrv.',
             ),
         };
     }
