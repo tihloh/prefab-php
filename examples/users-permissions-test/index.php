@@ -1,6 +1,7 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Users\User\PrefabUser;
@@ -8,6 +9,13 @@ use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
 use Tihloh\Prefab\Permissions\Services\PermissionManager;
+
+/* OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$pdo]);
+ * Permissions can inherit the shared DB, or a compatible Users DB when its own
+ * store/database is not configured. Explicit Permissions config always wins.
+ */
+
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();$_SESSION['up_perms']??=[];
 class ProjectUser extends PrefabUser implements PermissionSubjectInterface{public function __construct(int $id,string $name,string $email,private array $groups=[]){parent::__construct($id,$name,$email,true);}public function permissionSubjectId():int|string{return $this->id;}public function permissionGroupIds():array{return $this->groups;}}
 $userProvider=new class implements UserProviderInterface{
@@ -20,20 +28,19 @@ $userProvider=new class implements UserProviderInterface{
  public function delete(int|string $id):bool{return false;}
 };
 $store=new class implements PermissionStoreInterface{public function get(string $t,int|string $i):array{return $_SESSION['up_perms'][$t][(string)$i]??[];}public function put(string $t,int|string $i,array $p):void{$_SESSION['up_perms'][$t][(string)$i]=$p;}public function remove(string $t,int|string $i):void{unset($_SESSION['up_perms'][$t][(string)$i]);}};
-$usersManager=new UserManager($userProvider);
-$permissionsManager=new PermissionManager(new PermissionDefinitions(['documents.view'=>['name'=>'View Documents','default'=>true],'documents.approve'=>['name'=>'Approve Documents','default'=>false]]),$store);
-$permissionsManager->set('group',10,'documents.approve',true);
 
-/*
- * Custom session adapters are supplied explicitly; Core automatically detects
- * the Users + Permissions combination and keeps discovery active for anything
- * else installed. Explicit initialization only fills what cannot be inferred.
+$users=new UserManager($userProvider);
+$permissions=new PermissionManager(new PermissionDefinitions([
+ 'documents.view'=>['name'=>'View Documents','default'=>true],
+ 'documents.approve'=>['name'=>'Approve Documents','default'=>false]
+]),$store);
+$permissions->set('group',10,'documents.approve',true);
+
+/* Database-backed alternative:
+ * PrefabConfig::set(['database'=>$pdo]);
+ * $users = new UserManager();
+ * $permissions = new PermissionManager(['definitions'=>$definitions]);
  */
-$prefab=Prefab::create(['modules'=>['users'=>$usersManager,'permissions'=>$permissionsManager]]);
-$users=$prefab->users();
-$permissions=$prefab->permissions();
-
-/* Normal/default project: $prefab=Prefab::create(['db'=>$pdo]); */
 
 $user=$users->find(25);
 if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';$p=$_POST['permission']??'';if($a==='allow')$permissions->set('user',25,$p,true);elseif($a==='deny')$permissions->set('user',25,$p,false);elseif($a==='clear')$permissions->clear('user',25,$p);}
