@@ -1,10 +1,21 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
 use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
+
+/*
+ * OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set([...]);
+ *
+ * Auth is standalone. If a compatible Prefab Users module already exists and
+ * no Auth provider is configured, Auth automatically uses it. Explicit provider
+ * or session configuration overrides automatic integration.
+ */
+
 $user=new class implements AuthenticatableUserInterface{
  public function authId():int|string{return 1;}
  public function authPasswordHash():?string{return password_hash('password123',PASSWORD_DEFAULT);}
@@ -15,24 +26,13 @@ $provider=new class($user) implements AuthUserProviderInterface{
  public function findByIdentifier(string $identifier):?AuthenticatableUserInterface{return $identifier==='demo@example.com'?$this->user:null;}
  public function findById(int|string $id):?AuthenticatableUserInterface{return (string)$id==='1'?$this->user:null;}
 };
-$authManager=new AuthManager($provider,new NativeSessionStore('auth_test_user'));
 
-/*
- * Core always discovers/integrates available modules. This standalone Auth
- * test has no Users module/default user source, so Auth itself is explicitly
- * initialized with the test provider. If Users were already initialized and
- * supplied a compatible auth user source, Auth could be derived automatically.
- */
-$prefab=Prefab::create(['modules'=>['auth'=>$authManager]]);
-$auth=$prefab->auth();
+// Standalone Auth has no Users module, so this test supplies its provider explicitly.
+$auth=new AuthManager($provider,new NativeSessionStore('auth_test_user'));
 
-/*
- * Typical project with defaults:
- * $prefab=Prefab::create(['db'=>$pdo]);
- * $auth=$prefab->auth();
- *
- * Optional custom Auth only when Prefab cannot infer your user/session source:
- * $prefab=Prefab::create(['modules'=>['auth'=>$customAuth]]);
+/* With Prefab Users present and compatible, this can simply be:
+ * $users = new UserManager(...);
+ * $auth = new AuthManager();
  */
 
 $message=null;$lastLog=null;
