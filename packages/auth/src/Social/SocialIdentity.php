@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Auth\Social;
 
-final readonly class SocialIdentity
+final class SocialIdentity
 {
     public function __construct(
         public string $provider,
