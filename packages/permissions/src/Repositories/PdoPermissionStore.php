@@ -4,52 +4,74 @@ namespace Tihloh\Prefab\Permissions\Repositories;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 
 /**
- * PDO-backed permission storage with driver-specific SQL kept inside the
- * repository. Prefab Permissions therefore remains standalone and does not
- * require Prefab Database merely to support multiple PDO database engines.
+ * Database-backed permission storage.
  *
- * First-class drivers: MySQL/MariaDB, PostgreSQL, SQLite and SQL Server.
+ * The historical PDO class name is retained for backward compatibility, but
+ * the repository now consumes DatabaseInterface. Passing PDO still works and
+ * is automatically adapted. Driver-specific schema/upsert SQL remains local
+ * until Prefab introduces a dedicated optional schema abstraction.
  */
 final class PdoPermissionStore implements PermissionStoreInterface
 {
+    private DatabaseInterface $database;
+
     public function __construct(
-        private PDO $pdo,
+        DatabaseInterface|PDO $database,
         private string $table = 'prefab_subject_permissions',
     ) {
+        $this->database = $database instanceof PDO
+            ? new PdoDatabaseAdapter($database)
+            : $database;
+
         $this->assertIdentifier($this->table);
         $this->ensureSchema();
     }
 
     public function get(string $subjectType, int|string $subjectId): array
     {
-        $sql = "SELECT permissions FROM {$this->table} WHERE subject_type = :type AND subject_id = :id";
+        $sql = $this->driver() === 'sqlsrv'
+            ? "SELECT TOP 1 permissions FROM {$this->table} WHERE subject_type = :type AND subject_id = :id"
+            : "SELECT permissions FROM {$this->table} WHERE subject_type = :type AND subject_id = :id LIMIT 1";
 
-        if ($this->driver() !== 'sqlsrv') {
-            $sql .= ' LIMIT 1';
-        }
+        $rows = $this->database->select(
+            $sql,
+            [
+                'type' => $subjectType,
+                'id' => (string) $subjectId,
+            ],
+        );
+        $json = $rows[0]['permissions'] ?? null;
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute(['type' => $subjectType, 'id' => (string) $subjectId]);
-        $json = $stmt->fetchColumn();
-
-        if ($json === false || $json === null || $json === '') {
+        if ($json === null || $json === '') {
             return [];
         }
 
-        $decoded = json_decode((string) $json, true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode(
+            (string) $json,
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
 
         return is_array($decoded) ? $decoded : [];
     }
 
-    public function put(string $subjectType, int|string $subjectId, array $permissions): void
-    {
+    public function put(
+        string $subjectType,
+        int|string $subjectId,
+        array $permissions,
+    ): void {
         $params = [
             'type' => $subjectType,
             'id' => (string) $subjectId,
-            'permissions' => json_encode($permissions, JSON_THROW_ON_ERROR),
+            'permissions' => json_encode(
+                $permissions,
+                JSON_THROW_ON_ERROR,
+            ),
         ];
 
         $sql = match ($this->driver()) {
@@ -81,15 +103,18 @@ final class PdoPermissionStore implements PermissionStoreInterface
             ),
         };
 
-        $this->pdo->prepare($sql)->execute($params);
+        $this->database->statement($sql, $params);
     }
 
     public function remove(string $subjectType, int|string $subjectId): void
     {
-        $stmt = $this->pdo->prepare(
+        $this->database->statement(
             "DELETE FROM {$this->table} WHERE subject_type = :type AND subject_id = :id",
+            [
+                'type' => $subjectType,
+                'id' => (string) $subjectId,
+            ],
         );
-        $stmt->execute(['type' => $subjectType, 'id' => (string) $subjectId]);
     }
 
     private function ensureSchema(): void
@@ -141,20 +166,20 @@ final class PdoPermissionStore implements PermissionStoreInterface
             ),
         };
 
-        $this->pdo->exec($sql);
+        $this->database->statement($sql);
     }
 
     private function driver(): string
     {
-        $driver = strtolower((string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
-
-        return $driver === 'dblib' ? 'sqlsrv' : $driver;
+        return $this->database->driver();
     }
 
     private function assertIdentifier(string $identifier): void
     {
         if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier)) {
-            throw new RuntimeException("Unsafe SQL identifier: {$identifier}");
+            throw new RuntimeException(
+                "Unsafe SQL identifier: {$identifier}",
+            );
         }
     }
 }
