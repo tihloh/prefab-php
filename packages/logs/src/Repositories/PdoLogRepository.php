@@ -4,21 +4,30 @@ namespace Tihloh\Prefab\Logs\Repositories;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
 
 /**
- * Portable PDO audit-log repository.
+ * Database-backed audit-log repository.
  *
- * Schema differences are isolated here so Prefab Logs can remain standalone.
- * First-class drivers are MySQL/MariaDB, PostgreSQL, SQLite and SQL Server.
+ * The historical PDO class name is retained for backward compatibility, but
+ * storage now flows through DatabaseInterface. Plain PDO is automatically
+ * adapted, while Prefab Database/framework adapters can be used directly.
  */
 final class PdoLogRepository implements LogRepositoryInterface
 {
+    private DatabaseInterface $database;
+
     public function __construct(
-        private PDO $pdo,
+        DatabaseInterface|PDO $database,
         private string $table = 'prefab_logs',
     ) {
+        $this->database = $database instanceof PDO
+            ? new PdoDatabaseAdapter($database)
+            : $database;
+
         $this->assertIdentifier($this->table);
         $this->ensureSchema();
     }
@@ -30,21 +39,33 @@ final class PdoLogRepository implements LogRepositoryInterface
             VALUES
             (:action, :subject_type, :subject_id, :actor_id, :message, :changes, :metadata, :ip_address, :user_agent, :occurred_at, CURRENT_TIMESTAMP)";
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
-            'action' => $entry->action,
-            'subject_type' => $entry->subjectType,
-            'subject_id' => $entry->subjectId !== null ? (string) $entry->subjectId : null,
-            'actor_id' => $entry->actorId !== null ? (string) $entry->actorId : null,
-            'message' => $entry->message,
-            'changes' => json_encode($entry->changes, JSON_THROW_ON_ERROR),
-            'metadata' => json_encode($entry->metadata, JSON_THROW_ON_ERROR),
-            'ip_address' => $entry->ipAddress,
-            'user_agent' => $entry->userAgent,
-            'occurred_at' => $entry->occurredAt,
-        ]);
+        $this->database->statement(
+            $sql,
+            [
+                'action' => $entry->action,
+                'subject_type' => $entry->subjectType,
+                'subject_id' => $entry->subjectId !== null
+                    ? (string) $entry->subjectId
+                    : null,
+                'actor_id' => $entry->actorId !== null
+                    ? (string) $entry->actorId
+                    : null,
+                'message' => $entry->message,
+                'changes' => json_encode(
+                    $entry->changes,
+                    JSON_THROW_ON_ERROR,
+                ),
+                'metadata' => json_encode(
+                    $entry->metadata,
+                    JSON_THROW_ON_ERROR,
+                ),
+                'ip_address' => $entry->ipAddress,
+                'user_agent' => $entry->userAgent,
+                'occurred_at' => $entry->occurredAt,
+            ],
+        );
 
-        return $this->pdo->lastInsertId();
+        return $this->database->lastInsertId();
     }
 
     public function find(int|string $id): ?array
@@ -53,58 +74,77 @@ final class PdoLogRepository implements LogRepositoryInterface
             ? "SELECT TOP 1 * FROM {$this->table} WHERE id = :id"
             : "SELECT * FROM {$this->table} WHERE id = :id LIMIT 1";
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute(['id' => $id]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $rows = $this->database->select($sql, ['id' => $id]);
 
-        return $row ? $this->decode($row) : null;
+        return isset($rows[0]) ? $this->decode($rows[0]) : null;
     }
 
     public function recent(int $limit = 100, int $offset = 0): array
     {
-        $rows = $this->pdo->query($this->pagedSql(null, $limit, $offset))
-            ->fetchAll(PDO::FETCH_ASSOC);
-
-        return array_map(fn (array $row) => $this->decode($row), $rows);
-    }
-
-    public function forSubject(string $subjectType, int|string $subjectId, int $limit = 100): array
-    {
-        $stmt = $this->pdo->prepare(
-            $this->pagedSql('subject_type = :type AND subject_id = :id', $limit),
+        $rows = $this->database->select(
+            $this->pagedSql(null, $limit, $offset),
         );
-        $stmt->execute(['type' => $subjectType, 'id' => (string) $subjectId]);
 
         return array_map(
             fn (array $row) => $this->decode($row),
-            $stmt->fetchAll(PDO::FETCH_ASSOC),
+            $rows,
         );
     }
 
-    public function forActor(int|string $actorId, int $limit = 100): array
-    {
-        $stmt = $this->pdo->prepare(
+    public function forSubject(
+        string $subjectType,
+        int|string $subjectId,
+        int $limit = 100,
+    ): array {
+        $rows = $this->database->select(
+            $this->pagedSql(
+                'subject_type = :type AND subject_id = :id',
+                $limit,
+            ),
+            [
+                'type' => $subjectType,
+                'id' => (string) $subjectId,
+            ],
+        );
+
+        return array_map(
+            fn (array $row) => $this->decode($row),
+            $rows,
+        );
+    }
+
+    public function forActor(
+        int|string $actorId,
+        int $limit = 100,
+    ): array {
+        $rows = $this->database->select(
             $this->pagedSql('actor_id = :actor_id', $limit),
+            ['actor_id' => (string) $actorId],
         );
-        $stmt->execute(['actor_id' => (string) $actorId]);
 
         return array_map(
             fn (array $row) => $this->decode($row),
-            $stmt->fetchAll(PDO::FETCH_ASSOC),
+            $rows,
         );
     }
 
-    private function pagedSql(?string $where, int $limit, int $offset = 0): string
-    {
+    private function pagedSql(
+        ?string $where,
+        int $limit,
+        int $offset = 0,
+    ): string {
         $limit = max(1, min($limit, 1000));
         $offset = max(0, $offset);
         $whereSql = $where ? " WHERE {$where}" : '';
 
         if ($this->driver() === 'sqlsrv') {
-            return "SELECT * FROM {$this->table}{$whereSql} ORDER BY id DESC OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
+            return "SELECT * FROM {$this->table}{$whereSql}"
+                . " ORDER BY id DESC OFFSET {$offset} ROWS"
+                . " FETCH NEXT {$limit} ROWS ONLY";
         }
 
-        return "SELECT * FROM {$this->table}{$whereSql} ORDER BY id DESC LIMIT {$limit} OFFSET {$offset}";
+        return "SELECT * FROM {$this->table}{$whereSql}"
+            . " ORDER BY id DESC LIMIT {$limit} OFFSET {$offset}";
     }
 
     private function ensureSchema(): void
@@ -180,7 +220,7 @@ final class PdoLogRepository implements LogRepositoryInterface
             ),
         };
 
-        $this->pdo->exec($sql);
+        $this->database->statement($sql);
         $this->ensureIndexes();
     }
 
@@ -188,23 +228,30 @@ final class PdoLogRepository implements LogRepositoryInterface
     {
         $driver = $this->driver();
 
-        if ($driver === 'sqlite') {
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_subject ON {$this->table}(subject_type, subject_id)");
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_actor ON {$this->table}(actor_id)");
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_action ON {$this->table}(action)");
-        } elseif ($driver === 'pgsql') {
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_subject ON {$this->table}(subject_type, subject_id)");
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_actor ON {$this->table}(actor_id)");
-            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$this->table}_action ON {$this->table}(action)");
+        if (in_array($driver, ['sqlite', 'pgsql'], true)) {
+            $this->database->statement(
+                "CREATE INDEX IF NOT EXISTS idx_{$this->table}_subject"
+                . " ON {$this->table}(subject_type, subject_id)",
+            );
+            $this->database->statement(
+                "CREATE INDEX IF NOT EXISTS idx_{$this->table}_actor"
+                . " ON {$this->table}(actor_id)",
+            );
+            $this->database->statement(
+                "CREATE INDEX IF NOT EXISTS idx_{$this->table}_action"
+                . " ON {$this->table}(action)",
+            );
         }
-        // MySQL indexes are declared with the table. SQL Server deployments may
-        // add project-specific indexes independently to avoid duplicate-name DDL.
     }
 
     private function decode(array $row): array
     {
-        $row['changes'] = $this->decodeJson($row['changes'] ?? null);
-        $row['metadata'] = $this->decodeJson($row['metadata'] ?? null);
+        $row['changes'] = $this->decodeJson(
+            $row['changes'] ?? null,
+        );
+        $row['metadata'] = $this->decodeJson(
+            $row['metadata'] ?? null,
+        );
 
         return $row;
     }
@@ -215,22 +262,26 @@ final class PdoLogRepository implements LogRepositoryInterface
             return [];
         }
 
-        $decoded = json_decode((string) $value, true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode(
+            (string) $value,
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
 
         return is_array($decoded) ? $decoded : [];
     }
 
     private function driver(): string
     {
-        $driver = strtolower((string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
-
-        return $driver === 'dblib' ? 'sqlsrv' : $driver;
+        return $this->database->driver();
     }
 
     private function assertIdentifier(string $identifier): void
     {
         if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier)) {
-            throw new RuntimeException("Unsafe SQL identifier: {$identifier}");
+            throw new RuntimeException(
+                "Unsafe SQL identifier: {$identifier}",
+            );
         }
     }
 }
