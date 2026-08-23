@@ -35,7 +35,9 @@ final class Prefab
         foreach ($config['modules'] ?? [] as $name => $module) {
             if (is_object($module)) $self->register((string)$name, $module);
         }
-        if (($config['auto_discover'] ?? true) !== false) $self->discover();
+        // Discovery is intentionally always on. Explicit initialization only
+        // supplies/replaces modules Core cannot initialize from available defaults.
+        $self->discover();
         return $self;
     }
 
@@ -56,7 +58,6 @@ final class Prefab
         foreach ($known as $name => $class) {
             if ($this->has($name) || !class_exists($class)) continue;
             $moduleConfig = $this->config['module_options'][$name] ?? [];
-            if (($moduleConfig['enabled'] ?? true) === false) continue;
             $factory = $moduleConfig['factory'] ?? $this->factories[$name] ?? null;
             if (is_callable($factory)) {
                 $module = $factory($this, $moduleConfig);
