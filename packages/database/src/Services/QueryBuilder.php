@@ -6,13 +6,7 @@ use InvalidArgumentException;
 use PDO;
 use RuntimeException;
 
-/**
- * Lightweight framework-independent query builder.
- *
- * This deliberately covers the common CRUD subset needed by rapid Prefab
- * applications rather than attempting to reproduce a full ORM. Values are
- * always parameterized; table/column identifiers are validated separately.
- */
+/** Lightweight, framework-independent query builder for common portable CRUD. */
 final class QueryBuilder
 {
     private array $wheres = [];
@@ -21,10 +15,8 @@ final class QueryBuilder
     private ?int $limitValue = null;
     private int $offsetValue = 0;
 
-    public function __construct(
-        private PDO $pdo,
-        private string $table,
-    ) {
+    public function __construct(private PDO $pdo, private string $table)
+    {
         $this->assertIdentifier($table);
     }
 
@@ -65,7 +57,6 @@ final class QueryBuilder
     {
         $clone = clone $this;
         $clone->limitValue = max(1, $limit);
-
         return $clone;
     }
 
@@ -73,7 +64,6 @@ final class QueryBuilder
     {
         $clone = clone $this;
         $clone->offsetValue = max(0, $offset);
-
         return $clone;
     }
 
@@ -82,15 +72,12 @@ final class QueryBuilder
         [$sql, $bindings] = $this->selectSql();
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($bindings);
-
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function first(): ?array
     {
-        $rows = $this->limit(1)->get();
-
-        return $rows[0] ?? null;
+        return $this->limit(1)->get()[0] ?? null;
     }
 
     public function insert(array $values): bool
@@ -100,28 +87,22 @@ final class QueryBuilder
         }
 
         $columns = array_keys($values);
-        array_walk($columns, fn (string $column) => $this->assertIdentifier($column));
+        foreach ($columns as $column) {
+            $this->assertIdentifier((string) $column);
+        }
         $placeholders = array_map(fn (string $column): string => ':i_' . $column, $columns);
         $bindings = [];
-
         foreach ($values as $column => $value) {
             $bindings[':i_' . $column] = $value;
         }
 
-        $sql = sprintf(
-            'INSERT INTO %s (%s) VALUES (%s)',
-            $this->table,
-            implode(', ', $columns),
-            implode(', ', $placeholders),
-        );
-
+        $sql = sprintf('INSERT INTO %s (%s) VALUES (%s)', $this->table, implode(', ', $columns), implode(', ', $placeholders));
         return $this->pdo->prepare($sql)->execute($bindings);
     }
 
     public function insertGetId(array $values): int|string
     {
         $this->insert($values);
-
         return $this->pdo->lastInsertId();
     }
 
@@ -133,7 +114,6 @@ final class QueryBuilder
 
         $sets = [];
         $bindings = $this->bindings;
-
         foreach ($values as $column => $value) {
             $this->assertIdentifier((string) $column);
             $parameter = ':u_' . $column;
@@ -141,19 +121,15 @@ final class QueryBuilder
             $bindings[$parameter] = $value;
         }
 
-        $sql = "UPDATE {$this->table} SET " . implode(', ', $sets) . $this->whereSql();
-        $stmt = $this->pdo->prepare($sql);
+        $stmt = $this->pdo->prepare("UPDATE {$this->table} SET " . implode(', ', $sets) . $this->whereSql());
         $stmt->execute($bindings);
-
         return $stmt->rowCount();
     }
 
     public function delete(): int
     {
-        $sql = "DELETE FROM {$this->table}" . $this->whereSql();
-        $stmt = $this->pdo->prepare($sql);
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->table}" . $this->whereSql());
         $stmt->execute($this->bindings);
-
         return $stmt->rowCount();
     }
 
@@ -170,20 +146,23 @@ final class QueryBuilder
             if (($this->limitValue !== null || $this->offsetValue > 0) && $this->orders === []) {
                 $sql .= ' ORDER BY (SELECT 0)';
             }
-
             if ($this->limitValue !== null || $this->offsetValue > 0) {
-                $limit = $this->limitValue ?? PHP_INT_MAX;
+                $limit = $this->limitValue ?? 2147483647;
                 $sql .= " OFFSET {$this->offsetValue} ROWS FETCH NEXT {$limit} ROWS ONLY";
             }
         } else {
             if ($this->limitValue !== null) {
                 $sql .= " LIMIT {$this->limitValue}";
+            } elseif ($this->offsetValue > 0) {
+                if ($driver === 'sqlite') {
+                    $sql .= ' LIMIT -1';
+                } elseif ($driver === 'mysql') {
+                    $sql .= ' LIMIT 18446744073709551615';
+                }
+                // PostgreSQL supports OFFSET without LIMIT.
             }
 
             if ($this->offsetValue > 0) {
-                if ($this->limitValue === null) {
-                    $sql .= $driver === 'sqlite' ? ' LIMIT -1' : ' LIMIT 18446744073709551615';
-                }
                 $sql .= " OFFSET {$this->offsetValue}";
             }
         }
@@ -199,7 +178,6 @@ final class QueryBuilder
     private function driver(): string
     {
         $driver = strtolower((string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
-
         return $driver === 'dblib' ? 'sqlsrv' : $driver;
     }
 
