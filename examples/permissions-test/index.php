@@ -1,9 +1,20 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
 use Tihloh\Prefab\Permissions\Services\PermissionManager;
+
+/*
+ * OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$pdo]);
+ *
+ * Permissions can inherit a shared database when no store/database is supplied.
+ * Explicit constructor config overrides it:
+ * $permissions = new PermissionManager(['database'=>$securityPdo,'definitions'=>$definitions]);
+ */
+
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();
 $_SESSION['permissions_test']??=[];
 $store=new class implements PermissionStoreInterface{
@@ -11,27 +22,17 @@ $store=new class implements PermissionStoreInterface{
  public function put(string $t,int|string $i,array $p):void{$_SESSION['permissions_test'][$t][(string)$i]=$p;}
  public function remove(string $t,int|string $i):void{unset($_SESSION['permissions_test'][$t][(string)$i]);}
 };
-$permissionsManager=new PermissionManager(new PermissionDefinitions([
+
+// Explicit store only because this test intentionally avoids a database.
+$permissions=new PermissionManager(new PermissionDefinitions([
  'documents.view'=>['name'=>'View Documents','description'=>'View documents','default'=>true],
  'documents.approve'=>['name'=>'Approve Documents','description'=>'Approve documents','default'=>false],
 ]),$store);
 
-/*
- * Discovery/integration is always automatic. This standalone example uses a
- * custom session permission store, so only Permissions needs explicit init.
- * Any other available Prefab modules remain automatically discoverable.
- */
-$prefab=Prefab::create(['modules'=>['permissions'=>$permissionsManager]]);
-$permissions=$prefab->permissions();
-
-/*
- * Typical database project when Prefab has a default store:
- * $prefab=Prefab::create(['db'=>$pdo]);
- * $permissions=$prefab->permissions();
- *
- * Optional custom factory:
- * $prefab=Prefab::create(['module_options'=>[
- *   'permissions'=>['factory'=>fn($prefab,$options)=>new PermissionManager($definitions,$customStore)]
+/* Database-backed alternative:
+ * PrefabConfig::set(['database'=>$pdo]);
+ * $permissions = new PermissionManager(['definitions'=>[
+ *   'documents.view'=>['name'=>'View Documents','default'=>true],
  * ]]);
  */
 
