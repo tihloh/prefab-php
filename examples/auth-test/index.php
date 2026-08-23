@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
+use Tihloh\Prefab\Core\Prefab;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
 use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
@@ -14,7 +15,26 @@ $provider=new class($user) implements AuthUserProviderInterface{
  public function findByIdentifier(string $identifier):?AuthenticatableUserInterface{return $identifier==='demo@example.com'?$this->user:null;}
  public function findById(int|string $id):?AuthenticatableUserInterface{return (string)$id==='1'?$this->user:null;}
 };
-$auth=new AuthManager($provider,new NativeSessionStore('auth_test_user'));
+$authManager=new AuthManager($provider,new NativeSessionStore('auth_test_user'));
+
+/*
+ * Core always discovers/integrates available modules. This standalone Auth
+ * test has no Users module/default user source, so Auth itself is explicitly
+ * initialized with the test provider. If Users were already initialized and
+ * supplied a compatible auth user source, Auth could be derived automatically.
+ */
+$prefab=Prefab::create(['modules'=>['auth'=>$authManager]]);
+$auth=$prefab->auth();
+
+/*
+ * Typical project with defaults:
+ * $prefab=Prefab::create(['db'=>$pdo]);
+ * $auth=$prefab->auth();
+ *
+ * Optional custom Auth only when Prefab cannot infer your user/session source:
+ * $prefab=Prefab::create(['modules'=>['auth'=>$customAuth]]);
+ */
+
 $message=null;$lastLog=null;
 if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='login'){$r=$auth->attempt(trim($_POST['email']??''),$_POST['password']??'');$message=$r->success?'Login successful':'Login failed';$lastLog=$r->log;}elseif($a==='logout'){$r=$auth->logout();$message='Logged out';$lastLog=$r->log;}}
 function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
