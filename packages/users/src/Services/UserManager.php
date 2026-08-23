@@ -14,14 +14,19 @@ use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
 use Tihloh\Prefab\Users\User\PrefabUser;
 
 /**
- * Main service API for the Prefab Users module.
+ * Main service API for Prefab Users.
  *
- * The manager can operate with an explicitly supplied UserProviderInterface or
- * configure a PDO-backed provider from local/shared configuration. When Prefab
- * Database is present, Users can inherit its default or a named connection.
+ * Prefab Users is standalone. It can use an explicitly supplied user provider,
+ * a PDO supplied through direct/module/common configuration, or an automatically
+ * discovered database capability such as Prefab Database.
  *
- * Explicit constructor configuration affects this module only and never writes
- * values back into shared Prefab configuration.
+ * Configuration priority for each setting:
+ * 1. direct UserManager configuration;
+ * 2. PrefabConfig modules.users configuration;
+ * 3. common PrefabConfig configuration;
+ * 4. compatible Prefab capability;
+ * 5. Users' internal default;
+ * 6. clear error when a required resource remains unresolved.
  */
 final class UserManager
 {
@@ -33,10 +38,20 @@ final class UserManager
     private ?object $autoLogger = null;
     private ?object $actorProvider = null;
 
+    /**
+     * @param UserProviderInterface|array|null $provider Custom provider, direct
+     *        module configuration, or null for automatic/shared configuration.
+     */
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
         if ($provider instanceof UserProviderInterface) {
             $this->provider = $provider;
+            PrefabRuntime::recordResolution(
+                'users',
+                'user_provider',
+                'module-local',
+                ['provider' => $provider::class],
+            );
         } elseif (is_array($provider)) {
             $this->config = $provider;
         }
@@ -45,75 +60,149 @@ final class UserManager
     }
 
     /**
-     * Resolve missing configuration and compatible module integrations.
+     * Resolve missing resources and publish the user-provider capability.
      *
-     * Resolution occurs during Prefab declaration/configuration passes. Normal
-     * CRUD operations use the already-resolved provider directly afterward.
+     * This runs during module declaration/configuration passes. Once resolved,
+     * normal CRUD calls use cached direct references.
      */
     public function prefabConfigure(): void
     {
         if (!$this->provider) {
-            $configuredProvider = $this->config['provider']
-                ?? PrefabConfig::module('users', 'provider');
+            $provider = PrefabConfig::resolve('users', 'provider', $this->config);
 
-            if ($configuredProvider instanceof UserProviderInterface) {
-                $this->provider = $configuredProvider;
-            } else {
-                $database = $this->config['database']
-                    ?? PrefabConfig::module('users', 'database');
-
-                if (!$database instanceof PDO) {
-                    $databaseManager = PrefabRuntime::get('database');
-
-                    if ($databaseManager) {
-                        $connectionName = $this->config['connection']
-                            ?? PrefabConfig::module('users', 'connection');
-
-                        if (
-                            is_string($connectionName)
-                            && method_exists($databaseManager, 'has')
-                            && method_exists($databaseManager, 'connection')
-                            && $databaseManager->has($connectionName)
-                        ) {
-                            $database = $databaseManager->connection($connectionName);
-                        } elseif (method_exists($databaseManager, 'prefabResource')) {
-                            $candidate = $databaseManager->prefabResource('database');
-
-                            if ($candidate instanceof PDO) {
-                                $database = $candidate;
-                            }
-                        }
-                    }
-                }
-
-                if ($database instanceof PDO) {
-                    $this->database = $database;
-                    $table = $this->config['table']
-                        ?? PrefabConfig::module('users', 'table', 'users');
-                    $map = $this->config['map']
-                        ?? PrefabConfig::module('users', 'map');
-
-                    if (!$map instanceof UserMap) {
-                        $map = new UserMap((string) $table);
-                    }
-
-                    $factory = $this->config['factory']
-                        ?? PrefabConfig::module('users', 'factory');
-
-                    $this->provider = new PdoUserProvider(
-                        $database,
-                        $map,
-                        $factory instanceof UserFactoryInterface ? $factory : null,
-                    );
-                }
+            if ($provider['value'] instanceof UserProviderInterface) {
+                $this->provider = $provider['value'];
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'user_provider',
+                    $provider['source'],
+                    ['provider' => $this->provider::class],
+                );
             }
         }
 
-        $this->autoLogger ??= PrefabRuntime::get('logs');
-        $this->actorProvider ??= PrefabRuntime::get('auth');
+        if (!$this->provider) {
+            $database = PrefabConfig::resolve('users', 'database', $this->config);
+            $pdo = $database['value'] instanceof PDO ? $database['value'] : null;
+            $databaseSource = $database['source'];
+            $databaseDetails = [];
+
+            if (!$pdo) {
+                $connection = PrefabConfig::resolve('users', 'connection', $this->config);
+
+                if (is_string($connection['value']) && $connection['value'] !== '') {
+                    $entry = PrefabRuntime::resolveEntry(
+                        'database.connection.' . $connection['value'],
+                    );
+
+                    if ($entry && $entry['value'] instanceof PDO) {
+                        $pdo = $entry['value'];
+                        $databaseSource = 'prefab-capability';
+                        $databaseDetails = [
+                            'provider' => $entry['provider'],
+                            'connection' => $connection['value'],
+                        ];
+                    }
+                }
+            }
+
+            if (!$pdo) {
+                $entry = PrefabRuntime::resolveEntry('database');
+
+                if ($entry && $entry['value'] instanceof PDO) {
+                    $pdo = $entry['value'];
+                    $databaseSource = 'prefab-capability';
+                    $databaseDetails = [
+                        'provider' => $entry['provider'],
+                        ...($entry['meta'] ?? []),
+                    ];
+                }
+            }
+
+            if ($pdo) {
+                $this->database = $pdo;
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'database',
+                    $databaseSource,
+                    $databaseDetails,
+                );
+
+                $table = PrefabConfig::resolve('users', 'table', $this->config, 'users');
+                $map = PrefabConfig::resolve('users', 'map', $this->config);
+                $factory = PrefabConfig::resolve('users', 'factory', $this->config);
+
+                $userMap = $map['value'] instanceof UserMap
+                    ? $map['value']
+                    : new UserMap((string) $table['value']);
+
+                $this->provider = new PdoUserProvider(
+                    $pdo,
+                    $userMap,
+                    $factory['value'] instanceof UserFactoryInterface
+                        ? $factory['value']
+                        : null,
+                );
+
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'table',
+                    $map['value'] instanceof UserMap ? $map['source'] : $table['source'],
+                    ['table' => $userMap->table],
+                );
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'user_provider',
+                    'pdo-provider',
+                    ['provider' => PdoUserProvider::class],
+                );
+            }
+        }
+
+        if ($this->provider) {
+            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
+        }
+
+        if ($this->database) {
+            PrefabRuntime::provide(
+                'database',
+                $this->database,
+                'prefab-users',
+                priority: -10,
+                meta: ['role' => 'users-database'],
+            );
+        }
+
+        if (!$this->autoLogger) {
+            $logger = PrefabRuntime::resolveEntry('logger');
+
+            if ($logger) {
+                $this->autoLogger = $logger['value'];
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'logger',
+                    'prefab-capability',
+                    ['provider' => $logger['provider']],
+                );
+            }
+        }
+
+        if (!$this->actorProvider) {
+            $actor = PrefabRuntime::resolveEntry('actor_provider');
+
+            if ($actor) {
+                $this->actorProvider = $actor['value'];
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'actor_provider',
+                    'prefab-capability',
+                    ['provider' => $actor['provider']],
+                );
+            }
+        }
     }
 
-    /** Expose resolved resources to compatible Prefab modules. */
+    /** Backward-compatible resource exposure for older Prefab integrations. */
     public function prefabResource(string $name): mixed
     {
         return match ($name) {
@@ -121,6 +210,12 @@ final class UserManager
             'user_provider' => $this->provider,
             default => null,
         };
+    }
+
+    /** Explain how this module resolved its resources and integrations. */
+    public function explain(): array
+    {
+        return PrefabRuntime::explain('users');
     }
 
     public function useContext(object $context): self
@@ -240,10 +335,7 @@ final class UserManager
             ) ? $this->actorProvider->id() : null;
         }
 
-        if (
-            !array_key_exists('actor_type', $base)
-            && ($base['actor_id'] ?? null) !== null
-        ) {
+        if (!array_key_exists('actor_type', $base) && ($base['actor_id'] ?? null) !== null) {
             $base['actor_type'] = 'user';
         }
 
@@ -253,18 +345,22 @@ final class UserManager
     private function createdChanges(array $data): array
     {
         $changes = [];
+
         foreach ($data as $field => $value) {
             $changes[$field] = ['old' => null, 'new' => $value];
         }
+
         return $changes;
     }
 
     private function deletedChanges(array $data): array
     {
         $changes = [];
+
         foreach ($data as $field => $value) {
             $changes[$field] = ['old' => $value, 'new' => null];
         }
+
         return $changes;
     }
 
@@ -276,6 +372,7 @@ final class UserManager
         foreach ($fields as $field) {
             $old = $before[$field] ?? null;
             $new = $after[$field] ?? null;
+
             if ($old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
