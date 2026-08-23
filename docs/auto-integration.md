@@ -1,104 +1,87 @@
-# Automatic module discovery and integration
+# Standalone automatic integration
 
-Prefab modules remain independently usable. With `tihloh/prefab-core`, module discovery and compatible integration are **always automatic**.
+Tihloh Prefab has no required Core package. Every module is standalone and can be installed/used by itself. When compatible Prefab modules are declared in the same application, they automatically resolve compatible integrations during module initialization.
+
+## Optional common configuration
+
+A project may declare shared configuration before creating modules:
 
 ```php
-use Tihloh\Prefab\Core\Prefab;
+use Tihloh\Prefab\PrefabConfig;
 
-$prefab = Prefab::create(['db' => $pdo]);
+PrefabConfig::set([
+    'database' => $mainPdo,
+    'modules' => [
+        'logs' => ['database' => $logPdo],
+    ],
+]);
 ```
 
-Core checks which known Prefab modules are available and integrates every module that has been initialized. There is no `auto_discover` switch: discovery is part of Core's normal behavior.
+Each module reads only the settings/resources it understands. Explicit constructor/module configuration overrides the shared configuration.
 
-## Initialization rule
+## Resolution rule
 
-Explicit initialization is needed only when a module cannot be initialized from another available module or from Prefab's default/project resources.
+For a needed resource, a module resolves configuration during initialization in this general order:
 
-For example, if Users has already been initialized and Auth can derive the user provider it needs from Users, Auth should initialize itself. If Logs has a usable default/log connection, it should initialize itself. If a project uses a special user provider that Prefab cannot infer, only that provider/module needs explicit initialization.
+1. explicit module/constructor configuration
+2. the module's own sensible internal default, when one exists
+3. shared `PrefabConfig` resource
+4. a compatible resource exposed by another initialized Prefab module
+5. clear configuration error if the resource is required and still unresolved
 
-```text
-Available/initialized module or default resource
-                    ↓
-            automatic discovery
-                    ↓
-          initialize what is possible
-                    ↓
-        automatic compatible integration
-                    ↓
-Explicit initialization only for unresolved/custom pieces
+Examples of internal defaults are table/session names. A database connection has no safe internal default, so it can come from `PrefabConfig`, another compatible module, or explicit module configuration.
+
+## Declaration sequence
+
+Each module registers itself when constructed and triggers a small configuration pass across the Prefab modules declared so far. The final module declaration leaves the available module graph configured.
+
+```php
+$users = new UserManager(...);
+$auth = new AuthManager();
+$permissions = new PermissionManager(...);
+$logs = new LogManager(...);
 ```
 
-Explicit initialization never disables discovery and never requires the developer to manually register every other module.
-
-## Automatic integration
-
-Once modules are available, Core provides the common glue:
-
-- Auth supplies the current actor through Context.
-- Users, Auth, and Permissions receive Context and the shared EventDispatcher when supported.
-- Logs listens for `prefab.log` events and records them automatically.
-- Modules continue to work when other modules are absent.
-
-Normal calls remain normal:
+After the last declaration, normal feature calls use already-resolved references. They do not repeat module discovery/configuration:
 
 ```php
 $auth->attempt($email, $password);
 $users->update(25, ['name' => 'Testing']);
 $permissions->set('user', 25, 'documents.approve', true);
+$logs->recent();
 ```
 
-No manual `$logs->record($result->log)` is required when Logs is available.
+## Automatic combinations
 
-## Optional explicit initialization
+Examples:
 
-Use a custom factory only for something Prefab cannot infer automatically:
+- Auth with no explicit provider can use a compatible Prefab Users module.
+- Permissions with no explicit database/store can use the shared database or a compatible Users database.
+- Logs with no explicit database/repository can use the shared database or a compatible module database.
+- When Logs exists, Users/Auth/Permissions activity is recorded automatically; callers do not manually forward each log payload.
+- Auth supplies the current actor for compatible activity logging.
+
+## Override one module only
+
+A shared database can be used by most modules while Logs uses another database:
 
 ```php
-$prefab = Prefab::create([
-    'db' => $pdo,
-    'module_options' => [
-        'users' => [
-            'factory' => fn ($prefab, $options) => new MyUserManager(...),
-        ],
-    ],
-]);
+PrefabConfig::set(['database' => $mainPdo]);
+
+$users = new UserManager();
+$auth = new AuthManager();
+$permissions = new PermissionManager(['definitions' => $definitions]);
+$logs = new LogManager(['database' => $logPdo]);
 ```
 
-Or supply an already-created custom module:
+Explicit Logs configuration changes only Logs. It does not disable integration with Users/Auth/Permissions.
 
-```php
-$prefab = Prefab::create([
-    'modules' => [
-        'users' => $customUsers,
-    ],
-]);
+## Standalone remains standalone
+
+Installing only Users does not install Auth, Permissions, Logs, or a Core package:
+
+```bash
+composer require tihloh/prefab-users
 ```
 
-Prefab still discovers and integrates Auth, Permissions, Logs, and any other compatible installed modules automatically.
-
-## Multiple databases
-
-Connections are named and project-owned:
-
-```php
-$prefab = Prefab::create([
-    'connections' => [
-        'default' => $mainPdo,
-        'logs' => $logPdo,
-    ],
-]);
-```
-
-Repositories still receive the connection they need, so storage remains flexible.
-
-## Custom integrations
-
-Applications can listen to events without modifying modules:
-
-```php
-$prefab->events()->listen('prefab.log', function (array $entry) {
-    // custom audit, notification, queue, etc.
-});
-```
-
-Core is the automatic composition layer, not a replacement for managers, providers, repositories, contracts, or project-specific adapters.
+The same principle applies to every other module.
