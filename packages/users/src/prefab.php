@@ -9,8 +9,11 @@ use RuntimeException;
  | Prefab interoperability bootstrap
  |--------------------------------------------------------------------------
  |
- | This generated copy is embedded into the standalone package. The canonical
- | development source is tools/prefab-bootstrap.php.
+ | This generated copy is embedded into every standalone package. This file is
+ | the canonical development source used by tools/sync-prefab-bootstrap.php.
+ |
+ | There is no required Core package. The first Prefab package Composer loads
+ | defines these guarded classes and the remaining packages reuse them.
  */
 if (!class_exists(PrefabConfig::class, false)) {
     final class PrefabConfig
@@ -38,8 +41,18 @@ if (!class_exists(PrefabConfig::class, false)) {
             return self::resolve($module, $key, default: $default)['value'];
         }
 
-        public static function resolve(string $module, string $key, array $local = [], mixed $default = null): array
-        {
+        /**
+         * Resolve the three developer-facing configuration levels:
+         * direct module config -> module PrefabConfig -> common PrefabConfig.
+         *
+         * @return array{value:mixed,source:string}
+         */
+        public static function resolve(
+            string $module,
+            string $key,
+            array $local = [],
+            mixed $default = null,
+        ): array {
             if (array_key_exists($key, $local)) {
                 return ['value' => $local[$key], 'source' => 'module-local'];
             }
@@ -93,8 +106,14 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$modules[$name] ?? null;
         }
 
-        public static function provide(string $capability, mixed $value, string $provider, int $priority = 0, array $meta = []): void
-        {
+        /** Publish one optional capability without creating a package dependency. */
+        public static function provide(
+            string $capability,
+            mixed $value,
+            string $provider,
+            int $priority = 0,
+            array $meta = [],
+        ): void {
             if ($value === null) {
                 unset(self::$capabilities[$capability][$provider]);
                 return;
@@ -107,8 +126,11 @@ if (!class_exists(PrefabRuntime::class, false)) {
             ];
         }
 
-        public static function resolveEntry(string $capability, ?string $preferredProvider = null): ?array
-        {
+        /** Resolve one capability and fail instead of guessing on equal-priority conflicts. */
+        public static function resolveEntry(
+            string $capability,
+            ?string $preferredProvider = null,
+        ): ?array {
             $providers = self::$capabilities[$capability] ?? [];
             if ($preferredProvider !== null) {
                 return $providers[$preferredProvider] ?? null;
@@ -129,13 +151,20 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return $top;
         }
 
-        public static function resolve(string $capability, ?string $preferredProvider = null): mixed
-        {
+        public static function resolve(
+            string $capability,
+            ?string $preferredProvider = null,
+        ): mixed {
             return self::resolveEntry($capability, $preferredProvider)['value'] ?? null;
         }
 
-        public static function recordResolution(string $module, string $resource, string $source, array $details = []): void
-        {
+        /** Record why a setting/resource resolved the way it did. */
+        public static function recordResolution(
+            string $module,
+            string $resource,
+            string $source,
+            array $details = [],
+        ): void {
             self::$resolutions[$module][$resource] = ['source' => $source, ...$details];
         }
 
@@ -144,6 +173,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             return self::$resolutions[$module] ?? [];
         }
 
+        /** Return diagnostics without exposing actual capability object values. */
         public static function inspect(): array
         {
             $capabilities = [];
@@ -163,6 +193,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             ];
         }
 
+        /** Reconfigure only while modules are being declared, not on feature calls. */
         public static function configureAll(): void
         {
             if (self::$configuring) {
@@ -180,6 +211,7 @@ if (!class_exists(PrefabRuntime::class, false)) {
             }
         }
 
+        /** Optional explicit end-of-startup boundary. */
         public static function ready(): void
         {
             self::configureAll();
