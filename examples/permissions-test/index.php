@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
+use Tihloh\Prefab\Core\Prefab;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
 use Tihloh\Prefab\Permissions\Services\PermissionManager;
@@ -10,10 +11,30 @@ $store=new class implements PermissionStoreInterface{
  public function put(string $t,int|string $i,array $p):void{$_SESSION['permissions_test'][$t][(string)$i]=$p;}
  public function remove(string $t,int|string $i):void{unset($_SESSION['permissions_test'][$t][(string)$i]);}
 };
-$permissions=new PermissionManager(new PermissionDefinitions([
+$permissionsManager=new PermissionManager(new PermissionDefinitions([
  'documents.view'=>['name'=>'View Documents','description'=>'View documents','default'=>true],
  'documents.approve'=>['name'=>'Approve Documents','description'=>'Approve documents','default'=>false],
 ]),$store);
+
+/*
+ * Discovery/integration is always automatic. This standalone example uses a
+ * custom session permission store, so only Permissions needs explicit init.
+ * Any other available Prefab modules remain automatically discoverable.
+ */
+$prefab=Prefab::create(['modules'=>['permissions'=>$permissionsManager]]);
+$permissions=$prefab->permissions();
+
+/*
+ * Typical database project when Prefab has a default store:
+ * $prefab=Prefab::create(['db'=>$pdo]);
+ * $permissions=$prefab->permissions();
+ *
+ * Optional custom factory:
+ * $prefab=Prefab::create(['module_options'=>[
+ *   'permissions'=>['factory'=>fn($prefab,$options)=>new PermissionManager($definitions,$customStore)]
+ * ]]);
+ */
+
 $uid=(int)($_GET['user']??25);
 if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';$perm=$_POST['permission']??'';if($a==='allow')$permissions->set('user',$uid,$perm,true);elseif($a==='deny')$permissions->set('user',$uid,$perm,false);elseif($a==='clear')$permissions->clear('user',$uid,$perm);elseif($a==='reset'){unset($_SESSION['permissions_test']);header('Location:'.$_SERVER['PHP_SELF']);exit;}}
 $resolved=$permissions->resolvedFor($uid,[]);
