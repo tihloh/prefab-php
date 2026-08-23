@@ -1,6 +1,7 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
 use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 use Tihloh\Prefab\Auth\Services\AuthManager;
@@ -8,31 +9,23 @@ use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
 use Tihloh\Prefab\Logs\Services\LogManager;
+
+/* OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$mainPdo,'modules'=>['logs'=>['database'=>$logPdo]]]);
+ */
+
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();$_SESSION['al_logs']??=[];
 $user=new class implements AuthenticatableUserInterface{public function authId():int|string{return 1;}public function authPasswordHash():?string{return password_hash('password123',PASSWORD_DEFAULT);}public function authIsActive():bool{return true;}};
 $users=new class($user) implements AuthUserProviderInterface{public function __construct(private AuthenticatableUserInterface $u){}public function findByIdentifier(string $i):?AuthenticatableUserInterface{return $i==='demo@example.com'?$this->u:null;}public function findById(int|string $id):?AuthenticatableUserInterface{return (string)$id==='1'?$this->u:null;}};
 $repo=new class implements LogRepositoryInterface{public function record(LogEntry $e):int|string{$id=count($_SESSION['al_logs'])+1;$_SESSION['al_logs'][$id]=['id'=>$id]+$e->toArray();return $id;}public function find(int|string $id):?array{return $_SESSION['al_logs'][(int)$id]??null;}public function recent(int $limit=100,int $offset=0):array{return array_slice(array_values(array_reverse($_SESSION['al_logs'],true)),$offset,$limit);}public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['al_logs'],fn($x)=>$x['subject_type']===$t&&(string)$x['subject_id']===(string)$id));}public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['al_logs'],fn($x)=>(string)($x['actor_id']??'')===(string)$id));}};
-$authManager=new AuthManager($users,new NativeSessionStore('auth_logs_test'));
-$logsManager=new LogManager($repo);
+
+$auth=new AuthManager($users,new NativeSessionStore('auth_logs_test'));
+$logs=new LogManager($repo);
 
 /*
- * Both test modules need explicit construction because they use custom
- * session-backed adapters. Core discovery is still always active and performs
- * their integration automatically. No manual Auth -> Logs wiring is needed.
- */
-$prefab=Prefab::create(['modules'=>[
-    'auth'=>$authManager,
-    'logs'=>$logsManager,
-]]);
-$auth=$prefab->auth();
-$logs=$prefab->logs();
-
-/*
- * With production defaults this can reduce to:
- * $prefab=Prefab::create(['db'=>$pdo]);
- *
- * Or with a separate audit database:
- * $prefab=Prefab::create(['connections'=>['default'=>$mainPdo,'logs'=>$logPdo]]);
+ * No manual Auth -> Logs wiring. When Logs is declared, the module declarations
+ * are reconfigured once and Auth activity is sent directly to the resolved Logs
+ * instance. Normal login/logout calls do not rediscover modules.
  */
 
 $msg=null;
