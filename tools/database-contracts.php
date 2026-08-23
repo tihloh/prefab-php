@@ -2,9 +2,7 @@
 
 namespace Tihloh\Prefab;
 
-use InvalidArgumentException;
 use PDO;
-use RuntimeException;
 use Throwable;
 
 /*
@@ -13,19 +11,18 @@ use Throwable;
  |--------------------------------------------------------------------------
  |
  | This is the canonical development copy embedded as src/database.php in
- | standalone Prefab packages that may provide or consume database resources.
+ | standalone Prefab packages that provide or consume database resources.
  |
- | It is deliberately small and framework-independent. Plain PDO is adapted
- | automatically, while Prefab Database and future framework adapters can
- | implement the same contract directly.
+ | The contract intentionally stays small. It covers the operations Prefab
+ | modules need to share database access without forcing prefab-database as a
+ | dependency. The richer Laravel-like query builder remains an optional
+ | feature of Prefab Database itself.
  |
  */
 
 if (!interface_exists(DatabaseInterface::class, false)) {
     interface DatabaseInterface
     {
-        public function table(string $table): QueryBuilderInterface;
-
         /** @return array<int, array<string, mixed>> */
         public function select(string $sql, array $bindings = []): array;
 
@@ -38,59 +35,25 @@ if (!interface_exists(DatabaseInterface::class, false)) {
         public function lastInsertId(?string $name = null): string|false;
 
         /**
-         * Expose the underlying PDO only for legacy/project-specific escape
-         * hatches. Prefab modules should prefer the unified methods above.
+         * Legacy/project escape hatch. Prefab modules should normally use the
+         * unified methods above rather than operating on PDO directly.
          */
         public function pdo(): PDO;
     }
 }
 
-if (!interface_exists(QueryBuilderInterface::class, false)) {
-    interface QueryBuilderInterface
-    {
-        public function where(
-            string $column,
-            mixed $operatorOrValue,
-            mixed $value = null,
-        ): static;
-
-        public function orderBy(string $column, string $direction = 'asc'): static;
-
-        public function limit(int $limit): static;
-
-        public function offset(int $offset): static;
-
-        /** @return array<int, array<string, mixed>> */
-        public function get(): array;
-
-        /** @return array<string, mixed>|null */
-        public function first(): ?array;
-
-        public function insert(array $values): bool;
-
-        public function insertGetId(array $values): int|string;
-
-        public function update(array $values): int;
-
-        public function delete(): int;
-    }
-}
-
 if (!class_exists(PdoDatabaseAdapter::class, false)) {
     /**
-     * Automatic adapter that makes a normal PDO connection satisfy Prefab's
-     * unified database contract without requiring prefab-database.
+     * Adapts a normal PDO connection to Prefab's database contract.
+     *
+     * This keeps every consuming module standalone: passing PDO continues to
+     * work even when prefab-database is not installed.
      */
     final class PdoDatabaseAdapter implements DatabaseInterface
     {
         public function __construct(
             private PDO $connection,
         ) {
-        }
-
-        public function table(string $table): QueryBuilderInterface
-        {
-            return new PdoQueryBuilder($this->connection, $table);
         }
 
         public function select(string $sql, array $bindings = []): array
@@ -143,259 +106,6 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
         public function pdo(): PDO
         {
             return $this->connection;
-        }
-    }
-}
-
-if (!class_exists(PdoQueryBuilder::class, false)) {
-    /**
-     * Small portable CRUD query builder used by the PDO adapter.
-     *
-     * It intentionally implements only the common operations required by
-     * Prefab modules and rapid applications. More advanced SQL remains
-     * available through DatabaseInterface::select()/statement().
-     */
-    final class PdoQueryBuilder implements QueryBuilderInterface
-    {
-        private array $wheres = [];
-        private array $bindings = [];
-        private array $orders = [];
-        private ?int $limitValue = null;
-        private int $offsetValue = 0;
-
-        public function __construct(
-            private PDO $connection,
-            private string $table,
-        ) {
-            $this->assertIdentifier($table);
-        }
-
-        public function where(
-            string $column,
-            mixed $operatorOrValue,
-            mixed $value = null,
-        ): static {
-            $this->assertIdentifier($column);
-
-            $clone = clone $this;
-            $operator = func_num_args() === 2
-                ? '='
-                : strtoupper((string) $operatorOrValue);
-            $actualValue = func_num_args() === 2
-                ? $operatorOrValue
-                : $value;
-
-            if (!in_array(
-                $operator,
-                ['=', '!=', '<>', '<', '<=', '>', '>=', 'LIKE'],
-                true,
-            )) {
-                throw new InvalidArgumentException(
-                    "Unsupported where operator '{$operator}'.",
-                );
-            }
-
-            $parameter = ':w' . count($clone->bindings);
-            $clone->wheres[] = "{$column} {$operator} {$parameter}";
-            $clone->bindings[$parameter] = $actualValue;
-
-            return $clone;
-        }
-
-        public function orderBy(
-            string $column,
-            string $direction = 'asc',
-        ): static {
-            $this->assertIdentifier($column);
-            $direction = strtoupper($direction);
-
-            if (!in_array($direction, ['ASC', 'DESC'], true)) {
-                throw new InvalidArgumentException(
-                    'Order direction must be ASC or DESC.',
-                );
-            }
-
-            $clone = clone $this;
-            $clone->orders[] = "{$column} {$direction}";
-
-            return $clone;
-        }
-
-        public function limit(int $limit): static
-        {
-            $clone = clone $this;
-            $clone->limitValue = max(1, $limit);
-
-            return $clone;
-        }
-
-        public function offset(int $offset): static
-        {
-            $clone = clone $this;
-            $clone->offsetValue = max(0, $offset);
-
-            return $clone;
-        }
-
-        public function get(): array
-        {
-            [$sql, $bindings] = $this->selectSql();
-            $statement = $this->connection->prepare($sql);
-            $statement->execute($bindings);
-
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        public function first(): ?array
-        {
-            $rows = $this->limit(1)->get();
-
-            return $rows[0] ?? null;
-        }
-
-        public function insert(array $values): bool
-        {
-            if ($values === []) {
-                throw new InvalidArgumentException(
-                    'Insert values cannot be empty.',
-                );
-            }
-
-            $columns = array_keys($values);
-
-            foreach ($columns as $column) {
-                $this->assertIdentifier((string) $column);
-            }
-
-            $placeholders = [];
-            $bindings = [];
-
-            foreach ($values as $column => $value) {
-                $parameter = ':i_' . $column;
-                $placeholders[] = $parameter;
-                $bindings[$parameter] = $value;
-            }
-
-            $sql = sprintf(
-                'INSERT INTO %s (%s) VALUES (%s)',
-                $this->table,
-                implode(', ', $columns),
-                implode(', ', $placeholders),
-            );
-
-            return $this->connection->prepare($sql)->execute($bindings);
-        }
-
-        public function insertGetId(array $values): int|string
-        {
-            $this->insert($values);
-            $id = $this->connection->lastInsertId();
-
-            return ctype_digit((string) $id) ? (int) $id : $id;
-        }
-
-        public function update(array $values): int
-        {
-            if ($values === []) {
-                return 0;
-            }
-
-            $sets = [];
-            $bindings = $this->bindings;
-
-            foreach ($values as $column => $value) {
-                $this->assertIdentifier((string) $column);
-                $parameter = ':u_' . $column;
-                $sets[] = "{$column} = {$parameter}";
-                $bindings[$parameter] = $value;
-            }
-
-            $sql = "UPDATE {$this->table} SET "
-                . implode(', ', $sets)
-                . $this->whereSql();
-
-            $statement = $this->connection->prepare($sql);
-            $statement->execute($bindings);
-
-            return $statement->rowCount();
-        }
-
-        public function delete(): int
-        {
-            $sql = "DELETE FROM {$this->table}" . $this->whereSql();
-            $statement = $this->connection->prepare($sql);
-            $statement->execute($this->bindings);
-
-            return $statement->rowCount();
-        }
-
-        /** @return array{0:string,1:array} */
-        private function selectSql(): array
-        {
-            $driver = $this->driver();
-            $sql = "SELECT * FROM {$this->table}" . $this->whereSql();
-
-            if ($this->orders !== []) {
-                $sql .= ' ORDER BY ' . implode(', ', $this->orders);
-            }
-
-            if ($driver === 'sqlsrv') {
-                if (
-                    ($this->limitValue !== null || $this->offsetValue > 0)
-                    && $this->orders === []
-                ) {
-                    $sql .= ' ORDER BY (SELECT 0)';
-                }
-
-                if ($this->limitValue !== null || $this->offsetValue > 0) {
-                    $limit = $this->limitValue ?? 2147483647;
-                    $sql .= " OFFSET {$this->offsetValue} ROWS"
-                        . " FETCH NEXT {$limit} ROWS ONLY";
-                }
-            } else {
-                if ($this->limitValue !== null) {
-                    $sql .= " LIMIT {$this->limitValue}";
-                }
-
-                if ($this->offsetValue > 0) {
-                    if ($this->limitValue === null) {
-                        $sql .= match ($driver) {
-                            'sqlite' => ' LIMIT -1',
-                            'pgsql' => ' LIMIT ALL',
-                            default => ' LIMIT 18446744073709551615',
-                        };
-                    }
-
-                    $sql .= " OFFSET {$this->offsetValue}";
-                }
-            }
-
-            return [$sql, $this->bindings];
-        }
-
-        private function whereSql(): string
-        {
-            return $this->wheres === []
-                ? ''
-                : ' WHERE ' . implode(' AND ', $this->wheres);
-        }
-
-        private function driver(): string
-        {
-            $driver = strtolower(
-                (string) $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME),
-            );
-
-            return $driver === 'dblib' ? 'sqlsrv' : $driver;
-        }
-
-        private function assertIdentifier(string $identifier): void
-        {
-            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier)) {
-                throw new RuntimeException(
-                    "Unsafe SQL identifier: {$identifier}",
-                );
-            }
         }
     }
 }
