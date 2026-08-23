@@ -1,0 +1,78 @@
+name: Split Prefab Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional version tag to publish to package repositories, e.g. v0.1.0'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  split:
+    name: Split ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [database, users, auth, permissions, logs]
+
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require package split token
+        env:
+          TOKEN: ${{ secrets.PREFAB_SPLIT_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "PREFAB_SPLIT_TOKEN is not configured."
+            echo "Create the target repositories and add a token with Contents write access."
+            exit 1
+          fi
+
+      - name: Split package history
+        run: git subtree split --prefix="packages/${{ matrix.package }}" -b "split-${{ matrix.package }}"
+
+      - name: Push package main branch
+        env:
+          TOKEN: ${{ secrets.PREFAB_SPLIT_TOKEN }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          git push --force \
+            "https://x-access-token:${TOKEN}@github.com/tihloh/prefab-${PACKAGE}.git" \
+            "split-${PACKAGE}:refs/heads/main"
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        env:
+          MANUAL_TAG: ${{ inputs.release_tag }}
+        run: |
+          TAG=""
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${MANUAL_TAG}" ]]; then
+            TAG="${MANUAL_TAG}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Push package version tag
+        if: steps.release.outputs.tag != ''
+        env:
+          TOKEN: ${{ secrets.PREFAB_SPLIT_TOKEN }}
+          PACKAGE: ${{ matrix.package }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git tag -f "$TAG" "split-${PACKAGE}"
+          git push --force \
+            "https://x-access-token:${TOKEN}@github.com/tihloh/prefab-${PACKAGE}.git" \
+            "refs/tags/${TAG}"

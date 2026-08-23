@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Users\Mapping;
 
-final readonly class UserMap
+final class UserMap
 {
     public function __construct(
         public string $table,

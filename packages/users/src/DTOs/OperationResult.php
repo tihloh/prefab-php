@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Users\DTOs;
 
-final readonly class OperationResult
+final class OperationResult
 {
     public function __construct(
         public mixed $data,

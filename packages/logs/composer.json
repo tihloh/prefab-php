@@ -1,14 +1,35 @@
 {
-  "name": "tihloh/prefab-logs",
-  "description": "Framework-independent structured logging manager for Tihloh Prefab PHP.",
-  "type": "library",
-  "license": "MIT",
-  "require": {
-    "php": "^8.2"
-  },
-  "autoload": {
-    "psr-4": {
-      "Tihloh\\Prefab\\Logs\\": "src/"
+    "name": "tihloh/prefab-logs",
+    "description": "Standalone, framework-independent structured activity and audit logging for Prefab PHP.",
+    "keywords": ["php", "logging", "audit-log", "activity-log", "prefab", "modular", "framework-independent"],
+    "homepage": "https://github.com/tihloh/prefab-php",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Christian Bustamante"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/tihloh/prefab-php/issues",
+        "source": "https://github.com/tihloh/prefab-php"
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "suggest": {
+        "ext-pdo": "Required only when using Prefab's built-in PDO/database-backed log repository.",
+        "tihloh/prefab-database": "Optional shared/named database manager with automatic Prefab integration.",
+        "tihloh/prefab-auth": "Optional actor provider for automatic current-user attribution.",
+        "tihloh/prefab-users": "Optional user name resolution for human-friendly logs."
+    },
+    "autoload": {
+        "psr-4": {
+            "Tihloh\\Prefab\\Logs\\": "src/"
+        },
+        "files": [
+            "src/prefab.php",
+            "src/database.php"
+        ]
     }
-  }
 }

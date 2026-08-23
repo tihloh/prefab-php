@@ -1,0 +1,17 @@
+{
+    "documents.view": {
+        "name": "View Documents",
+        "description": "Allows the user to view documents.",
+        "default": true
+    },
+    "documents.approve": {
+        "name": "Approve Documents",
+        "description": "Allows the user to approve documents.",
+        "default": false
+    },
+    "documents.delete": {
+        "name": "Delete Documents",
+        "description": "Allows the user to delete documents.",
+        "default": false
+    }
+}

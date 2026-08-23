@@ -1,0 +1,31 @@
+<?php
+require __DIR__.'/vendor/autoload.php';
+
+use Tihloh\Prefab\PrefabConfig;
+use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
+use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
+use Tihloh\Prefab\Permissions\Services\PermissionManager;
+use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
+use Tihloh\Prefab\Logs\DTOs\LogEntry;
+use Tihloh\Prefab\Logs\Services\LogManager;
+
+/* OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$mainPdo,'modules'=>['logs'=>['database'=>$logPdo]]]);
+ */
+
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();$_SESSION['pl_perms']??=[];$_SESSION['pl_logs']??=[];
+$store=new class implements PermissionStoreInterface{public function get(string $t,int|string $i):array{return $_SESSION['pl_perms'][$t][(string)$i]??[];}public function put(string $t,int|string $i,array $p):void{$_SESSION['pl_perms'][$t][(string)$i]=$p;}public function remove(string $t,int|string $i):void{unset($_SESSION['pl_perms'][$t][(string)$i]);}};
+$repo=new class implements LogRepositoryInterface{public function record(LogEntry $e):int|string{$id=count($_SESSION['pl_logs'])+1;$_SESSION['pl_logs'][$id]=['id'=>$id]+$e->toArray();return $id;}public function find(int|string $id):?array{return $_SESSION['pl_logs'][(int)$id]??null;}public function recent(int $limit=100,int $offset=0):array{return array_slice(array_values(array_reverse($_SESSION['pl_logs'],true)),$offset,$limit);}public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['pl_logs'],fn($x)=>$x['subject_type']===$t&&(string)$x['subject_id']===(string)$id));}public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['pl_logs'],fn($x)=>(string)($x['actor_id']??'')===(string)$id));}};
+
+$permissions=new PermissionManager(new PermissionDefinitions(['documents.approve'=>['name'=>'Approve Documents','default'=>false]]),$store);
+$logs=new LogManager($repo);
+
+/*
+ * No Core and no manual $logs->record(...). Permissions and Logs are standalone
+ * modules; after Logs is declared, the automatic configuration pass resolves
+ * their direct integration once.
+ */
+
+if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='allow'){$permissions->set('user',25,'documents.approve',true,['actor_id'=>1]);}elseif($a==='deny'){$permissions->set('user',25,'documents.approve',false,['actor_id'=>1]);}elseif($a==='clear'){$permissions->clear('user',25,'documents.approve',['actor_id'=>1]);}elseif($a==='reset'){$_SESSION['pl_perms']=[];$_SESSION['pl_logs']=[];}}
+$effective=$permissions->resolve(25,'documents.approve');$rows=$logs->recent();function e(mixed $v):string{return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Permissions + Logs</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-body-tertiary"><main class="container py-4"><div class="d-flex justify-content-between align-items-center mb-4"><h1 class="h3 mb-0">Permissions + Logs Interactive Test</h1><form method="post"><button name="action" value="reset" class="btn btn-sm btn-outline-secondary">Reset</button></form></div><div class="row g-4"><div class="col-md-4"><div class="card"><div class="card-header">documents.approve — User 25</div><div class="card-body"><div class="display-6 text-<?=$effective->allowed?'success':'danger'?>"><?=$effective->allowed?'ALLOW':'DENY'?></div><p>Source: <?=e($effective->source)?></p><form method="post" class="btn-group w-100"><button name="action" value="allow" class="btn btn-outline-success">Allow</button><button name="action" value="deny" class="btn btn-outline-danger">Deny</button><button name="action" value="clear" class="btn btn-outline-secondary">Clear</button></form></div></div></div><div class="col-md-8"><div class="card"><div class="card-header">Generated Permission Logs</div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>#</th><th>Action</th><th>Message</th><th>Changes</th></tr></thead><tbody><?php foreach($rows as $r):?><tr><td><?=e($r['id'])?></td><td><code><?=e($r['action'])?></code></td><td><?=e($r['message']??'')?></td><td><small><code><?=e(json_encode($r['changes']??[]))?></code></small></td></tr><?php endforeach;?></tbody></table></div></div></div></div></main></body></html>

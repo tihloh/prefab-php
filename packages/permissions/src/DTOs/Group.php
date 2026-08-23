@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Permissions\DTOs;
 
-final readonly class Group
+final class Group
 {
     public function __construct(
         public int|string $id,
