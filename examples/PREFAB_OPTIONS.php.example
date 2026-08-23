@@ -1,0 +1,45 @@
+<?php
+
+use Tihloh\Prefab\Core\Prefab;
+
+/*
+ * Copy the parts you need into an example/project.
+ *
+ * DEFAULT — automatic discovery/integration:
+ * $prefab = Prefab::create(['db' => $pdo]);
+ *
+ * NO DATABASE example (session/in-memory adapters):
+ * $prefab = Prefab::create();
+ *
+ * MULTIPLE DATABASES:
+ * $prefab = Prefab::create([
+ *     'connections' => ['default' => $mainPdo, 'logs' => $logPdo],
+ * ]);
+ *
+ * MANUAL MODE:
+ * $prefab = Prefab::create(['db' => $pdo, 'auto_discover' => false]);
+ *
+ * DISABLE ONE MODULE:
+ * $prefab = Prefab::create([
+ *     'db' => $pdo,
+ *     'module_options' => ['logs' => ['enabled' => false]],
+ * ]);
+ *
+ * CUSTOM MODULE FACTORY:
+ * $prefab = Prefab::create([
+ *     'db' => $pdo,
+ *     'module_options' => [
+ *         // 'users' => ['factory' => fn ($prefab, $options) => new MyUserManager(...)],
+ *     ],
+ * ]);
+ *
+ * EXPLICIT MODULE INSTANCE:
+ * $prefab = Prefab::create([
+ *     'modules' => [
+ *         // 'users' => $users,
+ *         // 'auth' => $auth,
+ *     ],
+ * ]);
+ *
+ * Priority: explicit configuration > auto discovery > defaults.
+ */
