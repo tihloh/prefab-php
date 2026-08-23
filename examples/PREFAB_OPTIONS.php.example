@@ -3,12 +3,13 @@
 use Tihloh\Prefab\Core\Prefab;
 
 /*
- * Copy the parts you need into an example/project.
+ * Copy only the initialization your project actually needs.
+ * Discovery/integration is ALWAYS automatic.
  *
- * DEFAULT — automatic discovery/integration:
+ * DEFAULT:
  * $prefab = Prefab::create(['db' => $pdo]);
  *
- * NO DATABASE example (session/in-memory adapters):
+ * NO DATABASE / session-backed example:
  * $prefab = Prefab::create();
  *
  * MULTIPLE DATABASES:
@@ -16,16 +17,8 @@ use Tihloh\Prefab\Core\Prefab;
  *     'connections' => ['default' => $mainPdo, 'logs' => $logPdo],
  * ]);
  *
- * MANUAL MODE:
- * $prefab = Prefab::create(['db' => $pdo, 'auto_discover' => false]);
- *
- * DISABLE ONE MODULE:
- * $prefab = Prefab::create([
- *     'db' => $pdo,
- *     'module_options' => ['logs' => ['enabled' => false]],
- * ]);
- *
- * CUSTOM MODULE FACTORY:
+ * CUSTOM MODULE FACTORY — only when Prefab has no automatic/default way to
+ * initialize that module:
  * $prefab = Prefab::create([
  *     'db' => $pdo,
  *     'module_options' => [
@@ -33,7 +26,8 @@ use Tihloh\Prefab\Core\Prefab;
  *     ],
  * ]);
  *
- * EXPLICIT MODULE INSTANCE:
+ * EXPLICIT MODULE INSTANCE — useful when the module has no other initialized
+ * module/default resource to derive from, or a custom implementation is needed:
  * $prefab = Prefab::create([
  *     'modules' => [
  *         // 'users' => $users,
@@ -41,5 +35,6 @@ use Tihloh\Prefab\Core\Prefab;
  *     ],
  * ]);
  *
- * Priority: explicit configuration > auto discovery > defaults.
+ * Explicit initialization never disables discovery. Other available modules
+ * continue to be discovered and integrated automatically.
  */
