@@ -4,6 +4,7 @@ Reusable, modular PHP components that work standalone and automatically cooperat
 
 ## Packages
 
+- `tihloh/prefab-database` — shared/default and named PDO connection management
 - `tihloh/prefab-users` — user management and provider abstraction
 - `tihloh/prefab-auth` — authentication and social sign-in building blocks
 - `tihloh/prefab-permissions` — permission definitions, group inheritance and user overrides
@@ -23,6 +24,40 @@ Each Prefab module follows the same rules:
 6. **Project data stays project-owned** — Prefab may map to an existing project table without taking ownership of it.
 7. **Prefab-owned storage is self-contained** — modules such as Permissions and Logs may create only their own required tables.
 
+## Database Connection Manager
+
+Prefab Database is optional. It is useful when an application has one shared database connection or several named connections that should be reused by multiple modules.
+
+```php
+use Tihloh\Prefab\Database\Services\DatabaseManager;
+
+$database = new DatabaseManager([
+    'default' => 'main',
+    'connections' => [
+        'main' => $mainPdo,
+        'logs' => $logPdo,
+    ],
+]);
+
+$users = new UserManager();
+$permissions = new PermissionManager();
+$logs = new LogManager([
+    'connection' => 'logs',
+]);
+```
+
+Resolved behavior:
+
+```text
+Users        -> main
+Permissions  -> main
+Logs         -> logs
+```
+
+Users and Permissions inherit the Database Manager's default connection because they were not given their own database. Logs explicitly selects the named `logs` connection, and that choice affects Logs only.
+
+The manager can also create PDO connections from configuration arrays containing `dsn`, `username`, `password`, and `options`.
+
 ## Optional shared configuration
 
 A project may declare common resources before constructing modules:
@@ -31,11 +66,17 @@ A project may declare common resources before constructing modules:
 use Tihloh\Prefab\PrefabConfig;
 
 PrefabConfig::set([
-    'database' => $mainPdo,
-
     'modules' => [
+        'database' => [
+            'default' => 'main',
+            'connections' => [
+                'main' => $mainPdo,
+                'logs' => $logPdo,
+            ],
+        ],
+
         'logs' => [
-            'database' => $logPdo,
+            'connection' => 'logs',
         ],
     ],
 ]);
@@ -44,44 +85,46 @@ PrefabConfig::set([
 Then modules can be declared normally:
 
 ```php
-use Tihloh\Prefab\Auth\Services\AuthManager;
-use Tihloh\Prefab\Logs\Services\LogManager;
-use Tihloh\Prefab\Permissions\Services\PermissionManager;
-use Tihloh\Prefab\Users\Services\UserManager;
-
+$database = new DatabaseManager();
 $users = new UserManager();
 $auth = new AuthManager();
 $permissions = new PermissionManager();
 $logs = new LogManager();
 ```
 
-In the example above, Logs uses `$logPdo`, while Users and Permissions can continue using `$mainPdo`. The Logs override does not modify the shared configuration or affect other modules.
-
 ## Configuration resolution
 
 Configuration is resolved per resource/setting rather than per entire module.
 
-Typical priority:
+Typical database/resource priority:
 
 ```text
 Explicit module constructor/configuration
               ↓
 Module-specific shared configuration
               ↓
-Module's internal sensible default
+Named Prefab Database connection
               ↓
-Shared project resource
+Prefab Database default connection
               ↓
-Compatible Prefab resource
+Other compatible Prefab resource
               ↓
 Clear configuration error if still unresolved
 ```
 
-This allows partial overrides. A module may override only its table name while still using the shared database, for example.
+This allows partial overrides. A module may override only its table name or connection name while still inheriting everything else.
 
-## Permission inheritance
+## Permission definitions and inheritance
 
-Prefab Permissions resolves effective values in this order:
+Permission definitions may be provided as:
+
+```text
+inline PHP array
+PHP template file returning an array
+JSON template file
+```
+
+Effective permission resolution is:
 
 ```text
 User override
@@ -98,10 +141,8 @@ A user-level override always takes priority. Clearing that override restores inh
 Prefab Logs stores one structured technical/audit record. It can be displayed in two ways:
 
 ```php
-// Technical/audit data.
 $technicalLogs = $logs->recent(50);
 
-// Compact ordinary-user view.
 $humanLogs = $logs->humanRecent(
     50,
     actorResolver: fn ($id) => $users->find($id)?->name,
@@ -115,7 +156,7 @@ $humanLogs = $logs->humanRecent(
 );
 ```
 
-A technical record such as `permission.denied` can therefore be shown to ordinary users as:
+A technical record such as `permission.denied` can therefore be shown as:
 
 ```text
 Demo Admin denied View Documents for Test User.
@@ -127,34 +168,20 @@ without duplicating the underlying log entry.
 
 Source documentation is part of the Prefab API. New and updated code should follow these rules:
 
-- public classes must describe their responsibility and integration behavior with PHPDoc;
-- public methods must explain important parameters, return values and side effects;
-- contracts/interfaces must document what implementers are expected to provide;
-- DTOs should document the meaning of non-obvious fields;
-- non-obvious configuration/inheritance/discovery behavior should have concise inline comments;
-- examples must use normal indentation and readable multi-line formatting rather than compressed one-line PHP;
-- comments should explain **why** behavior exists, not repeat obvious PHP syntax;
-- sensitive information such as password hashes, tokens and secrets must not be exposed in human-friendly logs;
-- package READMEs should document setup, standalone use, automatic integration, configuration overrides, storage ownership and common examples.
+- public classes describe their responsibility and integration behavior with PHPDoc;
+- public methods explain important parameters, return values and side effects;
+- contracts/interfaces document what implementers are expected to provide;
+- DTOs document the meaning of non-obvious fields;
+- non-obvious configuration, inheritance and discovery behavior has concise inline comments;
+- examples use normal indentation and readable multi-line formatting rather than compressed one-line PHP;
+- comments explain why behavior exists rather than repeating obvious PHP syntax;
+- sensitive information such as password hashes, tokens and secrets is not exposed in human-friendly logs;
+- package READMEs document setup, standalone use, automatic integration, configuration overrides, storage ownership and common examples.
 
 ## Examples
 
-See `examples/` for runnable projects, especially:
+See `examples/` for runnable projects, especially `examples/database-integration-test`.
 
-```text
-examples/database-integration-test
-```
-
-That example demonstrates:
-
-- project-owned user/group tables;
-- Prefab Users mapping to an existing user table;
-- automatic Auth integration;
-- user creation;
-- groups and user-group relationships;
-- permission inheritance and user overrides;
-- Prefab Permissions-owned storage;
-- a separate database for Prefab Logs;
-- technical and human-friendly activity views.
+That example demonstrates project-owned users/groups, Prefab Users mapping, Auth integration, permission inheritance, separate log storage, and human/technical logs.
 
 See also `docs/auto-integration.md` and each package's own README for module-specific details.
