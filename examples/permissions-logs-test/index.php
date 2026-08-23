@@ -1,36 +1,29 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
-use Tihloh\Prefab\Core\Prefab;
+
+use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Services\PermissionDefinitions;
 use Tihloh\Prefab\Permissions\Services\PermissionManager;
 use Tihloh\Prefab\Logs\Contracts\LogRepositoryInterface;
 use Tihloh\Prefab\Logs\DTOs\LogEntry;
 use Tihloh\Prefab\Logs\Services\LogManager;
+
+/* OPTIONAL COMMON CONFIGURATION
+ * PrefabConfig::set(['database'=>$mainPdo,'modules'=>['logs'=>['database'=>$logPdo]]]);
+ */
+
 if(session_status()!==PHP_SESSION_ACTIVE)session_start();$_SESSION['pl_perms']??=[];$_SESSION['pl_logs']??=[];
 $store=new class implements PermissionStoreInterface{public function get(string $t,int|string $i):array{return $_SESSION['pl_perms'][$t][(string)$i]??[];}public function put(string $t,int|string $i,array $p):void{$_SESSION['pl_perms'][$t][(string)$i]=$p;}public function remove(string $t,int|string $i):void{unset($_SESSION['pl_perms'][$t][(string)$i]);}};
 $repo=new class implements LogRepositoryInterface{public function record(LogEntry $e):int|string{$id=count($_SESSION['pl_logs'])+1;$_SESSION['pl_logs'][$id]=['id'=>$id]+$e->toArray();return $id;}public function find(int|string $id):?array{return $_SESSION['pl_logs'][(int)$id]??null;}public function recent(int $limit=100,int $offset=0):array{return array_slice(array_values(array_reverse($_SESSION['pl_logs'],true)),$offset,$limit);}public function forSubject(string $t,int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['pl_logs'],fn($x)=>$x['subject_type']===$t&&(string)$x['subject_id']===(string)$id));}public function forActor(int|string $id,int $limit=100):array{return array_values(array_filter($_SESSION['pl_logs'],fn($x)=>(string)($x['actor_id']??'')===(string)$id));}};
-$permissionsManager=new PermissionManager(new PermissionDefinitions(['documents.approve'=>['name'=>'Approve Documents','default'=>false]]),$store);
-$logsManager=new LogManager($repo);
+
+$permissions=new PermissionManager(new PermissionDefinitions(['documents.approve'=>['name'=>'Approve Documents','default'=>false]]),$store);
+$logs=new LogManager($repo);
 
 /*
- * The custom session stores require explicit construction in this demo.
- * Once supplied, Core automatically detects the combination and connects
- * PermissionManager's prefab.log events to Logs. No manual record() call.
- */
-$prefab=Prefab::create(['modules'=>[
-    'permissions'=>$permissionsManager,
-    'logs'=>$logsManager,
-]]);
-$permissions=$prefab->permissions();
-$logs=$prefab->logs();
-
-/*
- * Production/default example:
- * $prefab=Prefab::create(['db'=>$pdo]);
- *
- * Separate log DB:
- * $prefab=Prefab::create(['connections'=>['default'=>$mainPdo,'logs'=>$logPdo]]);
+ * No Core and no manual $logs->record(...). Permissions and Logs are standalone
+ * modules; after Logs is declared, the automatic configuration pass resolves
+ * their direct integration once.
  */
 
 if($_SERVER['REQUEST_METHOD']==='POST'){$a=$_POST['action']??'';if($a==='allow'){$permissions->set('user',25,'documents.approve',true,['actor_id'=>1]);}elseif($a==='deny'){$permissions->set('user',25,'documents.approve',false,['actor_id'=>1]);}elseif($a==='clear'){$permissions->clear('user',25,'documents.approve',['actor_id'=>1]);}elseif($a==='reset'){$_SESSION['pl_perms']=[];$_SESSION['pl_logs']=[];}}
