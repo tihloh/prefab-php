@@ -1,0 +1,47 @@
+<?php
+
+/*
+ | COMBINED TEST — PREFAB INITIALIZATION OPTIONS
+ |
+ | Core ALWAYS discovers/integrates compatible modules. There is no switch to
+ | disable discovery. Explicit initialization only fills pieces Prefab cannot
+ | infer from installed/initialized modules or available default resources.
+ |
+ | Preferred normal setup:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create(['db' => $pdo]);
+ |
+ | With separate log storage:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create([
+ |   //     'connections' => [
+ |   //         'default' => $mainPdo,
+ |   //         'logs' => $logPdo,
+ |   //     ],
+ |   // ]);
+ |
+ | Explicitly initialize ONLY unresolved/custom pieces, for example a project
+ | user source Prefab cannot infer:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create([
+ |   //     'modules' => [
+ |   //         'users' => $customUsers,
+ |   //     ],
+ |   // ]);
+ |
+ | Prefab still discovers Auth, Permissions, Logs, and any other compatible
+ | modules and integrates them automatically.
+ |
+ | Or provide a factory for only the unresolved module:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create([
+ |   //     'module_options' => [
+ |   //         'permissions' => [
+ |   //             'factory' => fn ($prefab, $options) => $customPermissions,
+ |   //         ],
+ |   //     ],
+ |   // ]);
+ |
+ | This interactive example uses session-backed adapters intentionally instead
+ | of a database, so those adapters are explicitly constructed in index.php.
+ */
