@@ -4,6 +4,44 @@ Standalone, framework-independent database connection management and lightweight
 
 Prefab Database is **optional**. Users, Auth, Permissions and Logs do not require it. Installing it simply gives compatible modules a shared database capability they may inherit automatically.
 
+## Database interoperability contract
+
+Database-consuming Prefab modules now use the small framework-independent `DatabaseInterface` internally.
+
+```php
+interface DatabaseInterface
+{
+    public function select(string $sql, array $bindings = []): array;
+    public function statement(string $sql, array $bindings = []): bool;
+    public function transaction(callable $callback): mixed;
+    public function driver(): string;
+    public function lastInsertId(?string $name = null): string|false;
+    public function pdo(): PDO;
+}
+```
+
+`DatabaseManager` implements this contract directly. A normal PDO object is automatically wrapped by `PdoDatabaseAdapter`, so standalone usage remains unchanged:
+
+```php
+$users = new UserManager([
+    'database' => $pdo,
+]);
+```
+
+Internally:
+
+```text
+plain PDO
+    ↓ automatic adapter
+DatabaseInterface
+    ↓
+Prefab module
+```
+
+This also gives future Laravel/Doctrine/framework adapters one stable interface to implement without requiring Prefab Database.
+
+The richer `table()` query builder is intentionally a feature of Prefab Database itself rather than part of the tiny shared interoperability contract. This keeps standalone modules lightweight.
+
 ## Supported database targets
 
 The first-class PDO targets are:
@@ -81,7 +119,9 @@ $id = $database
 $database
     ->table('users')
     ->where('id', $id)
-    ->update(['name' => 'Updated User']);
+    ->update([
+        'name' => 'Updated User',
+    ]);
 
 $database
     ->table('users')
@@ -101,7 +141,7 @@ $rows = $database->select(
     [1],
 );
 
-$affected = $database->statement(
+$success = $database->statement(
     'UPDATE users SET active = ? WHERE id = ?',
     [false, 10],
 );
@@ -125,6 +165,15 @@ $rows = $database
     ->limit(20)
     ->get();
 ```
+
+Raw PDO access remains available intentionally for project-specific escape hatches:
+
+```php
+$pdo = $database->connection('main');
+$defaultPdo = $database->pdo();
+```
+
+Prefab modules themselves should prefer `DatabaseInterface` operations.
 
 ## Automatic Prefab integration
 
@@ -152,7 +201,7 @@ Permissions  -> main
 Logs         -> logs
 ```
 
-The Logs override affects Logs only.
+The default `database` capability and each `database.connection.<name>` capability now expose `DatabaseInterface`, not raw PDO. Consumers therefore do not need to know whether the provider is Prefab Database, a PDO adapter, or a future framework adapter.
 
 ## Three configuration levels
 
@@ -207,6 +256,8 @@ $database->table('users');
 $database->select($sql, $bindings);
 $database->statement($sql, $bindings);
 $database->transaction($callback);
+$database->lastInsertId();
+$database->pdo();
 ```
 
 Prefab Database remains a convenience block, never a Core dependency.
