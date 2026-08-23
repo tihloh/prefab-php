@@ -15,10 +15,10 @@
         "source": "https://github.com/tihloh/prefab-php"
     },
     "require": {
-        "php": ">=8.1",
-        "ext-pdo": "*"
+        "php": ">=8.1"
     },
     "suggest": {
+        "ext-pdo": "Required only when using Prefab's built-in PDO/database-backed user provider.",
         "tihloh/prefab-database": "Optional shared/named database manager with automatic Prefab integration.",
         "tihloh/prefab-auth": "Optional authentication module that can automatically use Prefab Users.",
         "tihloh/prefab-logs": "Optional structured activity logging for user operations."
