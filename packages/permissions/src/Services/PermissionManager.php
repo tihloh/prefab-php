@@ -15,13 +15,12 @@ use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
 /**
  * Main authorization service for Prefab Permissions.
  *
- * Effective permissions are resolved in this order:
- * 1. explicit user override
- * 2. group permissions
- * 3. permission definition default
+ * Permissions is standalone. Definitions can be inline, PHP, or JSON. Storage
+ * can be supplied explicitly, through PrefabConfig, or through the optional
+ * database capability published by Prefab Database/another compatible provider.
  *
- * Storage may be explicit, use a named/default Prefab Database connection, or
- * inherit a compatible database resource from Prefab Users.
+ * Effective permission priority remains:
+ * user override -> group permission -> permission default.
  */
 final class PermissionManager
 {
@@ -38,6 +37,7 @@ final class PermissionManager
     ) {
         if ($definitions instanceof PermissionDefinitions) {
             $this->definitions = $definitions;
+            PrefabRuntime::recordResolution('permissions', 'definitions', 'module-local');
         } elseif (is_string($definitions)) {
             $this->config = ['definitions' => $definitions];
         } elseif (is_array($definitions)) {
@@ -46,85 +46,158 @@ final class PermissionManager
 
         if ($store) {
             $this->store = $store;
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'store',
+                'module-local',
+                ['provider' => $store::class],
+            );
         }
 
         PrefabRuntime::register('permissions', $this);
     }
 
-    /** Resolve definitions and storage during Prefab configuration passes. */
+    /** Resolve definitions/storage and publish reusable capabilities. */
     public function prefabConfigure(): void
     {
         if (!$this->definitions) {
-            $source = $this->config['definitions']
-                ?? PrefabConfig::module('permissions', 'definitions');
+            $definitions = PrefabConfig::resolve(
+                'permissions',
+                'definitions',
+                $this->config,
+            );
 
+            $source = $definitions['value'];
             $this->definitions = $source instanceof PermissionDefinitions
                 || is_array($source)
                 || is_string($source)
                     ? PermissionDefinitions::from($source)
                     : new PermissionDefinitions([]);
+
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'definitions',
+                $definitions['source'],
+                ['count' => count($this->definitions->all())],
+            );
         }
 
-        if ($this->store) {
-            return;
+        if (!$this->store) {
+            $store = PrefabConfig::resolve('permissions', 'store', $this->config);
+
+            if ($store['value'] instanceof PermissionStoreInterface) {
+                $this->store = $store['value'];
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'store',
+                    $store['source'],
+                    ['provider' => $this->store::class],
+                );
+            }
         }
 
-        $configuredStore = $this->config['store']
-            ?? PrefabConfig::module('permissions', 'store');
+        if (!$this->store) {
+            $database = PrefabConfig::resolve(
+                'permissions',
+                'database',
+                $this->config,
+            );
 
-        if ($configuredStore instanceof PermissionStoreInterface) {
-            $this->store = $configuredStore;
-            return;
-        }
+            $pdo = $database['value'] instanceof PDO ? $database['value'] : null;
+            $databaseSource = $database['source'];
+            $databaseDetails = [];
 
-        $database = $this->config['database']
-            ?? PrefabConfig::module('permissions', 'database');
+            if (!$pdo) {
+                $connection = PrefabConfig::resolve(
+                    'permissions',
+                    'connection',
+                    $this->config,
+                );
 
-        if (!$database instanceof PDO) {
-            $databaseManager = PrefabRuntime::get('database');
+                if (is_string($connection['value']) && $connection['value'] !== '') {
+                    $entry = PrefabRuntime::resolveEntry(
+                        'database.connection.' . $connection['value'],
+                    );
 
-            if ($databaseManager) {
-                $connectionName = $this->config['connection']
-                    ?? PrefabConfig::module('permissions', 'connection');
-
-                if (
-                    is_string($connectionName)
-                    && method_exists($databaseManager, 'has')
-                    && method_exists($databaseManager, 'connection')
-                    && $databaseManager->has($connectionName)
-                ) {
-                    $database = $databaseManager->connection($connectionName);
-                } elseif (method_exists($databaseManager, 'prefabResource')) {
-                    $candidate = $databaseManager->prefabResource('database');
-
-                    if ($candidate instanceof PDO) {
-                        $database = $candidate;
+                    if ($entry && $entry['value'] instanceof PDO) {
+                        $pdo = $entry['value'];
+                        $databaseSource = 'prefab-capability';
+                        $databaseDetails = [
+                            'provider' => $entry['provider'],
+                            'connection' => $connection['value'],
+                        ];
                     }
                 }
             }
-        }
 
-        if (!$database instanceof PDO) {
-            $users = PrefabRuntime::get('users');
+            if (!$pdo) {
+                $entry = PrefabRuntime::resolveEntry('database');
 
-            if ($users && method_exists($users, 'prefabResource')) {
-                $candidate = $users->prefabResource('database');
-
-                if ($candidate instanceof PDO) {
-                    $database = $candidate;
+                if ($entry && $entry['value'] instanceof PDO) {
+                    $pdo = $entry['value'];
+                    $databaseSource = 'prefab-capability';
+                    $databaseDetails = [
+                        'provider' => $entry['provider'],
+                        ...($entry['meta'] ?? []),
+                    ];
                 }
+            }
+
+            if ($pdo) {
+                $this->database = $pdo;
+                $table = PrefabConfig::resolve(
+                    'permissions',
+                    'table',
+                    $this->config,
+                    'prefab_subject_permissions',
+                );
+
+                $this->store = new PdoPermissionStore(
+                    $pdo,
+                    (string) $table['value'],
+                );
+
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'database',
+                    $databaseSource,
+                    $databaseDetails,
+                );
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'table',
+                    $table['source'],
+                    ['table' => (string) $table['value']],
+                );
+                PrefabRuntime::recordResolution(
+                    'permissions',
+                    'store',
+                    'pdo-store',
+                    ['provider' => PdoPermissionStore::class],
+                );
             }
         }
 
-        if ($database instanceof PDO) {
-            $this->database = $database;
-            $this->store = new PdoPermissionStore(
-                $database,
-                $this->config['table'] ?? 'prefab_subject_permissions',
+        if ($this->store) {
+            PrefabRuntime::provide(
+                'permission_store',
+                $this->store,
+                'prefab-permissions',
+            );
+        }
+
+        if ($this->database) {
+            PrefabRuntime::provide(
+                'database',
+                $this->database,
+                'prefab-permissions',
+                priority: -20,
+                meta: ['role' => 'permissions-database'],
             );
         }
     }
 
+    /** Backward-compatible resource exposure. */
     public function prefabResource(string $name): mixed
     {
         return match ($name) {
@@ -132,6 +205,12 @@ final class PermissionManager
             'permission_store' => $this->store,
             default => null,
         };
+    }
+
+    /** Explain how this module resolved its resources/configuration. */
+    public function explain(): array
+    {
+        return PrefabRuntime::explain('permissions');
     }
 
     public function useContext(object $context): self
@@ -324,7 +403,7 @@ final class PermissionManager
     {
         if (!$this->store) {
             throw new RuntimeException(
-                'Prefab Permissions needs a store/database configuration.',
+                'Prefab Permissions needs a store or database capability/configuration.',
             );
         }
 
@@ -359,10 +438,7 @@ final class PermissionManager
             $base['actor_id'] = PrefabRuntime::actorId();
         }
 
-        if (
-            !array_key_exists('actor_type', $base)
-            && ($base['actor_id'] ?? null) !== null
-        ) {
+        if (!array_key_exists('actor_type', $base) && ($base['actor_id'] ?? null) !== null) {
             $base['actor_type'] = 'user';
         }
 
