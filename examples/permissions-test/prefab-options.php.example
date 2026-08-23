@@ -1,0 +1,33 @@
+<?php
+
+/*
+ | PERMISSIONS TEST — PREFAB INITIALIZATION OPTIONS
+ |
+ | Prefab Core always discovers/integrates available modules automatically.
+ | This standalone test manually creates PermissionManager only to isolate the
+ | Permissions module.
+ |
+ | Preferred normal project setup:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create(['db' => $pdo]);
+ |
+ | If Prefab can obtain the permission store/definitions from defaults or another
+ | initialized integration, no explicit Permissions setup is needed.
+ |
+ | Use explicit initialization only when your permission store or definitions are
+ | project-specific:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create([
+ |   //     'module_options' => [
+ |   //         'permissions' => [
+ |   //             'factory' => fn ($prefab, $options) =>
+ |   //                 new \Tihloh\Prefab\Permissions\Services\PermissionManager(
+ |   //                     $definitions,
+ |   //                     new MyPermissionStore($pdo)
+ |   //                 ),
+ |   //         ],
+ |   //     ],
+ |   // ]);
+ |
+ | Users/Auth/Logs remain automatically discoverable and integrate themselves.
+ */
