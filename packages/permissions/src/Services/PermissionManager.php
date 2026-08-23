@@ -20,9 +20,8 @@ use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
  * 2. group permissions
  * 3. permission definition default
  *
- * The module is standalone. When no store/database is explicitly configured,
- * it may use shared Prefab configuration or inherit a compatible database
- * resource exposed by Prefab Users.
+ * Permission definitions may be an inline array, a PHP template path, a JSON
+ * template path, or a PermissionDefinitions object.
  */
 final class PermissionManager
 {
@@ -34,16 +33,20 @@ final class PermissionManager
     private ?object $events = null;
 
     /**
-     * @param PermissionDefinitions|array|null $definitions Definitions object,
-     *        local module configuration array, or null to resolve defaults.
+     * @param PermissionDefinitions|array|string|null $definitions Permission
+     *        definitions object/file, local module configuration array, or null.
      */
     public function __construct(
-        PermissionDefinitions|array|null $definitions = null,
+        PermissionDefinitions|array|string|null $definitions = null,
         ?PermissionStoreInterface $store = null,
     ) {
         if ($definitions instanceof PermissionDefinitions) {
             $this->definitions = $definitions;
+        } elseif (is_string($definitions)) {
+            $this->config = ['definitions' => $definitions];
         } elseif (is_array($definitions)) {
+            // Constructor arrays remain module configuration arrays for backward
+            // compatibility. Put inline definitions under ['definitions' => [...]].
             $this->config = $definitions;
         }
 
@@ -58,16 +61,14 @@ final class PermissionManager
     public function prefabConfigure(): void
     {
         if (!$this->definitions) {
-            $definitions = $this->config['definitions']
+            $source = $this->config['definitions']
                 ?? PrefabConfig::module('permissions', 'definitions');
 
-            if ($definitions instanceof PermissionDefinitions) {
-                $this->definitions = $definitions;
-            } elseif (is_array($definitions)) {
-                $this->definitions = new PermissionDefinitions($definitions);
-            } else {
-                $this->definitions = new PermissionDefinitions([]);
-            }
+            $this->definitions = $source instanceof PermissionDefinitions
+                || is_array($source)
+                || is_string($source)
+                    ? PermissionDefinitions::from($source)
+                    : new PermissionDefinitions([]);
         }
 
         if ($this->store) {
@@ -132,16 +133,10 @@ final class PermissionManager
         string $permission,
         array $groupIds = [],
     ): bool {
-        return $this->resolve(
-            $subject,
-            $permission,
-            $groupIds,
-        )->allowed;
+        return $this->resolve($subject, $permission, $groupIds)->allowed;
     }
 
-    /**
-     * Resolve an effective permission and report where the decision came from.
-     */
+    /** Resolve an effective permission and report its inheritance source. */
     public function resolve(
         PermissionSubjectInterface|int|string $subject,
         string $permission,
@@ -161,14 +156,10 @@ final class PermissionManager
             $subjectId = $subject;
         }
 
-        // A user-specific value has the highest priority.
         $userOverrides = $store->get('user', $subjectId);
 
         if (array_key_exists($permission, $userOverrides)) {
-            return new PermissionResult(
-                (bool) $userOverrides[$permission],
-                'user',
-            );
+            return new PermissionResult((bool) $userOverrides[$permission], 'user');
         }
 
         $allowingGroups = [];
@@ -188,30 +179,17 @@ final class PermissionManager
             }
         }
 
-        // Current Prefab policy: an explicit allow from any group wins over
-        // group denies. User-level overrides still take priority over all groups.
+        // An explicit allow from any group currently wins over group denies.
+        // A user override still has higher priority than every group decision.
         if ($allowingGroups !== []) {
-            return new PermissionResult(
-                true,
-                'group',
-                $allowingGroups,
-                $denyingGroups,
-            );
+            return new PermissionResult(true, 'group', $allowingGroups, $denyingGroups);
         }
 
         if ($denyingGroups !== []) {
-            return new PermissionResult(
-                false,
-                'group',
-                $denyingGroups,
-                $denyingGroups,
-            );
+            return new PermissionResult(false, 'group', $denyingGroups, $denyingGroups);
         }
 
-        return new PermissionResult(
-            $definitions->default($permission),
-            'default',
-        );
+        return new PermissionResult($definitions->default($permission), 'default');
     }
 
     /** Return raw overrides assigned to a user/group subject. */
@@ -220,11 +198,7 @@ final class PermissionManager
         return $this->store()->get($type, $id);
     }
 
-    /**
-     * Resolve every defined permission for a subject; useful for management UIs.
-     *
-     * @return array<string, PermissionResult>
-     */
+    /** @return array<string, PermissionResult> */
     public function resolvedFor(
         PermissionSubjectInterface|int|string $subject,
         array $groups = [],
@@ -232,11 +206,7 @@ final class PermissionManager
         $results = [];
 
         foreach (array_keys($this->defs()->all()) as $permission) {
-            $results[$permission] = $this->resolve(
-                $subject,
-                $permission,
-                $groups,
-            );
+            $results[$permission] = $this->resolve($subject, $permission, $groups);
         }
 
         return $results;
@@ -253,18 +223,12 @@ final class PermissionManager
         $store = $this->store();
         $definitions = $this->defs();
         $overrides = $store->get($type, $id);
-
         $old = array_key_exists($permission, $overrides)
             ? (bool) $overrides[$permission]
             : null;
 
         $overrides[$permission] = $value;
-
-        $store->put(
-            $type,
-            $id,
-            $definitions->validateOverrides($overrides),
-        );
+        $store->put($type, $id, $definitions->validateOverrides($overrides));
 
         return $this->result(
             $value,
@@ -289,7 +253,6 @@ final class PermissionManager
     ): OperationResult {
         $store = $this->store();
         $overrides = $store->get($type, $id);
-
         $old = array_key_exists($permission, $overrides)
             ? (bool) $overrides[$permission]
             : null;
@@ -322,19 +285,18 @@ final class PermissionManager
         $this->store()->remove($type, $id);
     }
 
-    /** Return all permission definitions for UI/configuration use. */
+    /** @return array<string, array<string, mixed>> */
     public function definitions(): array
     {
         return $this->defs()->all();
     }
 
-    /** Return one permission definition. */
+    /** @return array<string, mixed>|null */
     public function definition(string $permission): ?array
     {
         return $this->defs()->get($permission);
     }
 
-    /** Determine whether a permission key is defined. */
     public function defined(string $permission): bool
     {
         return $this->defs()->has($permission);
@@ -346,8 +308,7 @@ final class PermissionManager
             $this->prefabConfigure();
         }
 
-        return $this->definitions
-            ?? new PermissionDefinitions([]);
+        return $this->definitions ?? new PermissionDefinitions([]);
     }
 
     private function store(): PermissionStoreInterface
@@ -398,13 +359,11 @@ final class PermissionManager
         }
 
         $context = array_replace($base, $context);
-
         $verb = match ($action) {
             'permission.granted' => 'granted to',
             'permission.denied' => 'denied for',
             default => 'cleared from',
         };
-
         $definition = $this->defs()->get($permission);
         $permissionName = $definition['name'] ?? null;
 
