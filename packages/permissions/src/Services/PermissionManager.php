@@ -4,6 +4,8 @@ namespace Tihloh\Prefab\Permissions\Services;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
@@ -15,17 +17,15 @@ use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
 /**
  * Main authorization service for Prefab Permissions.
  *
- * Permissions is standalone. Definitions can be inline, PHP, or JSON. Storage
- * can come from direct/module/common configuration or an optional database
- * capability. Database and connection-name settings are treated as two ways of
- * configuring the same resource so a module-specific connection cannot be
- * accidentally masked by a common database.
+ * Permissions remains standalone. Storage may come from a custom store, plain
+ * PDO, Prefab Database, or any framework adapter implementing
+ * DatabaseInterface. Existing PDO configuration is normalized automatically.
  */
 final class PermissionManager
 {
     private ?PermissionDefinitions $definitions = null;
     private ?PermissionStoreInterface $store = null;
-    private ?PDO $database = null;
+    private ?DatabaseInterface $database = null;
     private array $config = [];
     private ?object $context = null;
     private ?object $events = null;
@@ -36,7 +36,11 @@ final class PermissionManager
     ) {
         if ($definitions instanceof PermissionDefinitions) {
             $this->definitions = $definitions;
-            PrefabRuntime::recordResolution('permissions', 'definitions', 'module-local');
+            PrefabRuntime::recordResolution(
+                'permissions',
+                'definitions',
+                'module-local',
+            );
         } elseif (is_string($definitions)) {
             $this->config = ['definitions' => $definitions];
         } elseif (is_array($definitions)) {
@@ -82,7 +86,11 @@ final class PermissionManager
         }
 
         if (!$this->store) {
-            $store = PrefabConfig::resolve('permissions', 'store', $this->config);
+            $store = PrefabConfig::resolve(
+                'permissions',
+                'store',
+                $this->config,
+            );
 
             if ($store['value'] instanceof PermissionStoreInterface) {
                 $this->store = $store['value'];
@@ -96,10 +104,10 @@ final class PermissionManager
         }
 
         if (!$this->store) {
-            [$pdo, $source, $details] = $this->resolveDatabase();
+            [$database, $source, $details] = $this->resolveDatabase();
 
-            if ($pdo) {
-                $this->database = $pdo;
+            if ($database) {
+                $this->database = $database;
                 $table = PrefabConfig::resolve(
                     'permissions',
                     'table',
@@ -108,7 +116,7 @@ final class PermissionManager
                 );
 
                 $this->store = new PdoPermissionStore(
-                    $pdo,
+                    $database,
                     (string) $table['value'],
                 );
 
@@ -127,7 +135,7 @@ final class PermissionManager
                 PrefabRuntime::recordResolution(
                     'permissions',
                     'store',
-                    'pdo-store',
+                    'database-store',
                     ['provider' => PdoPermissionStore::class],
                 );
             }
@@ -147,43 +155,80 @@ final class PermissionManager
                 $this->database,
                 'prefab-permissions',
                 priority: -20,
-                meta: ['role' => 'permissions-database'],
+                meta: [
+                    'role' => 'permissions-database',
+                    'driver' => $this->database->driver(),
+                ],
             );
         }
     }
 
-    /** @return array{0:?PDO,1:string,2:array} */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function resolveDatabase(): array
     {
-        if (($this->config['database'] ?? null) instanceof PDO) {
-            return [$this->config['database'], 'module-local', []];
+        $localDatabase = $this->asDatabase(
+            $this->config['database'] ?? null,
+        );
+
+        if ($localDatabase) {
+            return [
+                $localDatabase,
+                'module-local',
+                ['driver' => $localDatabase->driver()],
+            ];
         }
 
-        if (isset($this->config['connection']) && is_string($this->config['connection'])) {
-            return $this->namedConnection($this->config['connection'], 'module-local');
+        if (
+            isset($this->config['connection'])
+            && is_string($this->config['connection'])
+        ) {
+            return $this->namedConnection(
+                $this->config['connection'],
+                'module-local',
+            );
         }
 
         $module = PrefabConfig::moduleOnly('permissions');
+        $moduleDatabase = $this->asDatabase(
+            $module['database'] ?? null,
+        );
 
-        if (($module['database'] ?? null) instanceof PDO) {
-            return [$module['database'], 'prefab-config-module', []];
+        if ($moduleDatabase) {
+            return [
+                $moduleDatabase,
+                'prefab-config-module',
+                ['driver' => $moduleDatabase->driver()],
+            ];
         }
 
-        if (isset($module['connection']) && is_string($module['connection'])) {
-            return $this->namedConnection($module['connection'], 'prefab-config-module');
+        if (
+            isset($module['connection'])
+            && is_string($module['connection'])
+        ) {
+            return $this->namedConnection(
+                $module['connection'],
+                'prefab-config-module',
+            );
         }
 
-        $common = PrefabConfig::get('database');
+        $common = $this->asDatabase(PrefabConfig::get('database'));
 
-        if ($common instanceof PDO) {
-            return [$common, 'prefab-config-common', []];
+        if ($common) {
+            return [
+                $common,
+                'prefab-config-common',
+                ['driver' => $common->driver()],
+            ];
         }
 
         $entry = PrefabRuntime::resolveEntry('database');
+        $capability = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $capability) {
             return [
-                $entry['value'],
+                $capability,
                 'prefab-capability',
                 [
                     'provider' => $entry['provider'],
@@ -195,20 +240,47 @@ final class PermissionManager
         return [null, 'unresolved', []];
     }
 
-    /** @return array{0:?PDO,1:string,2:array} */
+    /** @return array{0:?DatabaseInterface,1:string,2:array} */
     private function namedConnection(string $name, string $source): array
     {
-        $entry = PrefabRuntime::resolveEntry('database.connection.' . $name);
+        $entry = PrefabRuntime::resolveEntry(
+            'database.connection.' . $name,
+        );
+        $database = $entry
+            ? $this->asDatabase($entry['value'])
+            : null;
 
-        if ($entry && $entry['value'] instanceof PDO) {
+        if ($entry && $database) {
             return [
-                $entry['value'],
+                $database,
                 $source,
-                ['provider' => $entry['provider'], 'connection' => $name],
+                [
+                    'provider' => $entry['provider'],
+                    'connection' => $name,
+                    'driver' => $database->driver(),
+                ],
             ];
         }
 
-        return [null, $source, ['connection' => $name, 'unresolved' => true]];
+        return [
+            null,
+            $source,
+            [
+                'connection' => $name,
+                'unresolved' => true,
+            ],
+        ];
+    }
+
+    private function asDatabase(mixed $value): ?DatabaseInterface
+    {
+        if ($value instanceof DatabaseInterface) {
+            return $value;
+        }
+
+        return $value instanceof PDO
+            ? new PdoDatabaseAdapter($value)
+            : null;
     }
 
     public function prefabResource(string $name): mixed
@@ -242,7 +314,11 @@ final class PermissionManager
         string $permission,
         array $groupIds = [],
     ): bool {
-        return $this->resolve($subject, $permission, $groupIds)->allowed;
+        return $this->resolve(
+            $subject,
+            $permission,
+            $groupIds,
+        )->allowed;
     }
 
     public function resolve(
@@ -267,7 +343,10 @@ final class PermissionManager
         $userOverrides = $store->get('user', $subjectId);
 
         if (array_key_exists($permission, $userOverrides)) {
-            return new PermissionResult((bool) $userOverrides[$permission], 'user');
+            return new PermissionResult(
+                (bool) $userOverrides[$permission],
+                'user',
+            );
         }
 
         $allowingGroups = [];
@@ -288,14 +367,27 @@ final class PermissionManager
         }
 
         if ($allowingGroups !== []) {
-            return new PermissionResult(true, 'group', $allowingGroups, $denyingGroups);
+            return new PermissionResult(
+                true,
+                'group',
+                $allowingGroups,
+                $denyingGroups,
+            );
         }
 
         if ($denyingGroups !== []) {
-            return new PermissionResult(false, 'group', $denyingGroups, $denyingGroups);
+            return new PermissionResult(
+                false,
+                'group',
+                $denyingGroups,
+                $denyingGroups,
+            );
         }
 
-        return new PermissionResult($definitions->default($permission), 'default');
+        return new PermissionResult(
+            $definitions->default($permission),
+            'default',
+        );
     }
 
     public function overridesFor(string $type, int|string $id): array
@@ -311,7 +403,11 @@ final class PermissionManager
         $results = [];
 
         foreach (array_keys($this->defs()->all()) as $permission) {
-            $results[$permission] = $this->resolve($subject, $permission, $groups);
+            $results[$permission] = $this->resolve(
+                $subject,
+                $permission,
+                $groups,
+            );
         }
 
         return $results;
@@ -332,12 +428,18 @@ final class PermissionManager
             : null;
 
         $overrides[$permission] = $value;
-        $store->put($type, $id, $definitions->validateOverrides($overrides));
+        $store->put(
+            $type,
+            $id,
+            $definitions->validateOverrides($overrides),
+        );
 
         return $this->result(
             $value,
             $this->logPayload(
-                $value ? 'permission.granted' : 'permission.denied',
+                $value
+                    ? 'permission.granted'
+                    : 'permission.denied',
                 $type,
                 $id,
                 $permission,
@@ -408,7 +510,8 @@ final class PermissionManager
             $this->prefabConfigure();
         }
 
-        return $this->definitions ?? new PermissionDefinitions([]);
+        return $this->definitions
+            ?? new PermissionDefinitions([]);
     }
 
     private function store(): PermissionStoreInterface
@@ -442,15 +545,19 @@ final class PermissionManager
         ?bool $new,
         array $context,
     ): array {
-        $base = ($this->context && method_exists($this->context, 'logContext'))
-            ? $this->context->logContext()
-            : [];
+        $base = (
+            $this->context
+            && method_exists($this->context, 'logContext')
+        ) ? $this->context->logContext() : [];
 
         if (!array_key_exists('actor_id', $base)) {
             $base['actor_id'] = PrefabRuntime::actorId();
         }
 
-        if (!array_key_exists('actor_type', $base) && ($base['actor_id'] ?? null) !== null) {
+        if (
+            !array_key_exists('actor_type', $base)
+            && ($base['actor_id'] ?? null) !== null
+        ) {
             $base['actor_type'] = 'user';
         }
 
@@ -471,7 +578,10 @@ final class PermissionManager
             'actor_id' => $context['actor_id'] ?? null,
             'message' => "Permission {$permission} was {$verb} {$type} {$id}.",
             'changes' => [
-                $permission => ['old' => $old, 'new' => $new],
+                $permission => [
+                    'old' => $old,
+                    'new' => $new,
+                ],
             ],
             'metadata' => array_merge(
                 [
