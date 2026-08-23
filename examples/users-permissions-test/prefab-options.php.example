@@ -1,0 +1,31 @@
+<?php
+
+/*
+ | USERS + PERMISSIONS TEST — PREFAB INITIALIZATION OPTIONS
+ |
+ | Core always discovers/integrates compatible modules. If Users is initialized
+ | and Permissions can use its subject/user mapping plus an available permission
+ | store/default definitions, the pair should connect automatically.
+ |
+ | Preferred setup:
+ |
+ |   // $prefab = \Tihloh\Prefab\Core\Prefab::create(['db' => $pdo]);
+ |
+ | Explicit Users setup only for a project-specific user source:
+ |
+ |   // 'modules' => ['users' => $customUsers]
+ |
+ | Explicit Permissions setup only for a custom store/definitions source:
+ |
+ |   // 'module_options' => [
+ |   //     'permissions' => [
+ |   //         'factory' => fn ($prefab, $options) =>
+ |   //             new \Tihloh\Prefab\Permissions\Services\PermissionManager(
+ |   //                 $definitions,
+ |   //                 $customPermissionStore
+ |   //             ),
+ |   //     ],
+ |   // ]
+ |
+ | Auth/Logs remain automatically discoverable and integrate when available.
+ */
