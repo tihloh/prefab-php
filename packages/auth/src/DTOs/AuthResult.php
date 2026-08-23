@@ -4,7 +4,7 @@ namespace Tihloh\Prefab\Auth\DTOs;
 
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
 
-final readonly class AuthResult
+final class AuthResult
 {
     public function __construct(
         public bool $success,

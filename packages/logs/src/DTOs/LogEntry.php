@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Logs\DTOs;
 
-final readonly class LogEntry
+final class LogEntry
 {
     public function __construct(
         public string $action,

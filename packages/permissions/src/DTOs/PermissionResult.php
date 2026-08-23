@@ -2,7 +2,7 @@
 
 namespace Tihloh\Prefab\Permissions\DTOs;
 
-final readonly class PermissionResult
+final class PermissionResult
 {
     public function __construct(
         public bool $allowed,

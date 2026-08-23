@@ -1,10 +1,27 @@
 {
     "name": "tihloh/prefab-users",
-    "description": "Standalone Prefab users module.",
+    "description": "Standalone, framework-independent user management and project-table mapping for Prefab PHP.",
+    "keywords": ["php", "users", "user-management", "prefab", "modular", "framework-independent"],
+    "homepage": "https://github.com/tihloh/prefab-php",
     "type": "library",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Christian Bustamante"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/tihloh/prefab-php/issues",
+        "source": "https://github.com/tihloh/prefab-php"
+    },
     "require": {
         "php": ">=8.1"
+    },
+    "suggest": {
+        "ext-pdo": "Required only when using Prefab's built-in PDO/database-backed user provider.",
+        "tihloh/prefab-database": "Optional shared/named database manager with automatic Prefab integration.",
+        "tihloh/prefab-auth": "Optional authentication module that can automatically use Prefab Users.",
+        "tihloh/prefab-logs": "Optional structured activity logging for user operations."
     },
     "autoload": {
         "psr-4": {
