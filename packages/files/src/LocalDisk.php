@@ -151,13 +151,9 @@ final class LocalDisk implements DiskInterface
         }
 
         $items = [];
-        if ($recursive) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS)
-            );
-        } else {
-            $iterator = new \IteratorIterator(new \DirectoryIterator($base));
-        }
+        $iterator = $recursive
+            ? new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS))
+            : new \IteratorIterator(new \DirectoryIterator($base));
 
         foreach ($iterator as $item) {
             if (!$item->isFile()) {
@@ -170,6 +166,48 @@ final class LocalDisk implements DiskInterface
 
         usort($items, static fn (FileInfo $a, FileInfo $b) => strcmp($a->path(), $b->path()));
         return $items;
+    }
+
+    public function directories(string $directory = '', bool $recursive = false): array
+    {
+        $relativeDirectory = $this->normalize($directory, true);
+        $base = $relativeDirectory === '' ? $this->root : $this->absolute($relativeDirectory);
+        if (!is_dir($base)) {
+            return [];
+        }
+
+        $directories = [];
+        if ($recursive) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST,
+            );
+            foreach ($iterator as $item) {
+                if (!$item->isDir()) {
+                    continue;
+                }
+                $absolute = str_replace('\\', '/', $item->getPathname());
+                $directories[] = ltrim(substr($absolute, strlen($this->root)), '/');
+            }
+        } else {
+            foreach (new \DirectoryIterator($base) as $item) {
+                if ($item->isDot() || !$item->isDir()) {
+                    continue;
+                }
+                $absolute = str_replace('\\', '/', $item->getPathname());
+                $directories[] = ltrim(substr($absolute, strlen($this->root)), '/');
+            }
+        }
+
+        sort($directories);
+        return $directories;
+    }
+
+    public function directoryExists(string $directory): bool
+    {
+        $relative = $this->normalize($directory, true);
+        $absolute = $relative === '' ? $this->root : $this->absolute($relative);
+        return is_dir($absolute);
     }
 
     public function makeDirectory(string $directory): bool
@@ -218,6 +256,32 @@ final class LocalDisk implements DiskInterface
         );
     }
 
+    public function checksum(string $path, string $algorithm = 'sha256'): string
+    {
+        if (!in_array($algorithm, hash_algos(), true)) {
+            throw new RuntimeException("Unsupported hash algorithm: {$algorithm}");
+        }
+        $hash = hash_file($algorithm, $this->absoluteExisting($path));
+        if ($hash === false) {
+            throw new RuntimeException("Unable to checksum file: {$path}");
+        }
+        return $hash;
+    }
+
+    public function size(string $path): int
+    {
+        return $this->info($path)->size();
+    }
+
+    public function directorySize(string $directory = ''): int
+    {
+        $size = 0;
+        foreach ($this->files($directory, true) as $file) {
+            $size += $file->size();
+        }
+        return $size;
+    }
+
     public function path(string $path): string
     {
         return $this->absolute($path);
@@ -229,6 +293,15 @@ final class LocalDisk implements DiskInterface
             return null;
         }
         return $this->baseUrl . '/' . str_replace('%2F', '/', rawurlencode($this->normalize($path)));
+    }
+
+    public function supports(string $capability): bool
+    {
+        return match (strtolower($capability)) {
+            'atomic_write', 'checksum', 'local_path', 'directories', 'usage' => true,
+            'public_url' => $this->baseUrl !== null,
+            default => false,
+        };
     }
 
     private function absolute(string $path): string
