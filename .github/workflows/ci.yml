@@ -25,7 +25,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
-          extensions: pdo, pdo_sqlite
+          extensions: pdo, pdo_sqlite, fileinfo
 
       - name: Validate composer.json
         working-directory: packages/${{ matrix.package }}
@@ -51,15 +51,15 @@ jobs:
         with:
           php-version: '8.1'
           tools: composer:v2
+          extensions: fileinfo
 
       - name: Install Prefab Input
         working-directory: packages/input
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Verify normalization, casting, validation and whitelist
+      - name: Verify scalars, wildcard arrays, deep whitelist and uploads
         working-directory: packages/input
-        run: |
-          php -r "require 'vendor/autoload.php'; \$r=(new Tihloh\\Prefab\\Input\\Input(['name'=>'  Chris  ','email'=>'USER@EXAMPLE.COM','age'=>'35','active'=>'true','admin'=>1]))->process(['name'=>'trim|required|string|max:20','email'=>'trim|lowercase|required|email','age'=>'integer|min:18','active'=>'boolean']); if (\$r->fails() || \$r->validated() !== ['name'=>'Chris','email'=>'user@example.com','age'=>35,'active'=>true] || array_key_exists('admin', \$r->validated())) { fwrite(STDERR, json_encode(['errors'=>\$r->errors(),'validated'=>\$r->validated()])); exit(1); } echo 'Prefab Input OK', PHP_EOL;"
+        run: php tests/smoke.php
 
   interoperability-sync:
     name: Verify embedded interoperability files
