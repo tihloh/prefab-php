@@ -1,28 +1,30 @@
 # Prefab Input
 
-**Prefab Input** turns raw/untrusted PHP input into clean, normalized, typed, validated and whitelisted data.
+**Prefab Input** turns raw/untrusted PHP input into clean, normalized, typed, validated and deeply whitelisted application data.
 
-> Define what your application accepts. Everything else stays outside the validated result.
+> Define exactly what your application accepts. Everything else stays outside the validated result.
 
-It combines the closely related concerns that normally happen before business logic:
+It combines closely related input-boundary concerns:
 
 - validation;
-- trimming and sanitizing-style transformations;
-- normalization;
+- trimming and normalization;
 - type casting;
-- field filtering/whitelisting;
-- defaults;
-- nested input;
-- conditional rules;
+- safe field whitelisting;
+- defaults and conditional rules;
+- nested arrays and wildcard paths;
+- multiple/repeated form rows;
+- `$_FILES` normalization;
+- multipart file validation;
+- JSON request bodies;
 - custom rules and transformers;
-- friendly validation errors;
-- safe validated-data extraction.
+- friendly validation errors.
 
 Prefab Input is standalone. It does not require Routes, Database, Users, Auth, Permissions, Logs, Laravel, or another framework.
 
 ## Requirements
 
 - PHP 8.1 or newer
+- `ext-fileinfo` for secure MIME detection
 - Composer when installed as a package
 
 ## Installation
@@ -40,9 +42,7 @@ composer require tihloh/prefab-input
 ```php
 use Tihloh\Prefab\Input\Input;
 
-$input = new Input($_POST);
-
-$result = $input->process([
+$result = Input::from($_POST)->process([
     'name' => 'trim|required|string|max:100',
     'email' => 'trim|lowercase|required|email',
     'age' => 'nullable|integer|min:18',
@@ -57,15 +57,13 @@ if ($result->fails()) {
 $data = $result->validated();
 ```
 
-`validated()` contains only fields declared by the schema and only fields that passed processing.
+`validated()` contains only schema-declared fields that passed processing.
 
 ---
 
-# 2. Why Input is broader than validation
+# 2. One input pipeline
 
-Incoming application data rarely needs only a yes/no validation check.
-
-A real request often needs to become:
+Incoming values often need several steps before business logic:
 
 ```text
 "  Christian  "   → "Christian"
@@ -75,27 +73,41 @@ A real request often needs to become:
 ""                → null
 ```
 
-Prefab Input handles those steps in one predictable pipeline before the data reaches a database, service or business object.
+Prefab Input handles this as one pipeline:
+
+```text
+raw input
+   ↓
+whitelist/schema
+   ↓
+normalize
+   ↓
+cast
+   ↓
+validate
+   ↓
+safe validated data
+```
 
 ---
 
 # 3. Schema as a whitelist
 
-Suppose the browser sends:
+Suppose a client sends:
 
 ```php
-$_POST = [
+[
     'name' => 'Christian',
     'email' => 'user@example.com',
     'role' => 'admin',
     'is_superuser' => true,
-];
+]
 ```
 
-but your schema contains only:
+but the schema declares only:
 
 ```php
-$result = (new Input($_POST))->process([
+$result = Input::from($data)->process([
     'name' => 'trim|required|string',
     'email' => 'trim|lowercase|required|email',
 ]);
@@ -116,19 +128,19 @@ returns only:
 ]
 ```
 
-Undeclared fields do not automatically become trusted application data.
+Undeclared client fields never become validated application data.
 
 ---
 
 # 4. Compact and array schemas
 
-Compact pipe syntax:
+Compact syntax:
 
 ```php
 'name' => 'trim|required|string|max:100'
 ```
 
-Array syntax is useful for readability and callable rules:
+Array syntax:
 
 ```php
 'name' => [
@@ -139,25 +151,25 @@ Array syntax is useful for readability and callable rules:
 ]
 ```
 
-Both forms use the same processor.
+Array schemas can also contain callable validation rules.
 
 ---
 
-# 5. Built-in transformations and casting
+# 5. Transformations and casting
 
-Built-in transformations include:
+Built-in operations include:
 
 | Operation | Effect |
 |---|---|
-| `trim` | Trim surrounding whitespace from strings |
-| `lowercase` | Convert strings to lowercase |
-| `uppercase` | Convert strings to uppercase |
-| `null_if_empty` | Convert an empty string to `null` |
-| `string` | Cast to string |
-| `integer` | Cast a valid integer representation to `int` |
-| `float` | Cast numeric input to `float` |
-| `boolean` | Cast common boolean representations to `bool` |
-| `array` | Preserve arrays or wrap a scalar as an array |
+| `trim` | Trim string whitespace |
+| `lowercase` | Lowercase a string |
+| `uppercase` | Uppercase a string |
+| `null_if_empty` | Convert `''` to `null` |
+| `string` | Cast sensible scalar/stringable values |
+| `integer` | Cast a valid integer representation |
+| `float` | Cast numeric input to float |
+| `boolean` | Cast common boolean forms |
+| `array` | Keep arrays or wrap a scalar in an array |
 
 Example:
 
@@ -183,7 +195,7 @@ Validated output:
 ]
 ```
 
-Invalid integer/float/boolean casts produce validation errors rather than silently being accepted as correctly typed data.
+Invalid casts produce validation errors rather than silently pretending the requested type was produced.
 
 ---
 
@@ -215,137 +227,53 @@ same
 different
 regex
 confirmed
-```
-
-Examples:
-
-```php
-$result = $input->process([
-    'email' => 'required|email',
-    'age' => 'integer|between:18,100',
-    'status' => 'in:draft,published,archived',
-]);
+distinct
+file
+image
+mimes
+mimetypes
+min_size
+max_size
+dimensions
 ```
 
 ---
 
-# 7. Required, nullable and sometimes
-
-Required:
+# 7. Required, nullable, sometimes and defaults
 
 ```php
 'name' => 'required|string'
-```
-
-Nullable:
-
-```php
 'middle_name' => 'nullable|trim|string|max:100'
-```
-
-If the supplied nullable value is `null` or an empty string, validation stops for that field and the processed value becomes `null`.
-
-Sometimes:
-
-```php
 'bio' => 'sometimes|trim|string|max:500'
+'active' => 'default:true|boolean'
+'page' => 'default:1|integer|min:1'
 ```
 
-If `bio` is absent, Prefab ignores the field completely. If it is present, the remaining operations are applied.
+`nullable` accepts an absent/null/empty value as `null`. `sometimes` ignores an absent field completely. `default` applies only when the field is absent.
 
 ---
 
-# 8. Defaults
-
-Defaults apply only when a field is absent:
+# 8. Conditional validation
 
 ```php
-'active' => 'default:true|boolean'
+'company_name' => 'required_if:type,business|trim|string'
+'phone_extension' => 'required_with:phone|string'
 ```
 
-Supported literal defaults recognize:
-
-```text
-true
-false
-null
-```
-
-Other values remain strings unless a following cast transforms them.
+These rules also work inside wildcard rows when the referenced rule path uses the same wildcard positions.
 
 Example:
 
 ```php
-'page' => 'default:1|integer|min:1'
+'items.*.type' => 'required|in:product,service',
+'items.*.sku' => 'required_if:items.*.type,product|string',
 ```
+
+For `items.3.sku`, Prefab compares `items.3.type`.
 
 ---
 
-# 9. Conditional required rules
-
-Require a field when another field has a specific value:
-
-```php
-'company_name' => 'required_if:type,business|trim|string'
-```
-
-Require a field when another field is present and non-empty:
-
-```php
-'phone_extension' => 'required_with:phone|string'
-```
-
-These rules allow common form/API conditions without manually writing branching validation code.
-
----
-
-# 10. Minimum, maximum and between
-
-For numbers, size means numeric value:
-
-```php
-'age' => 'integer|min:18|max:100'
-```
-
-For strings, size means string length:
-
-```php
-'name' => 'trim|string|between:2,100'
-```
-
-For arrays, size means item count.
-
----
-
-# 11. Field comparison
-
-Same value:
-
-```php
-'email_confirmation' => 'same:email'
-```
-
-Different value:
-
-```php
-'new_email' => 'different:old_email'
-```
-
-Password-style confirmation has a convenience rule:
-
-```php
-'password' => 'required|string|min:8|confirmed'
-```
-
-which compares against:
-
-```text
-password_confirmation
-```
-
----
-
-# 12. Nested input
+# 9. Nested input
 
 Dot notation reads and writes nested arrays:
 
@@ -361,7 +289,7 @@ $result = Input::from([
 ]);
 ```
 
-Validated output preserves nesting:
+Validated output:
 
 ```php
 [
@@ -374,9 +302,318 @@ Validated output preserves nesting:
 
 ---
 
-# 13. Result object
+# 10. Array form inputs
 
-`process()` returns `InputResult`.
+PHP automatically converts HTML names such as:
+
+```html
+<input name="tags[]" value="PHP">
+<input name="tags[]" value="Go">
+```
+
+into:
+
+```php
+[
+    'tags' => ['PHP', 'Go'],
+]
+```
+
+Process each item using `*`:
+
+```php
+$result = Input::from($_POST)->process([
+    'tags' => 'required|array|max:10|distinct',
+    'tags.*' => 'trim|required|string',
+]);
+```
+
+---
+
+# 11. Repeated/nested rows with wildcards
+
+HTML:
+
+```html
+<input name="items[0][product_id]" value="10">
+<input name="items[0][qty]" value="2">
+
+<input name="items[1][product_id]" value="15">
+<input name="items[1][qty]" value="3">
+```
+
+PHP produces:
+
+```php
+[
+    'items' => [
+        ['product_id' => '10', 'qty' => '2'],
+        ['product_id' => '15', 'qty' => '3'],
+    ],
+]
+```
+
+Prefab schema:
+
+```php
+$result = Input::from($_POST)->process([
+    'items' => 'required|array|max:20',
+    'items.*.product_id' => 'required|integer',
+    'items.*.qty' => 'required|integer|min:1',
+]);
+```
+
+Validated output:
+
+```php
+[
+    'items' => [
+        ['product_id' => 10, 'qty' => 2],
+        ['product_id' => 15, 'qty' => 3],
+    ],
+]
+```
+
+Errors keep their concrete index:
+
+```php
+[
+    'items.1.qty' => [
+        'The items 1 qty field must be at least 1.',
+    ],
+]
+```
+
+Nested wildcards are also supported:
+
+```php
+'departments.*.employees.*.email' => 'trim|lowercase|required|email'
+```
+
+---
+
+# 12. Deep whitelisting
+
+Wildcard schemas do not copy undeclared fields from parent arrays.
+
+Input:
+
+```php
+[
+    'items' => [
+        [
+            'product_id' => 10,
+            'qty' => 2,
+            'price' => 0,
+            'is_free' => true,
+        ],
+    ],
+]
+```
+
+Schema:
+
+```php
+[
+    'items' => 'array',
+    'items.*.product_id' => 'integer',
+    'items.*.qty' => 'integer',
+]
+```
+
+Validated output:
+
+```php
+[
+    'items' => [
+        [
+            'product_id' => 10,
+            'qty' => 2,
+        ],
+    ],
+]
+```
+
+This makes nested client input safer to pass to application services or persistence.
+
+---
+
+# 13. Standard multipart forms
+
+For normal PHP `multipart/form-data` requests, PHP already parses the protocol into `$_POST` and `$_FILES`.
+
+Use:
+
+```php
+$input = Input::fromRequest();
+```
+
+or explicitly:
+
+```php
+$input = Input::from($_POST, $_FILES);
+```
+
+HTML:
+
+```html
+<form method="post" enctype="multipart/form-data">
+    <input name="title">
+    <input type="file" name="document">
+    <button type="submit">Save</button>
+</form>
+```
+
+Process it naturally:
+
+```php
+$result = Input::fromRequest()->process([
+    'title' => 'trim|required|string|max:200',
+    'document' => 'required|file|mimes:pdf|max_size:20mb',
+]);
+```
+
+Prefab does not reimplement the standard PHP multipart boundary parser. It normalizes PHP's already-parsed request data.
+
+---
+
+# 14. UploadedFile
+
+Uploaded files become `UploadedFile` objects:
+
+```php
+use Tihloh\Prefab\Input\UploadedFile;
+
+$file = $result->validated('document');
+
+if ($file instanceof UploadedFile) {
+    $file->name();
+    $file->tmpPath();
+    $file->size();
+    $file->extension();
+    $file->mime();
+    $file->error();
+    $file->isValid();
+    $file->isImage();
+    $file->dimensions();
+}
+```
+
+`mime()` detects MIME from temporary file contents using `fileinfo`; it does not simply trust the browser-provided MIME string.
+
+`UploadedFile` represents temporary input only. Permanent storage is intentionally outside Prefab Input.
+
+---
+
+# 15. File rules
+
+Examples:
+
+```php
+'photo' => 'required|file|image|max_size:5mb'
+'document' => 'required|file|mimes:pdf,doc,docx|max_size:20mb'
+'avatar' => 'image|mimetypes:image/jpeg,image/png'
+```
+
+Rules:
+
+| Rule | Meaning |
+|---|---|
+| `file` | Valid PHP upload |
+| `image` | Upload is a readable image |
+| `mimes:pdf,png` | Allowed extension plus detected MIME for supported formats |
+| `mimetypes:application/pdf,image/png` | Allowed detected MIME |
+| `min_size:1kb` | Minimum byte size |
+| `max_size:10mb` | Maximum byte size |
+| `dimensions:min_width=200,min_height=200` | Image dimension limits |
+
+Supported size suffixes are `b`, `kb`, `mb`, and `gb`.
+
+Dimension examples:
+
+```php
+'photo' => 'image|dimensions:min_width=200,min_height=200,max_width=4000,max_height=4000'
+```
+
+---
+
+# 16. Multiple file uploads
+
+HTML:
+
+```html
+<input type="file" name="attachments[]" multiple>
+```
+
+Prefab normalizes PHP's column-oriented `$_FILES` representation into:
+
+```php
+[
+    'attachments' => [
+        UploadedFile,
+        UploadedFile,
+    ],
+]
+```
+
+Then:
+
+```php
+$result = Input::fromRequest()->process([
+    'attachments' => 'array|max:10',
+    'attachments.*' => 'file|max_size:10mb',
+]);
+```
+
+---
+
+# 17. Nested multipart rows
+
+HTML can mix ordinary fields and files:
+
+```html
+<input name="employees[0][name]">
+<input type="file" name="employees[0][photo]">
+<input name="employees[1][name]">
+<input type="file" name="employees[1][photo]">
+```
+
+Schema:
+
+```php
+$result = Input::fromRequest()->process([
+    'employees' => 'required|array',
+    'employees.*.name' => 'trim|required|string|max:100',
+    'employees.*.photo' => 'nullable|image|max_size:5mb',
+]);
+```
+
+`$_POST` and `$_FILES` are merged into one logical nested input tree before validation.
+
+---
+
+# 18. JSON requests
+
+`Input::fromRequest()` detects `Content-Type: application/json` and reads `php://input` automatically:
+
+```php
+$result = Input::fromRequest()->process([
+    'title' => 'trim|required|string|max:200',
+    'priority' => 'default:0|integer|between:0,5',
+    'tags' => 'sometimes|array|max:10',
+    'tags.*' => 'trim|string',
+]);
+```
+
+Invalid JSON produces a clear exception instead of silently converting the request into empty data.
+
+Raw multipart parsing for unusual non-standard request flows can later belong to an HTTP transport layer; Prefab Input remains focused on input normalization and validation.
+
+---
+
+# 19. Result object
+
+`process()` returns `InputResult`:
 
 ```php
 $result->passes();
@@ -384,95 +621,65 @@ $result->fails();
 $result->raw();
 $result->all();
 $result->validated();
+$result->validated('document');
 $result->errors();
 $result->first();
 $result->first('email');
 $result->value('user.email');
 ```
 
-The distinction is intentional:
+Meaning:
 
 ```text
-raw()       → original untrusted input
-all()       → schema fields after transformations, including invalid fields
-validated() → schema fields that passed processing
-errors()    → validation messages
+raw()       → original normalized request tree before schema processing
+all()       → declared fields after transformations, including invalid values
+validated() → only declared fields that passed processing
+errors()    → field-indexed validation messages
 ```
 
-Prefer `validated()` when passing request data to application services or persistence.
+Prefer `validated()` when passing request data into application services.
 
 ---
 
-# 14. Friendly attribute names
-
-Generated messages normally derive their label from the field name.
-
-Customize them:
+# 20. Friendly attributes and messages
 
 ```php
 $input->attributes([
     'email_address' => 'Email address',
-    'user.first_name' => 'First name',
+    'items.*.qty' => 'Item quantity',
 ]);
-```
 
-Then errors are more suitable for user interfaces.
-
----
-
-# 15. Custom messages
-
-Customize one field/rule:
-
-```php
 $input->messages([
     'email.required' => 'Please enter your email address.',
+    'items.*.qty.min' => ':attribute must be at least :value.',
 ]);
 ```
 
-Or customize a rule globally for that Input instance:
-
-```php
-$input->messages([
-    'required' => ':attribute is required.',
-]);
-```
-
-`:attribute` is replaced with the friendly field name.
+Wildcard pattern messages/attributes apply to their concrete paths unless an even more specific concrete key is configured.
 
 ---
 
-# 16. Custom validation rules
-
-Register a reusable named rule:
+# 21. Custom rules
 
 ```php
 $input->rule('even', function ($field, $value) {
-    if (!is_int($value) || $value % 2 !== 0) {
-        return 'The value must be an even integer.';
-    }
-
-    return null;
+    return is_int($value) && $value % 2 === 0
+        ? null
+        : 'The value must be an even integer.';
 });
-```
 
-Use it normally:
-
-```php
 $result = $input->process([
     'quantity' => 'integer|even',
 ]);
 ```
 
-Custom rule callbacks receive the field, current value, original raw data, parsed rule parameters and an existence flag.
+Custom rule callbacks receive field, current value, raw data, parsed parameters and existence state.
 
-This is also the extension point for database-aware rules such as `unique` and `exists`.
+This is also the extension point for database-aware `unique`/`exists` behavior without making Prefab Database mandatory.
 
 ---
 
-# 17. Inline callable rules
-
-For one-off application rules, place a callable directly in an array schema:
+# 22. Inline callable rules
 
 ```php
 $result = $input->process([
@@ -488,35 +695,27 @@ $result = $input->process([
 ]);
 ```
 
-Returning `null` means valid. Returning a non-empty string adds that string to the field's errors.
+Return `null` when valid, or a non-empty error string when invalid.
 
 ---
 
-# 18. Custom transformations
-
-Register reusable normalization behavior:
+# 23. Custom transformations
 
 ```php
 $input->transform('phone', function ($value) {
     return preg_replace('/[^0-9+]/', '', (string) $value);
 });
+
+$result = $input->process([
+    'phone' => 'trim|phone|required',
+]);
 ```
 
-Then:
-
-```php
-'phone' => 'trim|phone|required'
-```
-
-Custom transformers receive the current value, parameters, field name and original raw input.
+Custom transformers receive the current value, parameters, field name and raw data.
 
 ---
 
-# 19. Database-aware rules without a hard dependency
-
-Prefab Input deliberately does not require Prefab Database.
-
-An application can register a rule backed by any storage system:
+# 24. Database-aware rules without a hard dependency
 
 ```php
 $input->rule('unique_email', function ($field, $value) use ($users) {
@@ -524,138 +723,99 @@ $input->rule('unique_email', function ($field, $value) use ($users) {
         ? null
         : 'That email address is already in use.';
 });
-```
-
-Then:
-
-```php
-'email' => 'trim|lowercase|required|email|unique_email'
-```
-
-A future Prefab Database integration can supply standard `unique`/`exists` resolvers without changing the core Input API.
-
----
-
-# 20. Routes / HTTP usage
-
-Prefab Input does not depend on a router or `$_POST`.
-
-Use it with any array source:
-
-```php
-$input = new Input($_POST);
-```
-
-JSON request body:
-
-```php
-$data = json_decode(file_get_contents('php://input'), true) ?? [];
-$result = (new Input($data))->process($schema);
-```
-
-With Prefab Routes, a controller or middleware can process request data before business logic. Future Prefab HTTP integration can provide a cleaner request object while Input itself stays transport-independent.
-
----
-
-# 21. Practical user-creation example
-
-```php
-$input = new Input($_POST);
 
 $result = $input->process([
-    'name' => 'trim|required|string|max:100',
-    'email' => 'trim|lowercase|required|email|max:200',
-    'password' => 'required|string|min:8|confirmed',
-    'active' => 'default:true|boolean',
+    'email' => 'trim|lowercase|required|email|unique_email',
 ]);
-
-if ($result->fails()) {
-    renderForm($result->errors());
-    return;
-}
-
-$user = $users->create($result->validated());
 ```
 
-Unexpected form fields never reach `create()` through `validated()`.
+A future Database adapter may provide reusable resolvers while the Input core stays database-independent.
 
 ---
 
-# 22. Practical API example
+# 25. Responsibility boundary
 
-```php
-$payload = json_decode(file_get_contents('php://input'), true) ?? [];
+Prefab Input owns the incoming-data boundary:
 
-$result = Input::from($payload)->process([
-    'title' => 'trim|required|string|max:200',
-    'priority' => 'default:0|integer|between:0,5',
-    'published' => 'default:false|boolean',
-    'tags' => 'sometimes|array|max:10',
-]);
-
-if ($result->fails()) {
-    http_response_code(422);
-    echo json_encode([
-        'errors' => $result->errors(),
-    ]);
-    return;
-}
-
-$service->create($result->validated());
+```text
+Browser / API
+      ↓
+POST / JSON / multipart
+      ↓
+Prefab Input
+├── normalize
+├── cast
+├── validate
+├── file inspection
+└── whitelist
+      ↓
+application-safe data
 ```
+
+It deliberately does **not** own permanent file storage, directories, cloud storage, public URLs, database persistence, HTTP responses, or routing.
+
+A future file-storage package could consume `UploadedFile` without changing Input itself.
 
 ---
 
-# 23. API quick reference
-
-`Input`:
+# 26. API quick reference
 
 | API | Purpose |
 |---|---|
-| `new Input($data)` | Create an input processor |
-| `Input::from($data)` | Static constructor |
-| `data()` | Replace raw input |
-| `process()` | Process a schema |
+| `Input::from($data, $files = [])` | Build from explicit arrays |
+| `Input::fromRequest()` | Read normal PHP form/multipart or JSON request data |
+| `process()` | Normalize/cast/validate/whitelist using a schema |
 | `rule()` | Register a custom validation rule |
 | `transform()` | Register a custom transformer |
-| `attributes()` | Set friendly field names |
-| `messages()` | Override validation messages |
+| `attributes()` | Configure friendly field labels |
+| `messages()` | Configure validation messages |
+| `Input::normalizeFiles()` | Normalize PHP `$_FILES` manually |
 
 `InputResult`:
 
 | API | Purpose |
 |---|---|
-| `passes()` | Whether no validation errors exist |
-| `fails()` | Whether validation errors exist |
-| `raw()` | Original input |
-| `all()` | Processed schema fields |
-| `validated()` | Safe fields that passed processing |
-| `errors()` | All field errors |
+| `passes()` / `fails()` | Validation status |
+| `raw()` | Original input tree |
+| `all()` | Processed declared fields |
+| `validated()` | Safe validated output or one validated path |
+| `errors()` | Error bag |
 | `first()` | First error globally or for a field |
-| `value()` | Read a processed field using dot notation |
+| `value()` | Read a processed value by dot path |
+
+`UploadedFile`:
+
+| API | Purpose |
+|---|---|
+| `name()` | Original client filename |
+| `tmpPath()` | PHP temporary path |
+| `size()` | File size in bytes |
+| `extension()` | Original filename extension |
+| `mime()` | Content-detected MIME |
+| `error()` | PHP upload error code |
+| `isValid()` | Valid temporary upload state |
+| `isImage()` | Detect readable image |
+| `dimensions()` | Image width/height |
 
 ---
 
-# 24. Design philosophy
+# 27. Design philosophy
 
-Prefab Input owns the boundary between raw external data and application-trusted data.
+Prefab Input stays simple for ordinary forms:
 
-```text
-Raw request/form/API data
-          ↓
-      Prefab Input
-          ↓
-trim / normalize / cast
-          ↓
-       validate
-          ↓
-      whitelist
-          ↓
-   validated() data
-          ↓
-business logic / persistence
+```php
+$result = Input::from($_POST)->process([
+    'name' => 'trim|required',
+]);
 ```
 
-A small application can use one schema and `validated()`. A larger application can add reusable custom rules, custom transformers, database-aware checks and request integrations without replacing the input-processing model.
+The same API scales to large dynamic forms and APIs:
 
-The core principle is: **raw input is not application data until the application explicitly defines and validates what it accepts.**
+```php
+$result = Input::fromRequest()->process([
+    'departments.*.employees.*.email' => 'trim|lowercase|required|email',
+    'departments.*.employees.*.photo' => 'nullable|image|max_size:5mb',
+]);
+```
+
+The core principle is: **turn untrusted external data into predictable application data without forcing a framework or persistence layer.**
