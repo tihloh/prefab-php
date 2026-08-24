@@ -8,11 +8,11 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 
 /**
- * Processes raw input through normalization, casting, filtering and validation.
+ * Converts raw input into normalized, typed, validated and whitelisted data.
  *
- * Schemas are whitelists: only declared fields can appear in validated output.
- * Custom transformers and validators keep the package extensible without hard
- * dependencies on database, HTTP, framework, or other Prefab modules.
+ * The schema is always a whitelist: undeclared raw fields never appear in the
+ * validated result. Custom rules and transforms keep the module extensible
+ * without hard dependencies on Database, Routes, HTTP or a framework.
  */
 final class Input
 {
@@ -34,28 +34,26 @@ final class Input
         return $this;
     }
 
-    /** Register a custom validation rule. Return null when valid or a message when invalid. */
+    /** Register a validation rule. Return null when valid or an error string when invalid. */
     public function rule(string $name, callable $validator): self
     {
-        $this->customRules[$name] = $validator;
+        $this->customRules[strtolower($name)] = $validator;
         return $this;
     }
 
-    /** Register a custom transformer/caster. */
+    /** Register a value transformer/caster. */
     public function transform(string $name, callable $transformer): self
     {
-        $this->customTransforms[$name] = $transformer;
+        $this->customTransforms[strtolower($name)] = $transformer;
         return $this;
     }
 
-    /** Friendly names used in generated validation messages. */
     public function attributes(array $attributes): self
     {
         $this->attributes = array_replace($this->attributes, $attributes);
         return $this;
     }
 
-    /** Override generated messages using `field.rule` or `rule` keys. */
     public function messages(array $messages): self
     {
         $this->messages = array_replace($this->messages, $messages);
@@ -63,10 +61,10 @@ final class Input
     }
 
     /**
-     * Process raw data using a compact schema.
+     * Process raw data against a schema.
      *
-     * Rules may be pipe strings or arrays. Transform/cast operations are applied
-     * in the declared order. Validation errors are collected per field.
+     * Definitions may be pipe strings or arrays. Array definitions may also
+     * contain callable validation rules. Operations execute in declared order.
      */
     public function process(array $schema): InputResult
     {
@@ -75,66 +73,76 @@ final class Input
         $errors = [];
 
         foreach ($schema as $field => $definition) {
+            $field = (string) $field;
             $operations = $this->normalizeOperations($definition);
-            $value = self::getPath($this->data, (string) $field, $exists);
+            $value = self::getPath($this->data, $field, $exists);
 
-            if ($this->containsOperation($operations, 'sometimes') && !$exists) {
+            if ($this->hasOperation($operations, 'sometimes') && !$exists) {
                 continue;
             }
 
+            $nullable = $this->hasOperation($operations, 'nullable');
             $fieldErrors = [];
-            $nullable = $this->containsOperation($operations, 'nullable');
 
             foreach ($operations as $operation) {
+                if (is_callable($operation) && !is_string($operation)) {
+                    $message = $operation($field, $value, $this->data, $exists);
+                    if (is_string($message) && $message !== '') {
+                        $fieldErrors[] = $message;
+                    }
+                    continue;
+                }
+
                 [$name, $params] = $this->parseOperation($operation);
 
                 if (in_array($name, ['sometimes', 'nullable'], true)) {
                     continue;
                 }
 
-                if ($name === 'default' && !$exists) {
-                    $value = $params[0] ?? null;
-                    $exists = true;
-                    continue;
-                }
-
-                if ($this->isTransform($name)) {
-                    if ($exists) {
-                        $value = $this->applyTransform($name, $value, $params, (string) $field);
+                if ($name === 'default') {
+                    if (!$exists) {
+                        $value = $this->literal($params[0] ?? null);
+                        $exists = true;
                     }
                     continue;
                 }
 
-                if ($nullable && ($value === null || $value === '')) {
+                if ($nullable && $exists && ($value === null || $value === '')) {
                     $value = null;
-                    $exists = true;
                     break;
                 }
 
-                $message = $this->validateRule(
-                    $name,
-                    (string) $field,
-                    $value,
-                    $exists,
-                    $params,
-                );
+                if ($this->isTransform($name)) {
+                    if ($exists) {
+                        $value = $this->applyTransform($name, $value, $params, $field);
 
+                        if (in_array($name, ['integer', 'float', 'boolean'], true)) {
+                            $message = $this->validateRule($name, $field, $value, true, $params);
+                            if ($message !== null) {
+                                $fieldErrors[] = $message;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                $message = $this->validateRule($name, $field, $value, $exists, $params);
                 if ($message !== null) {
                     $fieldErrors[] = $message;
                 }
             }
 
             if ($exists) {
-                self::setPath($processed, (string) $field, $value);
+                self::setPath($processed, $field, $value);
             }
 
             if ($fieldErrors !== []) {
-                $errors[(string) $field] = $fieldErrors;
+                $errors[$field] = array_values(array_unique($fieldErrors));
                 continue;
             }
 
             if ($exists) {
-                self::setPath($validated, (string) $field, $value);
+                self::setPath($validated, $field, $value);
             }
         }
 
@@ -156,10 +164,6 @@ final class Input
 
     private function parseOperation(mixed $operation): array
     {
-        if (is_callable($operation) && !is_string($operation)) {
-            return ['__callable__', [$operation]];
-        }
-
         if (!is_string($operation)) {
             throw new InvalidArgumentException('Input rule/transform must be a string or callable.');
         }
@@ -170,7 +174,7 @@ final class Input
         return [strtolower(trim($name)), $params];
     }
 
-    private function containsOperation(array $operations, string $target): bool
+    private function hasOperation(array $operations, string $target): bool
     {
         foreach ($operations as $operation) {
             if (!is_string($operation)) {
@@ -189,15 +193,8 @@ final class Input
     private function isTransform(string $name): bool
     {
         return isset($this->customTransforms[$name]) || in_array($name, [
-            'trim',
-            'lowercase',
-            'uppercase',
-            'null_if_empty',
-            'string',
-            'integer',
-            'float',
-            'boolean',
-            'array',
+            'trim', 'lowercase', 'uppercase', 'null_if_empty',
+            'string', 'integer', 'float', 'boolean', 'array',
         ], true);
     }
 
@@ -221,17 +218,8 @@ final class Input
         };
     }
 
-    private function validateRule(
-        string $name,
-        string $field,
-        mixed $value,
-        bool $exists,
-        array $params,
-    ): ?string {
-        if ($name === '__callable__') {
-            return null;
-        }
-
+    private function validateRule(string $name, string $field, mixed $value, bool $exists, array $params): ?string
+    {
         if (isset($this->customRules[$name])) {
             $message = ($this->customRules[$name])($field, $value, $this->data, $params, $exists);
             return is_string($message) && $message !== '' ? $message : null;
@@ -239,14 +227,15 @@ final class Input
 
         $valid = match ($name) {
             'required' => $exists && !$this->isBlank($value),
-            'required_if' => $this->validateRequiredIf($value, $params),
-            'required_with' => $this->validateRequiredWith($value, $params),
+            'required_if' => $this->requiredIf($value, $params),
+            'required_with' => $this->requiredWith($value, $params),
             'email' => !$exists || filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
             'url' => !$exists || filter_var($value, FILTER_VALIDATE_URL) !== false,
             'string' => !$exists || is_string($value),
-            'integer' => !$exists || is_int($value) || filter_var($value, FILTER_VALIDATE_INT) !== false,
+            'integer' => !$exists || is_int($value),
+            'float' => !$exists || is_float($value) || is_int($value),
             'numeric' => !$exists || is_numeric($value),
-            'boolean' => !$exists || is_bool($value) || in_array($value, [0, 1, '0', '1', 'true', 'false', 'on', 'off', 'yes', 'no'], true),
+            'boolean' => !$exists || is_bool($value),
             'array' => !$exists || is_array($value),
             'date' => !$exists || $this->isDate($value),
             'min' => !$exists || $this->sizeOf($value) >= (float) ($params[0] ?? 0),
@@ -264,7 +253,7 @@ final class Input
         return $valid ? null : $this->message($field, $name, $params);
     }
 
-    private function validateRequiredIf(mixed $value, array $params): bool
+    private function requiredIf(mixed $value, array $params): bool
     {
         $other = (string) ($params[0] ?? '');
         $expected = array_slice($params, 1);
@@ -277,7 +266,7 @@ final class Input
         return !$this->isBlank($value);
     }
 
-    private function validateRequiredWith(mixed $value, array $params): bool
+    private function requiredWith(mixed $value, array $params): bool
     {
         foreach ($params as $other) {
             $otherValue = self::getPath($this->data, (string) $other, $exists);
@@ -307,7 +296,7 @@ final class Input
             'url' => "The {$label} field must be a valid URL.",
             'string' => "The {$label} field must be a string.",
             'integer' => "The {$label} field must be an integer.",
-            'numeric' => "The {$label} field must be numeric.",
+            'float', 'numeric' => "The {$label} field must be numeric.",
             'boolean' => "The {$label} field must be boolean.",
             'array' => "The {$label} field must be an array.",
             'date' => "The {$label} field must be a valid date.",
@@ -321,6 +310,20 @@ final class Input
             'regex' => "The {$label} field format is invalid.",
             'confirmed' => "The {$label} confirmation does not match.",
             default => "The {$label} field is invalid.",
+        };
+    }
+
+    private function literal(mixed $value): mixed
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        return match (strtolower($value)) {
+            'true' => true,
+            'false' => false,
+            'null' => null,
+            default => $value,
         };
     }
 
@@ -364,7 +367,7 @@ final class Input
         }
 
         if (is_string($value)) {
-            return (float) mb_strlen($value);
+            return (float) (function_exists('mb_strlen') ? mb_strlen($value) : strlen($value));
         }
 
         if (is_array($value)) {
@@ -406,6 +409,7 @@ final class Input
                 $exists = false;
                 return null;
             }
+
             $value = $value[$segment];
         }
 
