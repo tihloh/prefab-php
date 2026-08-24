@@ -4,7 +4,7 @@
 
 > Input decides whether a file is acceptable. Files decides where and how it is stored.
 
-Prefab Files is standalone. It does not require Prefab Input, Routes, Database, Auth, Permissions, Logs, Laravel, or another framework.
+Prefab Files is standalone. Small applications can configure one local root and immediately call `put()`/`read()`. Larger systems can add named disks, public URLs, collision policies, checksums, storage usage, lifecycle hooks, temporary signed URLs and custom storage drivers without replacing the basic API.
 
 ## Requirements
 
@@ -35,25 +35,15 @@ $info = $files->put(
     'documents/report.txt',
     'Hello Prefab',
 );
-```
 
-Read it:
-
-```php
 $content = $files->read('documents/report.txt');
 ```
 
-Delete it:
-
-```php
-$files->delete('documents/report.txt');
-```
+Nothing else is required for a small application.
 
 ---
 
 # 2. Named disks
-
-A larger application can configure several storage locations:
 
 ```php
 $files = new FileManager([
@@ -78,86 +68,46 @@ Use the default disk:
 $files->put('documents/a.pdf', $contents);
 ```
 
-Or choose another disk:
+Choose another disk:
 
 ```php
-$files->put(
-    'avatars/user-25.jpg',
-    $contents,
-    disk: 'public',
-);
+$files->put('avatars/user.jpg', $contents, 'public');
 ```
 
-Inspect configured disks:
+Inspect disks:
 
 ```php
 $files->names();
 $files->defaultName();
 $files->hasDisk('public');
-```
-
-Change the default:
-
-```php
 $files->useDefault('public');
 ```
 
----
-
-# 3. Local storage
-
-The first built-in driver is `LocalDisk`.
-
-```php
-use Tihloh\Prefab\Files\LocalDisk;
-
-$disk = new LocalDisk(
-    __DIR__ . '/storage',
-);
-```
-
-Or with a public base URL:
-
-```php
-$disk = new LocalDisk(
-    __DIR__ . '/public/uploads',
-    '/uploads',
-);
-```
-
-The local driver creates its root when necessary.
+Public/private intent is deliberately easiest to express at **disk level**. A disk with a configured base URL can produce public URLs; a private disk without one cannot.
 
 ---
 
-# 4. Storage paths
+# 3. Safe relative paths
 
-Paths passed to Prefab Files are relative to the selected disk root.
+Application paths are relative to the selected disk root:
 
 ```php
 $files->put('documents/2026/report.pdf', $contents);
 ```
 
-A private disk rooted at:
+If the disk root is:
 
 ```text
 /var/www/app/storage/private
 ```
 
-stores that file at:
+the physical path is:
 
 ```text
 /var/www/app/storage/private/documents/2026/report.pdf
 ```
 
-Applications therefore do not need to concatenate absolute storage paths throughout business code.
-
----
-
-# 5. Path safety
-
-Local storage rejects path traversal.
-
-These are rejected:
+Traversal attempts are rejected:
 
 ```text
 ../.env
@@ -165,80 +115,62 @@ These are rejected:
 documents/../../../secret.txt
 ```
 
-Storage paths are normalized before filesystem operations, preventing callers from escaping the configured disk root through `..` segments.
-
-This is an important safety boundary, but applications should still use authorization when deciding **who** may access a stored private file.
+Applications should normally persist the **storage-relative path**, not the machine-specific absolute path.
 
 ---
 
-# 6. Atomic local writes
+# 4. Atomic local writes
 
-Local `put()` and `putStream()` write to a temporary file first and then rename it into place.
-
-Conceptually:
+`LocalDisk` writes string and stream content to a temporary file first and then renames it into place.
 
 ```text
 write temporary file
         ↓
-write succeeds completely
+complete successfully
         ↓
-rename into final path
+rename to final path
 ```
 
-This reduces the chance of readers seeing a partially written local file.
+This reduces the chance of readers observing a partially written local file.
 
 ---
 
-# 7. Writing strings
+# 5. Strings, streams and existing files
+
+String contents:
 
 ```php
-$info = $files->put(
-    'exports/report.csv',
-    $csv,
-);
+$files->put('exports/report.csv', $csv);
 ```
 
-`put()` returns `FileInfo` for the stored file.
-
----
-
-# 8. Writing streams
-
-For larger content, streams avoid loading the entire file into one PHP string:
+Stream:
 
 ```php
 $stream = fopen($sourcePath, 'rb');
 
 try {
-    $info = $files->putStream(
-        'archives/backup.zip',
-        $stream,
-    );
+    $files->putStream('archives/backup.zip', $stream);
 } finally {
     fclose($stream);
 }
 ```
 
----
-
-# 9. Copying an existing local file into storage
+Existing local file:
 
 ```php
-$info = $files->putFile(
+$files->putFile(
     '/tmp/generated-report.pdf',
     'reports/2026/report.pdf',
 );
 ```
 
-The source file is read as a stream and copied into the selected storage disk.
+For large content, prefer streams.
 
 ---
 
-# 10. Prefab Input upload integration
+# 6. Prefab Input integration
 
-`prefab-files` does not require `prefab-input`, but it understands upload-like objects that expose `tmpPath()`.
-
-With Prefab Input:
+`prefab-files` does not depend on `prefab-input`, but `storeUploaded()` accepts an upload-like object exposing `tmpPath()`.
 
 ```php
 $result = Input::fromRequest()->process([
@@ -249,79 +181,108 @@ if ($result->fails()) {
     return $result->errors();
 }
 
-$upload = $result->validated('document');
-
 $stored = $files->storeUploaded(
-    $upload,
+    $result->validated('document'),
     'documents',
 );
 ```
 
-Prefab Files generates a random name by default rather than trusting the original client filename as the stored filename.
-
-The original name is still available on the Input `UploadedFile` if the application wants to store it as business metadata.
-
----
-
-# 11. Choosing the stored filename
-
-Automatic random name:
-
-```php
-$stored = $files->storeUploaded(
-    $upload,
-    'documents',
-);
-```
-
-Explicit application-controlled name:
-
-```php
-$stored = $files->storeUploaded(
-    $upload,
-    'documents',
-    'document-25.pdf',
-);
-```
-
-Generate a random name manually:
-
-```php
-$name = $files->uniqueName('pdf');
-```
-
-Example result:
+The responsibility split is intentional:
 
 ```text
-0d2f3de89af847a3f8e61aa5d3f558e4.pdf
+HTTP upload
+    ↓
+Prefab Input
+├── normalize
+├── MIME/extension validation
+├── size/image rules
+└── whitelist
+    ↓
+validated UploadedFile
+    ↓
+Prefab Files
+├── choose disk
+├── choose stored path/name
+├── store/stream
+├── retrieve
+└── organize
 ```
+
+Prefab Files generates a random filename by default instead of trusting the original browser-supplied filename.
 
 ---
 
-# 12. Reading files
+# 7. Filename collision policies
 
-Read all contents:
+The default behavior is `overwrite`, preserving the simple historical API.
+
+```php
+$files->put('reports/report.pdf', $data);
+```
+
+Choose a policy when needed:
+
+```php
+$files->put('reports/report.pdf', $data, [
+    'collision' => 'error',
+]);
+```
+
+Supported policies:
+
+| Policy | Behavior |
+|---|---|
+| `overwrite` | Replace the existing destination |
+| `error` | Throw if the destination already exists |
+| `skip` | Keep the existing file and return its metadata |
+| `rename` | Generate `name-1.ext`, `name-2.ext`, etc. |
+
+Example:
+
+```php
+$stored = $files->put('reports/report.pdf', $data, [
+    'collision' => 'rename',
+]);
+```
+
+If `report.pdf` already exists, the returned path may be:
+
+```text
+reports/report-1.pdf
+```
+
+The same collision option is available for stream writes, `putFile()`, uploads, copy and move operations.
+
+---
+
+# 8. Reading and streams
+
+Read the entire file:
 
 ```php
 $content = $files->read('documents/report.txt');
 ```
 
-For large files, use the disk stream API:
+Read as a stream:
 
 ```php
-$stream = $files->disk()->readStream('documents/video.mp4');
+$stream = $files->readStream('documents/video.mp4');
+
+try {
+    // consume stream
+} finally {
+    fclose($stream);
+}
 ```
 
-The caller owns the returned stream and should close it after use.
+The caller owns returned streams.
 
 ---
 
-# 13. Existence and metadata
+# 9. File metadata
 
 ```php
-if ($files->exists('documents/report.pdf')) {
-    $info = $files->info('documents/report.pdf');
-}
+$info = $files->info('documents/report.pdf');
 ```
 
 `FileInfo` exposes:
@@ -329,35 +290,67 @@ if ($files->exists('documents/report.pdf')) {
 ```php
 $info->path();
 $info->name();
+$info->filename();
+$info->directory();
 $info->extension();
 $info->size();
 $info->mime();
 $info->modifiedAt();
 $info->url();
+$info->checksum();
 $info->toArray();
 ```
 
-MIME information is detected from stored file contents through `fileinfo`, not merely from the filename extension.
+MIME type is detected from the stored contents using `fileinfo`, not only from the extension.
 
 ---
 
-# 14. Public URLs
-
-Only a disk configured with a base URL produces public URLs.
+# 10. Checksums
 
 ```php
-$files = new FileManager([
-    'disks' => [
-        'public' => [
-            'driver' => 'local',
-            'root' => __DIR__ . '/public/uploads',
-            'url' => '/uploads',
-        ],
-    ],
-]);
+$sha256 = $files->checksum('documents/report.pdf');
 ```
 
-Then:
+Choose another PHP-supported hash algorithm:
+
+```php
+$sha512 = $files->checksum(
+    'documents/report.pdf',
+    'sha512',
+);
+```
+
+Checksums are useful for transfer verification, corruption checks, duplicate detection and change detection.
+
+---
+
+# 11. File and directory size
+
+File size:
+
+```php
+$bytes = $files->size('documents/report.pdf');
+```
+
+Directory usage:
+
+```php
+$bytes = $files->directorySize('documents');
+```
+
+Entire selected disk:
+
+```php
+$bytes = $files->usage();
+```
+
+Prefab exposes measurements but deliberately does not turn Files into a billing/quota system. Applications can implement quotas using these values when needed.
+
+---
+
+# 12. Public URLs
+
+Only disks configured with `url` produce a direct public URL:
 
 ```php
 $url = $files->url(
@@ -366,60 +359,147 @@ $url = $files->url(
 );
 ```
 
-may return:
+Result:
 
 ```text
 /uploads/avatars/user.jpg
 ```
 
-A private disk without `url` returns `null` from `url()`.
+A private disk returns `null` from `url()`.
 
-Prefab Files therefore does not accidentally claim that every stored file is publicly reachable.
+This keeps private/public intent explicit without maintaining fragile per-file visibility state in the core package.
 
 ---
 
-# 15. Absolute local path
+# 13. Temporary signed URLs
 
-For integrations that genuinely need the physical path:
+For local private files, Prefab can generate an **application URL** containing an expiry and HMAC signature.
+
+Configure once:
 
 ```php
-$absolute = $files->path('documents/report.pdf');
+$files = new FileManager([
+    'default' => 'private',
+    'temporary_url' => '/files/temp',
+    'signing_key' => $_ENV['FILES_SIGNING_KEY'],
+    'disks' => [
+        'private' => [
+            'driver' => 'local',
+            'root' => __DIR__ . '/storage/private',
+        ],
+    ],
+]);
 ```
 
-This is useful for native programs, PDF libraries, antivirus scanners, image processors, or other local tools.
+Generate a 10-minute URL:
 
-Prefer storage-relative paths in ordinary application data so the storage backend can change later.
+```php
+$url = $files->temporaryUrl(
+    'documents/private.pdf',
+    600,
+);
+```
+
+A route/controller verifies the query parameters:
+
+```php
+$valid = $files->verifyTemporaryUrl(
+    $_GET['path'] ?? '',
+    (int) ($_GET['expires'] ?? 0),
+    $_GET['signature'] ?? '',
+    $_GET['disk'] ?? null,
+);
+```
+
+If valid, the application may stream the file. Files signs/verifies the token but intentionally does **not** bypass Auth or Permissions. Authorization policy remains the application's responsibility.
+
+Future object-storage drivers may implement their own native presigned URL behavior through an adapter without changing application-level storage paths.
 
 ---
 
-# 16. Copy and move
+# 14. Transport-neutral downloads
 
 ```php
-$copy = $files->copy(
+$download = $files->download(
+    'documents/report.pdf',
+    'Annual Report 2026.pdf',
+);
+```
+
+The returned `FileDownload` exposes:
+
+```php
+$download->stream();
+$download->filename();
+$download->size();
+$download->mime();
+$download->headers();
+```
+
+Prefab Files does **not** automatically call `header()` or terminate the request. The host application, Prefab HTTP, another framework or a controller decides how to emit the response.
+
+Inline delivery is available:
+
+```php
+$download = $files->download(
+    'documents/report.pdf',
+    inline: true,
+);
+```
+
+---
+
+# 15. Copy, move and delete
+
+```php
+$files->copy(
     'documents/a.pdf',
     'archive/a.pdf',
 );
 ```
 
-Move/rename:
-
 ```php
-$moved = $files->move(
+$files->move(
     'incoming/a.pdf',
     'documents/a.pdf',
 );
 ```
 
-Both return metadata for the destination file.
+```php
+$files->delete('documents/a.pdf');
+```
+
+Copy/move support the same collision policies as writes.
 
 ---
 
-# 17. Directories
+# 16. Directories
 
-Create a directory:
+Create:
 
 ```php
 $files->makeDirectory('documents/2026');
+```
+
+Check:
+
+```php
+$files->directoryExists('documents/2026');
+```
+
+List immediate directories:
+
+```php
+$directories = $files->directories('documents');
+```
+
+List recursively:
+
+```php
+$directories = $files->directories(
+    'documents',
+    recursive: true,
+);
 ```
 
 Delete an empty directory:
@@ -437,19 +517,17 @@ $files->deleteDirectory(
 );
 ```
 
-Recursive deletion should be used deliberately because it removes all child files/directories.
-
 ---
 
-# 18. Listing files
+# 17. Listing files
 
-List direct files:
+Direct files:
 
 ```php
 $list = $files->files('documents');
 ```
 
-Recursive listing:
+Recursive:
 
 ```php
 $list = $files->files(
@@ -462,11 +540,60 @@ The result is an array of `FileInfo` objects rather than backend-specific filesy
 
 ---
 
-# 19. Protected/private downloads
+# 18. Driver capability detection
 
-Private files should normally live outside the web server's public document root.
+Storage backends do not all behave identically. Instead of pretending they do, adapters advertise optional capabilities:
 
-Example:
+```php
+$files->supports('checksum');
+$files->supports('atomic_write');
+$files->supports('local_path');
+$files->supports('public_url', 'public');
+```
+
+For the built-in local driver:
+
+```text
+atomic_write  ✓
+checksum      ✓
+local_path    ✓
+directories   ✓
+usage         ✓
+public_url    ✓ only when a base URL is configured
+```
+
+A future S3-compatible driver may support native temporary URLs but not a local filesystem path.
+
+---
+
+# 19. Lifecycle hooks
+
+Applications can observe file operations without making Files depend on Logs, Events or another module.
+
+```php
+$files->on('stored', function ($file, $disk, $context) {
+    // audit, metrics, indexing, etc.
+});
+```
+
+Available manager events include:
+
+```text
+stored
+deleted
+copied
+moved
+```
+
+A future Prefab Events or Logs adapter can subscribe to these hooks while Files remains standalone.
+
+Hooks are synchronous and lightweight. Heavy background processing belongs in a jobs/events layer rather than the storage core.
+
+---
+
+# 20. Protected/private files
+
+Private files should normally live outside the web server document root:
 
 ```text
 project/
@@ -477,7 +604,7 @@ project/
         └── documents/
 ```
 
-A route can authorize the request and then stream the file:
+A protected route can authorize and then create a download descriptor:
 
 ```php
 $routes->get('/documents/{id}/download', 'DocumentController@download')
@@ -485,112 +612,79 @@ $routes->get('/documents/{id}/download', 'DocumentController@download')
     ->permission('documents.download');
 ```
 
-The controller can resolve the stored relative path and use Prefab Files to read/stream it.
+Then the controller resolves the stored path and uses:
 
-This keeps confidential files out of directly public directories.
-
----
-
-# 20. Public files
-
-Files intended to be directly served by Apache/Nginx may use a public disk rooted under the document root:
-
-```text
-public/uploads/
+```php
+$download = $files->download($storedPath);
 ```
 
-Prefab Files manages the contents; the web server still serves the actual HTTP static response efficiently.
+Confidential files should not depend on obscure filenames for protection.
 
 ---
 
-# 21. Storage contract
+# 21. Custom storage drivers
 
-The manager depends on `DiskInterface`, not `LocalDisk` specifically.
+`FileManager` depends on `DiskInterface`, not `LocalDisk` specifically.
 
-The contract includes operations for:
+The contract includes:
 
 ```text
 put / putStream
 read / readStream
 exists / delete
 copy / move
-files
+files / directories
 makeDirectory / deleteDirectory
-info
-path
-url
+info / checksum / size / directorySize
+path / url
+supports
 ```
 
-This allows future storage adapters such as:
+Possible adapters include:
 
 ```text
 S3-compatible object storage
+MinIO / Cloudflare R2 style adapters
 SMB/network storage
 SFTP
-memory/testing disk
-framework filesystem adapter
+memory/testing storage
+framework filesystem adapters
 ```
 
-without changing application code that uses `FileManager`.
-
----
-
-# 22. Custom disk
-
-Implement `DiskInterface`:
+A custom disk can be registered directly:
 
 ```php
-final class MyCloudDisk implements DiskInterface
-{
-    // Implement the storage operations.
-}
-```
-
-Register it:
-
-```php
-$files = new FileManager();
 $files->add('cloud', new MyCloudDisk());
 $files->useDefault('cloud');
 ```
 
-This keeps cloud-specific SDK dependencies outside the core package.
+Cloud/network SDKs remain outside the small core package until an adapter explicitly needs them.
 
 ---
 
-# 23. Responsibility boundary
+# 22. What Prefab Files deliberately does not do
 
-Prefab Input and Prefab Files deliberately solve different problems:
+To preserve the Prefab goal, Files stays focused on storage infrastructure.
+
+It does **not** own:
 
 ```text
-HTTP upload
-    ↓
-Prefab Input
-├── normalize $_FILES
-├── upload error
-├── MIME validation
-├── extension rules
-├── size limits
-├── image rules
-└── whitelist
-    ↓
-validated UploadedFile
-    ↓
-Prefab Files
-├── choose disk
-├── choose stored path/name
-├── write/stream
-├── read
-├── copy/move/delete
-├── metadata
-└── URL/path resolution
+upload validation        → Prefab Input
+image resize/crop        → separate image capability
+PDF generation           → separate PDF capability
+spreadsheet generation   → separate spreadsheet capability
+virus scanning           → adapter/hook integration
+document workflows       → application/domain module
+authentication           → Prefab Auth
+authorization policy     → Prefab Permissions
+database document model  → application/domain data
 ```
 
-Files does not need to become an HTTP request parser, and Input does not need to become a storage filesystem.
+This prevents `prefab-files` from becoming a mini framework.
 
 ---
 
-# 24. Practical document upload
+# 23. Practical document upload
 
 ```php
 $inputResult = Input::fromRequest()->process([
@@ -607,7 +701,7 @@ $data = $inputResult->validated();
 $stored = $files->storeUploaded(
     $data['document'],
     'documents/' . date('Y'),
-    disk: 'private',
+    diskOrOptions: 'private',
 );
 
 $record = [
@@ -616,61 +710,73 @@ $record = [
     'original_name' => $data['document']->name(),
     'mime' => $stored->mime(),
     'size' => $stored->size(),
+    'sha256' => $files->checksum($stored->path()),
 ];
 ```
 
-Persist the storage-relative path (`stored_path`) rather than an absolute machine-specific path.
+Persist the relative path and business metadata in the application's own database model.
 
 ---
 
-# 25. API quick reference
-
-`FileManager`:
+# 24. API quick reference
 
 | API | Purpose |
 |---|---|
-| `add()` | Register a disk |
-| `disk()` | Get a named/default disk |
-| `names()` | List configured disk names |
-| `hasDisk()` | Test for a configured disk |
+| `add()` / `disk()` | Register or obtain a storage disk |
+| `names()` / `hasDisk()` | Inspect configured disks |
 | `useDefault()` | Change the default disk |
-| `put()` | Store string contents |
-| `putStream()` | Store a stream |
-| `putFile()` | Copy an existing file into storage |
+| `put()` / `putStream()` | Store contents |
+| `putFile()` | Copy an existing local file into storage |
 | `storeUploaded()` | Store an upload-like object |
-| `read()` | Read file contents |
-| `exists()` | Test whether a file exists |
-| `delete()` | Delete a file |
-| `copy()` | Copy a file |
-| `move()` | Move/rename a file |
-| `info()` | Read metadata |
-| `path()` | Resolve backend/local path |
-| `url()` | Resolve public URL when available |
+| `read()` / `readStream()` | Retrieve contents |
+| `download()` | Create a transport-neutral download descriptor |
+| `exists()` / `delete()` | Check/remove a file |
+| `copy()` / `move()` | Copy or move a file |
+| `info()` | Read file metadata |
+| `checksum()` | Hash stored contents |
+| `size()` | Return one file's size |
+| `directorySize()` | Sum a directory tree |
+| `usage()` | Sum the selected disk |
+| `path()` | Resolve backend/local path when supported |
+| `url()` | Resolve a direct public URL when configured |
+| `temporaryUrl()` | Generate an expiring signed application URL |
+| `verifyTemporaryUrl()` | Verify expiry/signature/existence |
 | `files()` | List files |
-| `makeDirectory()` | Create a directory |
-| `deleteDirectory()` | Delete a directory |
-| `uniqueName()` | Generate a random filename |
+| `directories()` | List directories |
+| `directoryExists()` | Check a directory |
+| `makeDirectory()` / `deleteDirectory()` | Manage directories |
+| `supports()` | Query backend capabilities |
+| `on()` | Register lifecycle hooks |
+| `uniqueName()` | Generate a cryptographically random filename |
 
 ---
 
-# 26. Design philosophy
-
-Prefab Files starts with local storage but does not make local storage part of the application's business logic.
+# 25. Design philosophy
 
 ```text
 Small application
       ↓
 one local root
+      ↓
+put / read
 
 Application grows
       ↓
 private + public disks
+      ↓
+collision policies + checksums + downloads
 
 Application grows further
       ↓
-custom/network/cloud disk
+temporary URLs + hooks + usage
+      ↓
+custom/network/cloud driver
 ```
 
-Application code continues using the same manager API.
+The simple API remains valid throughout:
 
-The core principle is: **store files through a small storage contract, keep private/public intent explicit, and keep HTTP upload validation separate from persistence.**
+```php
+$files->put('report.txt', 'Hello');
+```
+
+The core principle is: **keep storage simple for small applications, expose the abstractions large systems actually need, and keep validation, authorization and specialized file processing outside the storage core.**
