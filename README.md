@@ -20,7 +20,8 @@ Start here, then open the module that matches the problem you are solving.
 | **Permissions** | Authorization, groups, inheritance and user overrides | [Permissions documentation](packages/permissions/README.md) |
 | **Logs** | Structured audit/activity logging and human-friendly activity | [Logs documentation](packages/logs/README.md) |
 | **Routes** | HTTP routing, handlers, middleware, groups and diagnostics | [Routes documentation](packages/routes/README.md) |
-| **Input** | Validation, normalization, casting, filtering and safe input extraction | [Input documentation](packages/input/README.md) |
+| **Input** | Validation, normalization, casting, filtering, uploads and safe input extraction | [Input documentation](packages/input/README.md) |
+| **Files** | File storage, retrieval, named disks, metadata and safe filesystem operations | [Files documentation](packages/files/README.md) |
 
 Architecture and maintainer documentation:
 
@@ -37,6 +38,7 @@ Need authorization/access control?       → prefab-permissions
 Need audit/activity history?             → prefab-logs
 Need application routing?                → prefab-routes
 Need clean/validated request data?       → prefab-input
+Need file storage/organization?          → prefab-files
 ```
 
 There is **no required Core package**.
@@ -48,7 +50,7 @@ There is **no required Core package**.
 Each module has one primary responsibility:
 
 ```text
-Raw external data
+Raw external data / uploads
       ↓
 Prefab Input
       ↓
@@ -65,6 +67,7 @@ Prefab Permissions
 Application / business logic
 
 Prefab Database supplies persistence where needed.
+Prefab Files stores/retrieves application files where needed.
 Prefab Logs records structured activity where configured.
 ```
 
@@ -72,13 +75,14 @@ Another way to think about it:
 
 | Module | Main question |
 |---|---|
-| Database | Where/how do I access data? |
+| Database | Where/how do I access structured data? |
 | Users | Who are the application's users? |
 | Auth | Who is currently authenticated? |
 | Permissions | What may this subject do? |
 | Logs | What happened, who did it and what changed? |
 | Routes | Which application code handles this HTTP request? |
-| Input | Which incoming fields are valid, normalized and safe to use? |
+| Input | Which incoming fields/files are valid, normalized and safe to use? |
+| Files | Where/how should application files be stored and retrieved? |
 
 These modules can cooperate, but the responsibility boundaries remain intentional.
 
@@ -94,15 +98,8 @@ A tiny router:
 use Tihloh\Prefab\Routes\RouteManager;
 
 $routes = new RouteManager();
-
 $routes->get('/', fn () => 'Hello');
-$routes->get('/about', fn () => 'About');
-
 $result = $routes->dispatch();
-
-if (is_string($result)) {
-    echo $result;
-}
 ```
 
 A tiny input processor:
@@ -112,20 +109,19 @@ use Tihloh\Prefab\Input\Input;
 
 $result = Input::from($_POST)->process([
     'name' => 'trim|required|string|max:100',
-    'email' => 'trim|lowercase|required|email',
 ]);
-
-$data = $result->validated();
 ```
 
-A tiny database setup:
+A tiny file store:
 
 ```php
-$database = new DatabaseManager([
-    'connections' => [
-        'main' => $pdo,
-    ],
+use Tihloh\Prefab\Files\FileManager;
+
+$files = new FileManager([
+    'root' => __DIR__ . '/storage',
 ]);
+
+$files->put('notes/hello.txt', 'Hello Prefab');
 ```
 
 Using one module never requires installing the rest.
@@ -149,7 +145,13 @@ Routes + Input
 then:
 
 ```text
-Routes + Input + Database + Users + Auth
+Routes + Input + Files
+```
+
+then:
+
+```text
+Routes + Input + Files + Database + Users + Auth
 ```
 
 and later:
@@ -165,7 +167,8 @@ Users
   ↓
 Permissions
 
-Database supplies persistence.
+Database supplies structured persistence.
+Files supplies file persistence.
 Logs records activity.
 ```
 
@@ -177,42 +180,15 @@ The application adds Lego blocks rather than replacing its original foundation.
 
 Every Prefab package must remain genuinely useful by itself.
 
-Examples:
-
 ```php
 $database = new DatabaseManager([...]);
-```
-
-```php
-$users = new UserManager([
-    'database' => $pdo,
-    'map' => $userMap,
-]);
-```
-
-```php
+$users = new UserManager([...]);
 $auth = new AuthManager($userProvider, $sessionStore);
-```
-
-```php
-$permissions = new PermissionManager(
-    definitions: $definitions,
-    store: $permissionStore,
-);
-```
-
-```php
-$logs = new LogManager([
-    'database' => $pdo,
-]);
-```
-
-```php
+$permissions = new PermissionManager(definitions: $definitions, store: $permissionStore);
+$logs = new LogManager([...]);
 $routes = new RouteManager();
-```
-
-```php
 $input = new Input($_POST);
+$files = new FileManager(['root' => __DIR__ . '/storage']);
 ```
 
 No unrelated Prefab package is required merely because one module is installed.
@@ -233,27 +209,13 @@ permission_store
 logger
 ```
 
-Conceptually:
-
-```text
-Prefab Database
-      ↓ provides database capability
-Prefab Users
-      ↓ provides user provider
-Prefab Auth
-      ↓ provides current actor/user
-Prefab Permissions
-
-Prefab Logs ← compatible modules may publish structured activity
-```
-
-Input and Routes remain useful independently and can integrate with these capabilities through middleware/adapters when appropriate.
+Input, Routes and Files remain useful independently and can integrate with neighboring modules through small contracts or capability-style object APIs rather than becoming mandatory dependencies.
 
 ---
 
 # 6. Predictable configuration hierarchy
 
-Prefab modules use a consistent precedence model:
+Prefab modules that participate in shared configuration use a consistent precedence model:
 
 ```text
 1. Direct module configuration
@@ -264,35 +226,7 @@ Prefab modules use a consistent precedence model:
 6. Clear error if a required resource remains unresolved
 ```
 
-Direct configuration:
-
-```php
-$logs = new LogManager([
-    'database' => $specialLogDb,
-]);
-```
-
-Module-specific configuration:
-
-```php
-PrefabConfig::set([
-    'modules' => [
-        'logs' => [
-            'connection' => 'logs',
-        ],
-    ],
-]);
-```
-
-Common configuration:
-
-```php
-PrefabConfig::set([
-    'database' => $mainPdo,
-]);
-```
-
-Resolution happens per setting, so a module can override one option while inheriting another.
+Explicit configuration always has priority over automatic discovery.
 
 ---
 
@@ -309,18 +243,6 @@ DatabaseInterface
     ↓
 Prefab module
 ```
-
-or:
-
-```text
-Prefab Database
-      ↓
-DatabaseInterface
-      ↓
-Prefab module
-```
-
-This preserves both standalone PDO usage and automatic named-connection integration.
 
 See [Prefab Database](packages/database/README.md).
 
@@ -340,8 +262,6 @@ Existing users / employees / accounts table
         Auth / Permissions / Logs
 ```
 
-The project remains the owner of its schema and domain-specific fields.
-
 See [Prefab Users](packages/users/README.md).
 
 ---
@@ -356,139 +276,97 @@ Permissions
 "What may this user do?"
 ```
 
-Successful authentication does not automatically grant authorization.
-
 See [Prefab Auth](packages/auth/README.md) and [Prefab Permissions](packages/permissions/README.md).
 
 ---
 
-# 10. Permission inheritance
+# 10. Structured logging
 
-The default authorization hierarchy is:
-
-```text
-User override
-    ↓
-Group permission
-    ↓
-Permission definition default
-```
-
-This supports explicit allow, explicit deny and inheritance.
-
-See [Prefab Permissions](packages/permissions/README.md).
-
----
-
-# 11. Structured logging
-
-Prefab Logs stores structured facts once and can present the same event as either technical audit data or human-friendly activity.
-
-```text
-Application event
-       ↓
-structured log
-       ↓
-stored once
-   ┌───┴────┐
-   ↓        ↓
-technical  human-friendly
-view       view
-```
+Prefab Logs stores structured facts once and can present the same event as technical audit data or human-friendly activity.
 
 See [Prefab Logs](packages/logs/README.md).
 
 ---
 
-# 12. Routing
+# 11. Routing
 
-Prefab Routes supports both compact and native PHP handlers:
+Prefab Routes can start with simple `get()`/`dispatch()` usage and grow into named routes, constraints, groups, middleware, resource routes, route files and diagnostics.
 
 ```php
 $routes->get('/users/{id}', 'UserController@show');
-```
-
-```php
 $routes->get('/users/{id}', [UserController::class, 'show']);
 ```
-
-It can grow from simple `get()`/`dispatch()` usage into named routes, constraints, groups, middleware, resource routes, route files and diagnostics.
-
-Static files such as CSS, JavaScript, fonts and images remain the web server's responsibility.
 
 See [Prefab Routes](packages/routes/README.md).
 
 ---
 
-# 13. Input processing
+# 12. Input processing
 
-Prefab Input handles the trust boundary between raw request/form/API data and business logic.
+Prefab Input handles the trust boundary between raw form/API/upload data and business logic.
 
 ```php
-$result = Input::from([
-    'email' => '  ADMIN@EXAMPLE.COM ',
-    'age' => '35',
-    'admin' => true,
-])->process([
+$result = Input::fromRequest()->process([
     'email' => 'trim|lowercase|required|email',
     'age' => 'integer|min:18',
+    'document' => 'nullable|file|mimes:pdf|max_size:20mb',
 ]);
 ```
 
-Validated output:
-
-```php
-[
-    'email' => 'admin@example.com',
-    'age' => 35,
-]
-```
-
-The undeclared `admin` field is not included. Validation, normalization, casting and whitelisting happen in one schema-driven pipeline.
+It supports wildcard arrays, nested input, normalized `$_FILES`, multipart forms and safe schema-whitelisted output.
 
 See [Prefab Input](packages/input/README.md).
 
 ---
 
+# 13. File storage
+
+Prefab Files takes validated files or application-generated content and stores them through named storage disks.
+
+```php
+$files = new FileManager([
+    'default' => 'private',
+    'disks' => [
+        'private' => [
+            'driver' => 'local',
+            'root' => __DIR__ . '/storage/private',
+        ],
+        'public' => [
+            'driver' => 'local',
+            'root' => __DIR__ . '/public/uploads',
+            'url' => '/uploads',
+        ],
+    ],
+]);
+```
+
+Upload flow:
+
+```text
+multipart/form-data
+        ↓
+Prefab Input
+validate + normalize
+        ↓
+UploadedFile
+        ↓
+Prefab Files
+store + retrieve + organize
+```
+
+See [Prefab Files](packages/files/README.md).
+
+---
+
 # 14. Transparent diagnostics
 
-Automatic integration should never become mysterious.
-
-Managers participating in Prefab interoperability expose diagnostic APIs such as:
-
-```php
-$database->explain();
-$users->explain();
-$auth->explain();
-$permissions->explain();
-$logs->explain();
-```
-
-For the runtime-wide view:
-
-```php
-use Tihloh\Prefab\PrefabRuntime;
-
-$debug = PrefabRuntime::inspect();
-```
-
-Applications may optionally mark startup complete:
-
-```php
-PrefabRuntime::ready();
-```
-
-Normal usage does not require that call.
+Automatic integration should never become mysterious. Managers participating in Prefab interoperability expose diagnostic APIs such as `explain()`, and `PrefabRuntime::inspect()` provides a runtime-wide view where applicable.
 
 ---
 
 # 15. Conflict-aware discovery
 
-If one compatible capability exists, Prefab may use it automatically.
-
-If multiple providers exist with different priorities, the higher-priority provider wins.
-
-If equally preferred providers are ambiguous, Prefab should fail clearly rather than silently guessing. The developer can then resolve the ambiguity explicitly.
+If one compatible capability exists, Prefab may use it automatically. If equally preferred providers are ambiguous, Prefab should fail clearly rather than silently guessing.
 
 ---
 
@@ -505,13 +383,12 @@ prefab-php/
 │   ├── permissions/
 │   ├── logs/
 │   ├── routes/
-│   └── input/
+│   ├── input/
+│   └── files/
 ├── examples/
 ├── docs/
 └── tools/
 ```
-
-Development, issues, CI, examples, interoperability changes and releases originate here.
 
 Packagist distribution uses generated mirrors because each independently installable Composer package needs its own repository-root `composer.json`.
 
@@ -524,10 +401,11 @@ prefab-php (source of truth)
         ├── packages/permissions ───► prefab-permissions ───► Packagist
         ├── packages/logs ──────────► prefab-logs ──────────► Packagist
         ├── packages/routes ────────► prefab-routes ────────► Packagist
-        └── packages/input ─────────► prefab-input ─────────► Packagist
+        ├── packages/input ─────────► prefab-input ─────────► Packagist
+        └── packages/files ─────────► prefab-files ─────────► Packagist
 ```
 
-A mirror is created/published only after that module is ready for distribution. Distribution mirrors are not development sources and should not be edited manually.
+A mirror is created/published only after that module is ready for distribution.
 
 ---
 
@@ -535,19 +413,7 @@ A mirror is created/published only after that module is ready for distribution. 
 
 Standalone modules that participate in Prefab runtime interoperability use an embedded bootstrap rather than requiring a separate Core package.
 
-The monorepo maintains the canonical bootstrap in:
-
-```text
-tools/prefab-bootstrap.php
-```
-
-and synchronizes package copies with:
-
-```bash
-php tools/sync-prefab-bootstrap.php
-```
-
-This is a maintainer/release mechanism, not something ordinary package users need to run.
+The monorepo maintains the canonical bootstrap in `tools/prefab-bootstrap.php` and synchronizes package copies with `php tools/sync-prefab-bootstrap.php` where applicable.
 
 ---
 
@@ -562,6 +428,7 @@ User documentation:
 - [Logs](packages/logs/README.md)
 - [Routes](packages/routes/README.md)
 - [Input](packages/input/README.md)
+- [Files](packages/files/README.md)
 
 Maintainer/architecture documentation:
 
@@ -572,16 +439,7 @@ Maintainer/architecture documentation:
 
 # 19. Source documentation standard
 
-Documentation is part of Prefab's API quality standard:
-
-- public classes explain responsibility and integration behavior;
-- public methods document non-obvious parameters, return values and side effects;
-- contracts explain what implementers must provide;
-- examples use readable PHP formatting and indentation;
-- comments explain why behavior exists, not merely what PHP syntax does;
-- diagnostics explain automatic decisions;
-- package READMEs document standalone use, advanced use and integration boundaries;
-- sensitive secrets are not intentionally exposed through human-friendly diagnostics/logs.
+Documentation is part of Prefab's API quality standard. Public classes and contracts explain responsibilities, examples remain readable, automatic decisions are diagnosable, package boundaries are explicit, and secrets are not intentionally exposed through diagnostics or human-friendly logs.
 
 ---
 
@@ -593,14 +451,14 @@ Every module follows these principles:
 2. **Start simple** — advanced features are additive rather than mandatory.
 3. **Automatic cooperation where useful** — compatible modules may publish/consume capabilities.
 4. **Explicit configuration wins** — automation does not override developer intent.
-5. **Predictable configuration hierarchy** — direct, module, common, capability, then default/error.
+5. **Predictable configuration hierarchy** — direct, module, common, capability, then default/error where applicable.
 6. **Transparent automation** — important automatic decisions are diagnosable.
 7. **Conflict-aware discovery** — Prefab does not silently guess between equally preferred providers.
 8. **Project data remains project-owned** — existing schemas can be mapped rather than replaced.
 9. **Prefab-owned storage stays isolated** — modules create only storage they actually own.
 10. **Framework compatibility through contracts/adapters** — Prefab should cooperate with frameworks, not demand replacement.
 11. **No repeated runtime discovery when avoidable** — resources are resolved during setup and reused.
-12. **Clear module boundaries** — database, users, auth, authorization, logs, routing and input processing remain separate concerns.
+12. **Clear module boundaries** — database, users, auth, authorization, logs, routing, input processing and file storage remain separate concerns.
 
 ---
 
@@ -608,6 +466,6 @@ Every module follows these principles:
 
 Choose the smallest module that solves the problem in front of you:
 
-**[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md)**
+**[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md) · [Files](packages/files/README.md)**
 
 You can add the other modules later without abandoning the ones you already use.
