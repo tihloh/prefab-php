@@ -7,10 +7,11 @@ namespace Tihloh\Prefab\Files\Contracts;
 use Tihloh\Prefab\Files\FileInfo;
 
 /**
- * Minimal storage-disk contract.
+ * Storage backend contract used by FileManager.
  *
- * Implementations may target local disk, network storage, object storage, or
- * another backend while keeping FileManager independent of that backend.
+ * The contract stays intentionally small enough for local, object and network
+ * storage adapters while exposing the operations that application code commonly
+ * needs. Optional behavior is advertised through supports().
  */
 interface DiskInterface
 {
@@ -35,13 +36,27 @@ interface DiskInterface
     /** @return FileInfo[] */
     public function files(string $directory = '', bool $recursive = false): array;
 
+    /** @return string[] */
+    public function directories(string $directory = '', bool $recursive = false): array;
+
+    public function directoryExists(string $directory): bool;
+
     public function makeDirectory(string $directory): bool;
 
     public function deleteDirectory(string $directory, bool $recursive = false): bool;
 
     public function info(string $path): FileInfo;
 
+    public function checksum(string $path, string $algorithm = 'sha256'): string;
+
+    public function size(string $path): int;
+
+    public function directorySize(string $directory = ''): int;
+
     public function path(string $path): string;
 
     public function url(string $path): ?string;
+
+    /** Whether this backend supports a named optional capability. */
+    public function supports(string $capability): bool;
 }
