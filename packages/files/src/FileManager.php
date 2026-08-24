@@ -190,6 +190,22 @@ final class FileManager
     public function readStream(string $path, ?string $disk = null) { return $this->disk($disk)->readStream($path); }
     public function exists(string $path, ?string $disk = null): bool { return $this->disk($disk)->exists($path); }
 
+    public function download(
+        string $path,
+        ?string $filename = null,
+        bool $inline = false,
+        ?string $disk = null,
+    ): FileDownload {
+        $info = $this->info($path, $disk);
+        return new FileDownload(
+            $this->readStream($path, $disk),
+            $filename ?? $info->name(),
+            $info->size(),
+            $info->mime(),
+            $inline,
+        );
+    }
+
     public function delete(string $path, ?string $disk = null): bool
     {
         $storage = $this->disk($disk);
