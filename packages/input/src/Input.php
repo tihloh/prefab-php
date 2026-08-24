@@ -8,11 +8,10 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 
 /**
- * Converts raw input into normalized, typed, validated and whitelisted data.
+ * Converts raw/untrusted input into normalized, typed, validated and whitelisted data.
  *
- * The schema is always a whitelist: undeclared raw fields never appear in the
- * validated result. Custom rules and transforms keep the module extensible
- * without hard dependencies on Database, Routes, HTTP or a framework.
+ * Supports ordinary arrays, nested dot paths, wildcard paths, JSON request bodies,
+ * standard PHP multipart uploads, custom transforms, and custom validation rules.
  */
 final class Input
 {
@@ -23,9 +22,45 @@ final class Input
 
     public function __construct(private array $data = []) {}
 
-    public static function from(array $data): self
+    /**
+     * Create input from explicit data and optional PHP-style $_FILES data.
+     */
+    public static function from(array $data, array $files = []): self
     {
+        if ($files !== []) {
+            $data = self::mergeRecursive($data, self::normalizeFiles($files));
+        }
+
         return new self($data);
+    }
+
+    /**
+     * Create input from the current PHP request.
+     *
+     * - application/json: parses php://input
+     * - multipart/form-data: combines $_POST + normalized $_FILES
+     * - form-urlencoded/default POST: uses $_POST
+     */
+    public static function fromRequest(): self
+    {
+        $contentType = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? ''));
+
+        if (str_contains($contentType, 'application/json')) {
+            $raw = file_get_contents('php://input');
+            $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+
+            if ($decoded !== null && !is_array($decoded)) {
+                throw new InvalidArgumentException('JSON request body must decode to an object or array.');
+            }
+
+            if ($raw !== '' && $decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+                throw new InvalidArgumentException('Invalid JSON request body: ' . json_last_error_msg());
+            }
+
+            return new self($decoded ?? []);
+        }
+
+        return self::from($_POST, $_FILES);
     }
 
     public function data(array $data): self
@@ -63,8 +98,9 @@ final class Input
     /**
      * Process raw data against a schema.
      *
-     * Definitions may be pipe strings or arrays. Array definitions may also
-     * contain callable validation rules. Operations execute in declared order.
+     * Wildcards such as `items.*.qty` are expanded against the current data tree.
+     * If a parent field also has child schema definitions, only explicitly
+     * validated child fields are copied into validated output (deep whitelist).
      */
     public function process(array $schema): InputResult
     {
@@ -72,81 +108,114 @@ final class Input
         $validated = [];
         $errors = [];
 
-        foreach ($schema as $field => $definition) {
-            $field = (string) $field;
-            $operations = $this->normalizeOperations($definition);
-            $value = self::getPath($this->data, $field, $exists);
+        foreach ($schema as $pattern => $definition) {
+            $pattern = (string) $pattern;
+            $paths = str_contains($pattern, '*')
+                ? $this->expandWildcardPath($pattern)
+                : [$pattern];
 
-            if ($this->hasOperation($operations, 'sometimes') && !$exists) {
+            // A wildcard with no matching parent collection has no concrete item
+            // to validate. The parent rule (e.g. items|required|array) owns absence.
+            if ($paths === []) {
                 continue;
             }
 
-            $nullable = $this->hasOperation($operations, 'nullable');
-            $fieldErrors = [];
-
-            foreach ($operations as $operation) {
-                if (is_callable($operation) && !is_string($operation)) {
-                    $message = $operation($field, $value, $this->data, $exists);
-                    if (is_string($message) && $message !== '') {
-                        $fieldErrors[] = $message;
-                    }
-                    continue;
-                }
-
-                [$name, $params] = $this->parseOperation($operation);
-
-                if (in_array($name, ['sometimes', 'nullable'], true)) {
-                    continue;
-                }
-
-                if ($name === 'default') {
-                    if (!$exists) {
-                        $value = $this->literal($params[0] ?? null);
-                        $exists = true;
-                    }
-                    continue;
-                }
-
-                if ($nullable && $exists && ($value === null || $value === '')) {
-                    $value = null;
-                    break;
-                }
-
-                if ($this->isTransform($name)) {
-                    if ($exists) {
-                        $value = $this->applyTransform($name, $value, $params, $field);
-
-                        if (in_array($name, ['integer', 'float', 'boolean'], true)) {
-                            $message = $this->validateRule($name, $field, $value, true, $params);
-                            if ($message !== null) {
-                                $fieldErrors[] = $message;
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                $message = $this->validateRule($name, $field, $value, $exists, $params);
-                if ($message !== null) {
-                    $fieldErrors[] = $message;
-                }
-            }
-
-            if ($exists) {
-                self::setPath($processed, $field, $value);
-            }
-
-            if ($fieldErrors !== []) {
-                $errors[$field] = array_values(array_unique($fieldErrors));
-                continue;
-            }
-
-            if ($exists) {
-                self::setPath($validated, $field, $value);
+            foreach ($paths as $field) {
+                $this->processField(
+                    $field,
+                    $pattern,
+                    $definition,
+                    $schema,
+                    $processed,
+                    $validated,
+                    $errors,
+                );
             }
         }
 
         return new InputResult($this->data, $processed, $validated, $errors);
+    }
+
+    private function processField(
+        string $field,
+        string $pattern,
+        mixed $definition,
+        array $schema,
+        array &$processed,
+        array &$validated,
+        array &$errors,
+    ): void {
+        $operations = $this->normalizeOperations($definition);
+        $value = self::getPath($this->data, $field, $exists);
+
+        if ($this->hasOperation($operations, 'sometimes') && !$exists) {
+            return;
+        }
+
+        $nullable = $this->hasOperation($operations, 'nullable');
+        $fieldErrors = [];
+
+        foreach ($operations as $operation) {
+            if (is_callable($operation) && !is_string($operation)) {
+                $message = $operation($field, $value, $this->data, $exists);
+                if (is_string($message) && $message !== '') {
+                    $fieldErrors[] = $message;
+                }
+                continue;
+            }
+
+            [$name, $params] = $this->parseOperation($operation);
+
+            if (in_array($name, ['sometimes', 'nullable'], true)) {
+                continue;
+            }
+
+            if ($name === 'default') {
+                if (!$exists) {
+                    $value = $this->literal($params[0] ?? null);
+                    $exists = true;
+                }
+                continue;
+            }
+
+            if ($nullable && (!$exists || $value === null || $value === '')) {
+                $value = null;
+                $exists = true;
+                break;
+            }
+
+            if ($this->isTransform($name)) {
+                if ($exists) {
+                    $value = $this->applyTransform($name, $value, $params, $field);
+
+                    if (in_array($name, ['integer', 'float', 'boolean', 'string'], true)) {
+                        $message = $this->validateRule($name, $field, $pattern, $value, true, $params);
+                        if ($message !== null) {
+                            $fieldErrors[] = $message;
+                        }
+                    }
+                }
+                continue;
+            }
+
+            $message = $this->validateRule($name, $field, $pattern, $value, $exists, $params);
+            if ($message !== null) {
+                $fieldErrors[] = $message;
+            }
+        }
+
+        if ($exists) {
+            self::setPath($processed, $field, $value);
+        }
+
+        if ($fieldErrors !== []) {
+            $errors[$field] = array_values(array_unique($fieldErrors));
+            return;
+        }
+
+        if ($exists && !$this->hasDeclaredChildren($pattern, $schema)) {
+            self::setPath($validated, $field, $value);
+        }
     }
 
     private function normalizeOperations(mixed $definition): array
@@ -209,7 +278,7 @@ final class Input
             'lowercase' => is_string($value) ? strtolower($value) : $value,
             'uppercase' => is_string($value) ? strtoupper($value) : $value,
             'null_if_empty' => $value === '' ? null : $value,
-            'string' => $value === null ? null : (string) $value,
+            'string' => $this->castString($value),
             'integer' => filter_var($value, FILTER_VALIDATE_INT) !== false ? (int) $value : $value,
             'float' => is_numeric($value) ? (float) $value : $value,
             'boolean' => $this->castBoolean($value),
@@ -218,8 +287,14 @@ final class Input
         };
     }
 
-    private function validateRule(string $name, string $field, mixed $value, bool $exists, array $params): ?string
-    {
+    private function validateRule(
+        string $name,
+        string $field,
+        string $pattern,
+        mixed $value,
+        bool $exists,
+        array $params,
+    ): ?string {
         if (isset($this->customRules[$name])) {
             $message = ($this->customRules[$name])($field, $value, $this->data, $params, $exists);
             return is_string($message) && $message !== '' ? $message : null;
@@ -227,8 +302,8 @@ final class Input
 
         $valid = match ($name) {
             'required' => $exists && !$this->isBlank($value),
-            'required_if' => $this->requiredIf($value, $params),
-            'required_with' => $this->requiredWith($value, $params),
+            'required_if' => $this->requiredIf($field, $pattern, $value, $params),
+            'required_with' => $this->requiredWith($field, $pattern, $value, $params),
             'email' => !$exists || filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
             'url' => !$exists || filter_var($value, FILTER_VALIDATE_URL) !== false,
             'string' => !$exists || is_string($value),
@@ -243,21 +318,30 @@ final class Input
             'between' => !$exists || $this->between($value, $params),
             'in' => !$exists || in_array((string) $value, array_map('strval', $params), true),
             'not_in' => !$exists || !in_array((string) $value, array_map('strval', $params), true),
-            'same' => !$exists || $value === self::getPath($this->data, (string) ($params[0] ?? ''), $unused),
-            'different' => !$exists || $value !== self::getPath($this->data, (string) ($params[0] ?? ''), $unused),
+            'same' => !$exists || $value === $this->relatedValue($field, $pattern, (string) ($params[0] ?? '')),
+            'different' => !$exists || $value !== $this->relatedValue($field, $pattern, (string) ($params[0] ?? '')),
             'regex' => !$exists || $this->matchesRegex($value, $params[0] ?? ''),
             'confirmed' => !$exists || $value === self::getPath($this->data, $field . '_confirmation', $unused),
+            'distinct' => !$exists || $this->isDistinct($value),
+            'file' => !$exists || ($value instanceof UploadedFile && $value->isValid()),
+            'image' => !$exists || ($value instanceof UploadedFile && $value->isImage()),
+            'mimes' => !$exists || ($value instanceof UploadedFile && $value->isValid() && $value->matchesExtension($params)),
+            'mimetypes' => !$exists || ($value instanceof UploadedFile && $value->isValid() && $value->matchesMime($params)),
+            'min_size' => !$exists || ($value instanceof UploadedFile && $value->isValid() && $value->size() >= $this->parseBytes($params[0] ?? '0')),
+            'max_size' => !$exists || ($value instanceof UploadedFile && $value->isValid() && $value->size() <= $this->parseBytes($params[0] ?? (string) PHP_INT_MAX)),
+            'dimensions' => !$exists || ($value instanceof UploadedFile && $this->validDimensions($value, $params)),
             default => throw new InvalidArgumentException("Unknown input rule or transform: {$name}"),
         };
 
-        return $valid ? null : $this->message($field, $name, $params);
+        return $valid ? null : $this->message($field, $pattern, $name, $params);
     }
 
-    private function requiredIf(mixed $value, array $params): bool
+    private function requiredIf(string $field, string $pattern, mixed $value, array $params): bool
     {
-        $other = (string) ($params[0] ?? '');
+        $otherPattern = (string) ($params[0] ?? '');
         $expected = array_slice($params, 1);
-        $otherValue = self::getPath($this->data, $other, $exists);
+        $otherPath = $this->resolveRelatedPath($field, $pattern, $otherPattern);
+        $otherValue = self::getPath($this->data, $otherPath, $exists);
 
         if (!$exists || !in_array((string) $otherValue, array_map('strval', $expected), true)) {
             return true;
@@ -266,10 +350,11 @@ final class Input
         return !$this->isBlank($value);
     }
 
-    private function requiredWith(mixed $value, array $params): bool
+    private function requiredWith(string $field, string $pattern, mixed $value, array $params): bool
     {
-        foreach ($params as $other) {
-            $otherValue = self::getPath($this->data, (string) $other, $exists);
+        foreach ($params as $otherPattern) {
+            $otherPath = $this->resolveRelatedPath($field, $pattern, (string) $otherPattern);
+            $otherValue = self::getPath($this->data, $otherPath, $exists);
             if ($exists && !$this->isBlank($otherValue)) {
                 return !$this->isBlank($value);
             }
@@ -278,10 +363,50 @@ final class Input
         return true;
     }
 
-    private function message(string $field, string $rule, array $params): string
+    private function relatedValue(string $field, string $pattern, string $relatedPattern): mixed
     {
-        $label = $this->attributes[$field] ?? str_replace(['_', '.'], ' ', $field);
-        $custom = $this->messages[$field . '.' . $rule] ?? $this->messages[$rule] ?? null;
+        $path = $this->resolveRelatedPath($field, $pattern, $relatedPattern);
+        return self::getPath($this->data, $path, $unused);
+    }
+
+    /** Resolve wildcard references using the concrete indexes from the current field. */
+    private function resolveRelatedPath(string $field, string $pattern, string $relatedPattern): string
+    {
+        if (!str_contains($relatedPattern, '*')) {
+            return $relatedPattern;
+        }
+
+        $patternSegments = explode('.', $pattern);
+        $fieldSegments = explode('.', $field);
+        $indexes = [];
+
+        foreach ($patternSegments as $i => $segment) {
+            if ($segment === '*' && isset($fieldSegments[$i])) {
+                $indexes[] = $fieldSegments[$i];
+            }
+        }
+
+        $cursor = 0;
+        $resolved = array_map(function (string $segment) use (&$cursor, $indexes): string {
+            if ($segment !== '*') {
+                return $segment;
+            }
+            return $indexes[$cursor++] ?? '*';
+        }, explode('.', $relatedPattern));
+
+        return implode('.', $resolved);
+    }
+
+    private function message(string $field, string $pattern, string $rule, array $params): string
+    {
+        $label = $this->attributes[$field]
+            ?? $this->attributes[$pattern]
+            ?? str_replace(['_', '.'], ' ', $field);
+
+        $custom = $this->messages[$field . '.' . $rule]
+            ?? $this->messages[$pattern . '.' . $rule]
+            ?? $this->messages[$rule]
+            ?? null;
 
         if (is_string($custom)) {
             return strtr($custom, [
@@ -309,6 +434,14 @@ final class Input
             'different' => "The {$label} field must be different from " . ($params[0] ?? 'the comparison field') . '.',
             'regex' => "The {$label} field format is invalid.",
             'confirmed' => "The {$label} confirmation does not match.",
+            'distinct' => "The {$label} field contains duplicate values.",
+            'file' => "The {$label} field must be a valid uploaded file.",
+            'image' => "The {$label} field must be a valid image.",
+            'mimes' => "The {$label} field has an invalid file type.",
+            'mimetypes' => "The {$label} field has an invalid MIME type.",
+            'min_size' => "The {$label} file is smaller than the minimum allowed size.",
+            'max_size' => "The {$label} file is larger than the maximum allowed size.",
+            'dimensions' => "The {$label} image dimensions are invalid.",
             default => "The {$label} field is invalid.",
         };
     }
@@ -327,6 +460,23 @@ final class Input
         };
     }
 
+    private function castString(mixed $value): mixed
+    {
+        if ($value === null || is_string($value)) {
+            return $value;
+        }
+
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+
+        if (is_object($value) && method_exists($value, '__toString')) {
+            return (string) $value;
+        }
+
+        return $value;
+    }
+
     private function castBoolean(mixed $value): mixed
     {
         if (is_bool($value)) {
@@ -339,6 +489,10 @@ final class Input
 
     private function isBlank(mixed $value): bool
     {
+        if ($value instanceof UploadedFile) {
+            return !$value->isValid();
+        }
+
         return $value === null || $value === '' || (is_array($value) && $value === []);
     }
 
@@ -374,6 +528,10 @@ final class Input
             return (float) count($value);
         }
 
+        if ($value instanceof UploadedFile) {
+            return (float) $value->size();
+        }
+
         return 0.0;
     }
 
@@ -399,10 +557,136 @@ final class Input
         return preg_match($regex, (string) $value) === 1;
     }
 
+    private function isDistinct(mixed $value): bool
+    {
+        if (!is_array($value)) {
+            return false;
+        }
+
+        $seen = [];
+        foreach ($value as $item) {
+            $key = is_scalar($item) || $item === null
+                ? get_debug_type($item) . ':' . var_export($item, true)
+                : serialize($item);
+
+            if (isset($seen[$key])) {
+                return false;
+            }
+            $seen[$key] = true;
+        }
+
+        return true;
+    }
+
+    private function parseBytes(string|int|float $value): int
+    {
+        if (is_int($value) || is_float($value) || is_numeric($value)) {
+            return max(0, (int) $value);
+        }
+
+        if (!preg_match('/^\s*(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?\s*$/i', $value, $m)) {
+            throw new InvalidArgumentException("Invalid file size value: {$value}");
+        }
+
+        $number = (float) $m[1];
+        $unit = strtolower($m[2] ?? 'b');
+        $multiplier = match ($unit) {
+            'kb' => 1024,
+            'mb' => 1024 ** 2,
+            'gb' => 1024 ** 3,
+            default => 1,
+        };
+
+        return (int) round($number * $multiplier);
+    }
+
+    private function validDimensions(UploadedFile $file, array $params): bool
+    {
+        $dimensions = $file->dimensions();
+        if ($dimensions === null) {
+            return false;
+        }
+
+        $rules = [];
+        foreach ($params as $param) {
+            [$key, $value] = array_pad(explode('=', (string) $param, 2), 2, null);
+            if ($value !== null) {
+                $rules[strtolower(trim($key))] = (int) $value;
+            }
+        }
+
+        $width = $dimensions['width'];
+        $height = $dimensions['height'];
+
+        if (isset($rules['width']) && $width !== $rules['width']) return false;
+        if (isset($rules['height']) && $height !== $rules['height']) return false;
+        if (isset($rules['min_width']) && $width < $rules['min_width']) return false;
+        if (isset($rules['max_width']) && $width > $rules['max_width']) return false;
+        if (isset($rules['min_height']) && $height < $rules['min_height']) return false;
+        if (isset($rules['max_height']) && $height > $rules['max_height']) return false;
+
+        return true;
+    }
+
+    /**
+     * Expand wildcard paths against existing collection indexes.
+     * Missing final/non-wildcard children are still emitted so `required` works.
+     */
+    private function expandWildcardPath(string $pattern): array
+    {
+        $segments = explode('.', $pattern);
+        $results = [];
+        $this->expandSegments($this->data, $segments, 0, [], $results);
+        return array_values(array_unique($results));
+    }
+
+    private function expandSegments(mixed $node, array $segments, int $index, array $path, array &$results): void
+    {
+        if ($index >= count($segments)) {
+            $results[] = implode('.', $path);
+            return;
+        }
+
+        $segment = $segments[$index];
+
+        if ($segment === '*') {
+            if (!is_array($node)) {
+                return;
+            }
+
+            foreach (array_keys($node) as $key) {
+                $this->expandSegments($node[$key], $segments, $index + 1, [...$path, (string) $key], $results);
+            }
+            return;
+        }
+
+        $nextNode = is_array($node) && array_key_exists($segment, $node)
+            ? $node[$segment]
+            : null;
+
+        $this->expandSegments($nextNode, $segments, $index + 1, [...$path, $segment], $results);
+    }
+
+    /** True when the schema declares deeper fields below this pattern. */
+    private function hasDeclaredChildren(string $pattern, array $schema): bool
+    {
+        $prefix = rtrim($pattern, '.') . '.';
+        foreach (array_keys($schema) as $candidate) {
+            if ((string) $candidate !== $pattern && str_starts_with((string) $candidate, $prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static function getPath(array $data, string $path, ?bool &$exists = null): mixed
     {
         $exists = true;
         $value = $data;
+
+        if ($path === '') {
+            return $value;
+        }
 
         foreach (explode('.', $path) as $segment) {
             if (!is_array($value) || !array_key_exists($segment, $value)) {
@@ -433,5 +717,75 @@ final class Input
 
             $cursor =& $cursor[$segment];
         }
+    }
+
+    /** Normalize PHP's column-oriented $_FILES shape into normal nested UploadedFile values. */
+    public static function normalizeFiles(array $files): array
+    {
+        $normalized = [];
+
+        foreach ($files as $field => $spec) {
+            if (!is_array($spec) || !array_key_exists('name', $spec)) {
+                continue;
+            }
+
+            $value = self::normalizeFileSpec($spec);
+            if ($value !== null) {
+                $normalized[$field] = $value;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private static function normalizeFileSpec(array $spec): mixed
+    {
+        $names = $spec['name'] ?? null;
+
+        if (!is_array($names)) {
+            $error = (int) ($spec['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($error === UPLOAD_ERR_NO_FILE) {
+                return null;
+            }
+
+            return new UploadedFile(
+                originalName: (string) $names,
+                tmpPath: (string) ($spec['tmp_name'] ?? ''),
+                error: $error,
+                size: (int) ($spec['size'] ?? 0),
+                clientType: isset($spec['type']) ? (string) $spec['type'] : null,
+            );
+        }
+
+        $result = [];
+        foreach (array_keys($names) as $key) {
+            $childSpec = [
+                'name' => $spec['name'][$key] ?? null,
+                'type' => $spec['type'][$key] ?? null,
+                'tmp_name' => $spec['tmp_name'][$key] ?? null,
+                'error' => $spec['error'][$key] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $spec['size'][$key] ?? 0,
+            ];
+
+            $child = self::normalizeFileSpec($childSpec);
+            if ($child !== null) {
+                $result[$key] = $child;
+            }
+        }
+
+        return $result;
+    }
+
+    private static function mergeRecursive(array $data, array $files): array
+    {
+        foreach ($files as $key => $value) {
+            if (isset($data[$key]) && is_array($data[$key]) && is_array($value)) {
+                $data[$key] = self::mergeRecursive($data[$key], $value);
+            } else {
+                $data[$key] = $value;
+            }
+        }
+
+        return $data;
     }
 }
