@@ -1,0 +1,25 @@
+{
+    "name": "tihloh/prefab-input",
+    "description": "Framework-independent input validation, sanitization, normalization, casting and safe data extraction for Prefab PHP.",
+    "keywords": ["php", "input", "validation", "sanitization", "normalization", "filtering", "casting", "prefab", "modular", "framework-independent"],
+    "homepage": "https://github.com/tihloh/prefab-php",
+    "type": "library",
+    "license": "MIT",
+    "authors": [{"name": "Christian Bustamante"}],
+    "support": {
+        "issues": "https://github.com/tihloh/prefab-php/issues",
+        "source": "https://github.com/tihloh/prefab-php"
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "suggest": {
+        "tihloh/prefab-database": "Optional database capability for application-defined exists/unique rules.",
+        "tihloh/prefab-routes": "Optional routing integration for request input processing."
+    },
+    "autoload": {
+        "psr-4": {
+            "Tihloh\\Prefab\\Input\\": "src/"
+        }
+    }
+}
