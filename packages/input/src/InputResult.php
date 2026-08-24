@@ -40,9 +40,15 @@ final class InputResult
         return $this->processed;
     }
 
-    public function validated(): array
+    /** Return all validated data, or one validated field when a path is supplied. */
+    public function validated(?string $field = null, mixed $default = null): mixed
     {
-        return $this->validated;
+        if ($field === null) {
+            return $this->validated;
+        }
+
+        $value = self::getPath($this->validated, $field, $exists);
+        return $exists ? $value : $default;
     }
 
     public function errors(): array
