@@ -1,6 +1,11 @@
 # Tihloh Prefab PHP
 
-> **PHP building blocks. Your architecture.**
+> ## **PHP building blocks. Your architecture.**
+
+### **Modular** · **Reusable** · *Independent* · **Adaptive** · ***Better Together***
+
+Start with one block. Add another. **Gain capabilities.**  
+Improve the blocks you already have.
 
 **Stop rebuilding the same PHP plumbing—or adopting an entire framework just to get a few conveniences.**
 
