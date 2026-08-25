@@ -99,7 +99,10 @@ if (!class_exists(PrefabRuntime::class, false)) {
         public static function callExtension(object $target, string $method, array $arguments = []): mixed
         {
             $entry = self::extensionEntry($target, $method);
-            if (!$entry) throw new BadMethodCallException("Prefab fluent extension '{$method}' is unavailable for {$target::class}. Install/configure the Prefab module that provides this capability.");
+            if (!$entry) {
+                $class = $target::class;
+                throw new BadMethodCallException("Prefab fluent extension '{$method}' is unavailable for {$class}. Install/configure the Prefab module that provides this capability.");
+            }
             return ($entry['handler'])($target, ...$arguments);
         }
 
