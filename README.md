@@ -1,12 +1,47 @@
 # Tihloh Prefab PHP
 
-**Reusable, modular PHP building blocks for rapid Lego-style application development.**
+> **PHP building blocks. Your architecture.**
 
-Prefab is built around a simple rule:
+**Stop rebuilding the same PHP plumbing—or adopting an entire framework just to get a few conveniences.**
 
-> Install only what you need. Start simple. Add capabilities without replacing the architecture you already started with.
+Prefab is a collection of standalone, framework-independent PHP building blocks for the parts applications repeatedly need: routing, input validation, authentication, permissions, files, logging, messaging, notifications, and more.
 
-Every module works standalone. Compatible modules can cooperate through small contracts and runtime capabilities without becoming hard dependencies of one another.
+```bash
+composer require tihloh/prefab-routes
+composer require tihloh/prefab-input
+```
+
+Start with one block. Add another only when you need it. **Keep your application, database, directory structure, deployment model, and architectural decisions.**
+
+```text
+Plain PHP
+   │
+   ├── + Routes
+   ├── + Input
+   ├── + Auth
+   ├── + Permissions
+   ├── + Files
+   └── + whatever the application actually needs
+   ↓
+Structured application — without a framework takeover
+```
+
+## Why Prefab?
+
+A small PHP project often begins by rebuilding routing, validation, sessions, permissions, uploads and other infrastructure. A full framework solves those problems, but also brings its own application structure and conventions.
+
+Prefab provides a third option:
+
+- **Install only what you need.** Every package is independently useful.
+- **Start simple and grow without rewriting.** Advanced capabilities are additive.
+- **Modernize existing PHP incrementally.** Existing PDO connections, tables, sessions, pages and libraries remain usable.
+- **Keep control of the architecture.** Prefab does not require base controllers, models, an ORM, a project skeleton or a prescribed folder structure.
+- **Mix Prefab with other libraries.** Small contracts and adapters are preferred over ecosystem lock-in.
+- **Get a consistent toolbox instead of unrelated utilities.** Prefab modules follow common design and error-handling conventions.
+
+> **Start with one block. Add more when you need them. Never surrender your architecture.**
+
+Prefab is deliberately **not another full-stack framework**. Your application remains the architecture; Prefab handles reusable plumbing.
 
 ## Documentation
 
@@ -42,45 +77,6 @@ Internal bell/inbox notifications?       → prefab-notifications
 
 There is **no required Core package**.
 
-## Prefab at a glance
-
-```text
-External input/uploads
-        ↓
-      Input
-        ↓
-      Routes
-        ↓
-       Auth
-        ↓
-      Users
-        ↓
-   Permissions
-        ↓
-Application/business logic
-
-Database       → structured persistence
-Files          → file persistence
-Logs           → audit/activity
-Messaging      → external outbound communication
-Notifications  → internal system-to-user notices
-```
-
-The modules answer different questions:
-
-| Module | Main question |
-|---|---|
-| Database | Where/how do I access structured data? |
-| Users | Who are the application's users? |
-| Auth | Who is currently authenticated? |
-| Permissions | What may this subject do? |
-| Logs | What happened, who did it and what changed? |
-| Routes | Which code handles this HTTP request? |
-| Input | Which incoming data/files are safe and usable? |
-| Files | Where/how should files be stored and retrieved? |
-| Messaging | How do I deliver a message outside the application? |
-| Notifications | What internal notice should this application user see? |
-
 ## Start small
 
 Each module is independently useful:
@@ -101,7 +97,7 @@ $messaging->mail(
 );
 ```
 
-Internal notices are separate:
+Internal notices remain separate:
 
 ```php
 $notifications->send(
@@ -121,6 +117,88 @@ Document Approved
 ```
 
 Neither package requires the other.
+
+## Grow without replacing the foundation
+
+Prefab is intended to remain useful as the application grows:
+
+```text
+Day 1                    PHP + Routes
+Day 10                   PHP + Routes + Input
+Later                    + Auth + Permissions
+Larger application       + Files + Logs + other needed blocks
+```
+
+Adding a package should add a capability—not force a migration to a new application architecture.
+
+## Existing applications are first-class
+
+Prefab should adapt to what already works. An existing application may keep its own PDO connection, user schema, session strategy, controllers, templates and third-party packages.
+
+```text
+Existing PHP application
+        ↓ add one Prefab block
+Existing PHP + improved capability
+        ↓ add another when useful
+Incrementally modernized application
+```
+
+Prefab packages should avoid unnecessary inheritance and global ownership so removing or replacing one block does not require rebuilding the entire application.
+
+## Error handling
+
+**Errors must be useful, predictable and catchable.** Prefab should not hide failures or turn ordinary runtime problems into mysterious behavior.
+
+Use validation/result objects for expected user-data failures:
+
+```php
+$result = Input::from($_POST)->process([
+    'email' => 'required|email',
+]);
+
+if ($result->fails()) {
+    $errors = $result->errors();
+}
+```
+
+Use delivery/result objects when failure is a normal operational outcome:
+
+```php
+$result = $messaging->mail(
+    'user@example.com',
+    'Report Ready',
+    'Your report is ready.',
+);
+
+if ($result->failed()) {
+    error_log($result->error ?? 'Message delivery failed.');
+}
+```
+
+Use exceptions for invalid configuration, unsafe operations, unavailable required resources, programmer mistakes and failures where execution cannot safely continue:
+
+```php
+try {
+    $files->put('../unsafe.txt', 'data');
+} catch (Throwable $e) {
+    // Log, report, convert to an HTTP response, or handle at the application boundary.
+}
+```
+
+Prefab libraries should **not** unexpectedly terminate the process with `die()`/`exit()`, print errors directly, or expose secrets in exception messages. Applications decide how errors are logged, displayed or converted into HTTP/API responses.
+
+The general convention is:
+
+```text
+Expected invalid input          → validation errors/result
+Expected delivery outcome       → result object
+Missing optional capability     → capability check / clear fallback
+Invalid API/configuration       → exception
+Unsafe/impossible operation     → exception
+Unexpected infrastructure error → exception or documented failure result
+```
+
+Each module's documentation should describe its specific errors, failure results and exceptions with examples.
 
 ## Automatic cooperation
 
@@ -218,9 +296,30 @@ Distribution mirrors are created only when an individual module is ready for Pac
 9. **No unnecessary package fragmentation** — email belongs to Messaging; validation belongs to Input.
 10. **No framework creep** — a module should remain useful as a small Composer library.
 11. **Internal and external communication stay distinct** — Notifications handles in-app notices; Messaging handles outbound delivery.
+12. **Failures are explicit** — expected failures use inspectable results; exceptional failures use catchable exceptions; libraries do not unexpectedly terminate the application.
+13. **Keep the exit door open** — avoid architecture lock-in and unnecessary inheritance.
+
+## Documentation standard
+
+Every public Prefab package should document, in roughly this order:
+
+```text
+1. What problem does this package solve?
+2. Installation
+3. 1-minute quick start
+4. Common usage
+5. Error handling
+6. Advanced usage
+7. Integration with other Prefab blocks
+8. Extension/adapters
+9. Diagnostics/troubleshooting
+10. Responsibility boundary — what does NOT belong here?
+```
+
+Examples should show real failure handling where an operation can reasonably fail. Public methods should have predictable behavior, and advanced features should not make the simple path harder to understand.
 
 ## Documentation map
 
 **[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md) · [Files](packages/files/README.md) · [Messaging](packages/messaging/README.md) · [Notifications](packages/notifications/README.md)**
 
-Choose the smallest module that solves the problem in front of you. Add another block only when the application actually needs it.
+> **Start with one block. Add more when you need them. Keep your architecture.**
