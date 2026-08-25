@@ -1,10 +1,8 @@
 # Prefab Messaging
 
-**Prefab Messaging** is a standalone, framework-independent application-to-recipient messaging layer for PHP.
+**Prefab Messaging** provides framework-independent **external outbound communication** for PHP applications.
 
-> Send a simple message directly. Use structured notifications and multiple channels only when the application needs them.
-
-Messaging intentionally covers communication **to people/users/recipients**. It is not an HTTP client, event bus, webhook framework, queue system or networking library.
+> Messaging sends information outside the application. Internal bell/inbox notices belong to Prefab Notifications.
 
 ## Installation
 
@@ -12,145 +10,103 @@ Messaging intentionally covers communication **to people/users/recipients**. It 
 composer require tihloh/prefab-messaging
 ```
 
-## Core model
+## Purpose
 
 ```text
 Application
     ↓
-MessagingManager
-    ↓
-Message / Notification
-    ↓
-ChannelInterface
-    ├── mail
-    ├── inbox
+Prefab Messaging
+    ├── email / SMTP
     ├── SMS adapter
-    ├── push adapter
-    └── custom channel
+    ├── external push adapter
+    └── custom external channel
     ↓
-DeliveryResult
+External recipient/provider
 ```
 
-No channel provider is required by the core package. Applications register only the delivery channels they use.
+It is intentionally not an internal notification center, chat system, HTTP client, webhook framework, event bus, queue worker or scheduler.
 
-## Simple direct message
-
-A custom or provider-backed channel implements `ChannelInterface`:
+## Simple mail
 
 ```php
-use Tihloh\Prefab\Messaging\Channels\CallableChannel;
-use Tihloh\Prefab\Messaging\MessagingManager;
-
-$messaging = new MessagingManager([
-    new CallableChannel('mail', function ($recipient, $message) {
-        $email = $recipient->route('mail');
-
-        // Deliver using your SMTP/provider library here.
-        return 'provider-message-id';
-    }),
-]);
-
 $result = $messaging->mail(
     'user@example.com',
     'Annual Report',
-    'Please see the attached report.',
+    'Your report is ready.',
 );
 ```
 
-The direct API keeps small applications small. A notification class is not required merely to send one message.
-
-## Recipients
+## Generic channel delivery
 
 ```php
-$recipient = new Recipient(
-    id: 25,
-    name: 'Demo User',
-    routes: [
-        'mail' => 'user@example.com',
-        'sms' => '+639000000000',
-        'inbox' => 25,
+$result = $messaging->send(
+    'sms',
+    $recipient,
+    new Message('OTP', 'Your code is 123456'),
+);
+```
+
+`Recipient` stores channel routes such as email addresses or phone numbers. `ChannelInterface` keeps provider-specific delivery outside application business logic.
+
+## Mail
+
+Messaging includes a `MailChannel`, a zero-dependency `NativeMailTransport`, and a built-in `SmtpTransport` for SMTP delivery.
+
+SMTP supports host/port configuration, authentication, STARTTLS/SSL, plain text, HTML+text MIME, CC/BCC, reply-to and attachments.
+
+```php
+$smtp = new SmtpTransport([
+    'host' => 'smtp.example.com',
+    'port' => 587,
+    'username' => 'user@example.com',
+    'password' => 'secret',
+    'encryption' => 'tls',
+    'from' => [
+        'address' => 'noreply@example.com',
+        'name' => 'My System',
+    ],
+]);
+
+$messaging = new MessagingManager([
+    new MailChannel($smtp),
+]);
+```
+
+## Attachments
+
+```php
+$message = new Message(
+    subject: 'Report',
+    text: 'Your report is attached.',
+    attachments: [
+        Attachment::fromPath('/tmp/report.pdf'),
     ],
 );
 ```
 
-The recipient describes **where** each channel should deliver. This keeps channel routing separate from message content.
+Attachments can also be created from in-memory data with `Attachment::fromData()`.
 
-## Structured notifications
+## Templates
 
-Notifications are useful when one application event may be delivered through several channels:
+The lightweight `Template` helper supports simple `{{variable}}` replacement without forcing a template engine.
 
 ```php
-final class DocumentApproved implements NotificationInterface
-{
-    public function channels(Recipient $recipient): array
-    {
-        return ['mail', 'inbox'];
-    }
-
-    public function message(string $channel, Recipient $recipient): Message
-    {
-        return new Message(
-            subject: 'Document approved',
-            text: 'Your document has been approved.',
-        );
-    }
-}
-
-$results = $messaging->notify(
-    $recipient,
-    new DocumentApproved(),
+$template = new Template(
+    subject: 'Hello {{name}}',
+    text: 'Your report {{report}} is ready.'
 );
+
+$message = $template->render([
+    'name' => 'Demo User',
+    'report' => 'AR-2026',
+]);
 ```
 
-A notification is therefore a higher-level messaging feature, not the entire package.
+## Delivery results and hooks
 
-## Custom channels
+Every delivery returns `DeliveryResult` with success/failure, channel, optional provider message ID, error and metadata.
 
-Every channel follows the same small contract:
-
-```php
-interface ChannelInterface
-{
-    public function name(): string;
-
-    public function send(
-        Recipient $recipient,
-        Message $message,
-    ): DeliveryResult;
-}
-```
-
-This leaves SMTP libraries, SMS providers, push providers and application-specific inbox implementations outside the core.
-
-## Delivery results
-
-Every delivery produces a `DeliveryResult`:
-
-```php
-$result->successful;
-$result->failed();
-$result->channel;
-$result->messageId;
-$result->error;
-$result->metadata;
-```
-
-Provider-specific details can live in metadata without leaking provider APIs into application code.
-
-## Lifecycle hooks
-
-```php
-$messaging->on('sent', function (
-    $channel,
-    $recipient,
-    $message,
-    $result,
-) {
-    // logging, metrics, etc.
-});
-```
-
-Supported lifecycle points in the initial API are:
+Lifecycle hooks are available for:
 
 ```text
 sending
@@ -158,55 +114,31 @@ sent
 failed
 ```
 
-Hooks allow Prefab Logs, metrics or future Jobs integration without making those packages hard dependencies.
+These can integrate with Prefab Logs or future Jobs without creating hard dependencies.
 
-## Attachments and templates
-
-Attachments and reusable template/message builders belong in Messaging, but they should remain transport-neutral. Prefab Files can later provide stored file resources while Messaging only describes what should be delivered.
+## Relationship to Prefab Notifications
 
 ```text
-Prefab Files      → owns stored files
-Prefab Messaging  → owns recipient communication
-Mail channel      → converts attachments/message into provider format
+External communication
+Email / SMS / external push
+        ↓
+prefab-messaging
+
+Internal application notice
+Bell / inbox / unread state
+        ↓
+prefab-notifications
 ```
 
-The first core API deliberately does not hard-code a particular SMTP or template engine.
-
-## Intended integrations
-
-```text
-Prefab Users
-    ↓ optional recipient resolution
-Prefab Messaging
-    ↓
-channels
-
-Prefab Files ─────→ optional attachments
-Prefab Logs  ←──── lifecycle hooks
-Future Jobs  ←──── asynchronous delivery adapter
-```
-
-## What does NOT belong here?
-
-```text
-HTTP clients / REST calls      → not Messaging
-webhooks/system integration    → not Messaging
-internal application events    → future Prefab Events
-queue workers                   → future Prefab Jobs
-cron/scheduling                 → future Prefab Tasks
-file storage                    → Prefab Files
-access control                  → Prefab Permissions
-```
+An application can use both for the same business event, but neither package requires the other.
 
 ## Design philosophy
 
-Prefab Messaging follows the same Prefab rules:
+1. Standalone first.
+2. Direct mail stays simple.
+3. Provider-specific logic stays behind small channel/transport contracts.
+4. Advanced channels are additive.
+5. Internal notification storage/read state stays out of Messaging.
+6. Messaging remains external outbound delivery rather than becoming a general communication framework.
 
-1. **Standalone first** — no Users, Files, Logs or Jobs package is required.
-2. **Simple direct usage** — sending one message should not require a notification class.
-3. **Progressive capability** — structured notifications and multiple channels are additive.
-4. **Provider-neutral core** — SMTP/SMS/push providers implement small contracts rather than defining the package API.
-5. **No hidden hard dependencies** — integrations remain optional.
-6. **Clear responsibility** — Messaging communicates with recipients; it does not become an event bus, HTTP client or queue framework.
-
-The core principle is: **one messaging abstraction for recipient communication, with notifications and email as capabilities rather than separate package silos.**
+The core principle is: **deliver application messages to external recipients through replaceable transports.**
