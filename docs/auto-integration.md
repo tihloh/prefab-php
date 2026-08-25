@@ -1,99 +1,155 @@
-# Standalone automatic integration
+# Prefab Auto-Wiring
 
-Tihloh Prefab has no required Core package. Every module is standalone and can be installed/used by itself. When compatible Prefab modules are declared in the same application, they automatically cooperate through a tiny embedded capability runtime.
+> **Add a block. Prefab connects what makes sense.**
 
-## Three configuration levels
+Auto-Wiring is Prefab's automatic **infrastructure integration** system. It lets standalone modules discover compatible services from other installed Prefab modules without creating hard package dependencies.
 
-Configuration is resolved per setting/resource in this order:
+If this is your first time using Prefab, read the [Getting Started guide](getting-started.md) first.
 
-1. direct module configuration;
-2. module-specific `PrefabConfig` configuration;
-3. common `PrefabConfig` configuration;
-4. compatible Prefab capability;
-5. module internal sensible default;
-6. clear configuration error if a required resource is still unresolved.
+## The simple idea
+
+Suppose you install Users and Auth separately:
+
+```text
+Prefab Users                  Prefab Auth
+provides users                needs users
+      │                           │
+      └──── user_provider ────────┘
+```
+
+When both managers are present, Auth can use the compatible user provider published by Users.
+
+You do not have to manually connect them **unless you want to override the automatic choice**.
+
+Another example:
+
+```text
+Auth
+ └─ provides current actor
+          ↓
+Permissions / Logs
+ └─ can use current actor
+```
+
+## What Auto-Wiring should automate
+
+Auto-Wiring is for reusable infrastructure relationships:
+
+```text
+Users → Auth                  user provider
+Auth → Permissions           current actor
+Auth → Logs                  authentication audit context
+Database → compatible blocks shared database capability
+Logs ← compatible blocks     structured infrastructure events
+```
+
+It should **not invent application business rules**.
+
+For example:
+
+```text
+User logs in
+→ automatic audit is reasonable
+
+User profile changes
+→ automatically emailing the user is NOT assumed
+```
+
+If your application wants the second behavior, make the intent explicit:
+
+```php
+$users->update($id, $data)
+      ->notify()
+      ->email();
+```
+
+Those optional actions are [Fluent Extensions](fluent-extensions.md), not Auto-Wiring.
+
+## You can still configure modules manually
+
+Auto-Wiring is a convenience, not a requirement.
+
+A small application can configure a module directly:
+
+```php
+$users = new UserManager([
+    'database' => $pdo,
+    'map' => $map,
+]);
+```
+
+That direct configuration has priority over automatically discovered resources.
+
+## Configuration priority
+
+When Prefab needs a resource, it resolves it in this order:
+
+```text
+1. Direct configuration on this module       ← strongest
+2. This module's PrefabConfig settings
+3. Common PrefabConfig settings
+4. Compatible Auto-Wired capability
+5. Module default, when one exists
+6. Clear error if still unresolved
+```
+
+The short version is:
+
+> **Explicit configuration wins. Auto-Wiring fills the gaps.**
 
 Example:
 
 ```php
 PrefabConfig::set([
-    // Level 3: common resource.
     'database' => $mainPdo,
-
     'modules' => [
-        // Level 2: centralized Logs-specific configuration.
         'logs' => [
             'connection' => 'logs',
         ],
     ],
 ]);
 
-// Level 1: direct/local configuration. Highest priority for Auth only.
 $auth = new AuthManager([
     'session_key' => 'my_app_auth',
 ]);
 ```
 
-A module-local setting never writes back to shared configuration and never changes another module.
+Here, Auth's direct `session_key` applies only to Auth. Logs' module-specific database choice applies to Logs. The common database remains available to modules that have no more-specific choice.
 
-## Resource-level precedence
+## What is a capability?
 
-Different option names may configure the same underlying resource. For example, `database` and `connection` are both ways to choose a database resource.
+A capability is simply a small named service that one module makes available to compatible modules.
 
-Prefab therefore treats this correctly:
-
-```php
-PrefabConfig::set([
-    'database' => $mainPdo,
-    'modules' => [
-        'logs' => [
-            'connection' => 'logs',
-        ],
-    ],
-]);
-```
-
-Logs uses the module-specific `logs` connection instead of being accidentally masked by the common `$mainPdo` value.
-
-## Capability-based cooperation
-
-Modules publish small capabilities instead of requiring one another directly.
-
-Typical capabilities:
+Common examples include:
 
 ```text
-database
-database_manager
-database.connection.<name>
-user_provider
-actor_provider
-permission_store
-logger
+database                       default database
+database.connection.<name>     named database connection
+user_provider                  source of application users
+actor_provider                 current authenticated actor
+permission_store               permission persistence
+logger                         logging service
 ```
 
-Example graph:
+You normally **use the module API**, not these capability names directly. They exist so Prefab modules can cooperate without requiring each other's packages.
+
+## Example integration graph
 
 ```text
-Prefab Database
-  provides database + named connections
-        |
-        +--> Prefab Users
-        |      provides user_provider
-        |              |
-        |              +--> Prefab Auth
-        |                     provides actor_provider
-        |
-        +--> Prefab Permissions
-        |
-        +--> Prefab Logs
-               provides logger
+Database
+   │
+   ├────→ Users ─────→ Auth ─────→ actor_provider
+   │                                │
+   ├────→ Permissions ←─────────────┘
+   │
+   └────→ Logs ← authentication/user events
 ```
 
-A module consumes a capability only when its three configuration levels did not already provide the resource.
+Each box remains independently installable. The arrows are integrations that become possible when compatible boxes are present.
 
-## Declaration sequence
+## Does declaration order matter?
 
-Each module registers itself when constructed and triggers a small configuration pass across modules declared so far. This keeps declaration order flexible.
+Prefab re-runs a small configuration pass as managers register, so normal declaration order is flexible:
 
 ```php
 $database = new DatabaseManager();
@@ -103,28 +159,23 @@ $permissions = new PermissionManager();
 $logs = new LogManager();
 ```
 
-During configuration, modules cache the resolved references. Normal feature calls do not repeatedly scan/discover modules:
+Resolved references are cached during configuration. Normal feature calls do not need to rediscover the whole application repeatedly.
 
-```php
-$auth->attempt($email, $password);
-$users->update(25, ['name' => 'Testing']);
-$permissions->set('user', 25, 'documents.approve', true);
-$logs->recent();
-```
+## Do I need `PrefabRuntime::ready()`?
 
-Applications that want an explicit startup boundary may optionally call:
+Usually, **no**.
+
+Applications that want an explicit startup boundary may call:
 
 ```php
 PrefabRuntime::ready();
 ```
 
-This freezes registration of new module names after the final configuration pass. Normal Prefab applications are not required to call it.
+This performs the final configuration pass and prevents new module names from being registered afterward. It is useful for stricter bootstraps and diagnostics, but normal Prefab applications do not need it.
 
-## Transparent diagnostics
+## How do I know what was connected?
 
-Automatic integration must remain understandable.
-
-Each main manager exposes:
+Ask Prefab.
 
 ```php
 $users->explain();
@@ -134,40 +185,71 @@ $logs->explain();
 $database->explain();
 ```
 
-The complete runtime can be inspected with:
+For the complete application:
 
 ```php
-PrefabRuntime::inspect();
+$info = PrefabRuntime::inspect();
 ```
 
-The diagnostic result identifies modules, capability providers, priorities, metadata, and the recorded source for resolved resources without dumping capability object values.
+The runtime inspection can show:
 
-## Conflict detection
+```text
+registered modules
+capability providers
+fluent extensions
+provider priorities
+resource-resolution decisions
+```
 
-One unambiguous capability provider is used automatically. If multiple providers have different priorities, the highest priority wins. Equal top priorities are treated as ambiguous and Prefab throws a clear configuration error instead of silently guessing.
+It should not dump secrets or raw connection objects.
 
-The project can resolve the ambiguity by choosing a database/provider directly or through `PrefabConfig`.
+## What happens if two modules provide the same thing?
 
-## Standalone remains standalone
+Prefab does not silently guess.
 
-Installing only one module still installs only that module:
+If providers have different priorities, the higher-priority provider wins. If two providers have the same highest priority and Prefab cannot choose safely, it throws a clear ambiguity exception.
+
+Resolve it by explicitly selecting/configuring the resource you want.
+
+```text
+One clear provider        → use it
+Clear higher priority     → use it
+Equal best providers      → error; application chooses
+Explicit configuration   → application choice wins
+```
+
+## No required Core package
+
+Prefab modules remain standalone. Installing only Users still means:
 
 ```bash
 composer require tihloh/prefab-users
 ```
 
-There is no required runtime/Core package. Each standalone package embeds `src/prefab.php`.
+There is no mandatory `prefab-core` runtime package. Standalone packages embed the small shared interoperability bootstrap they need.
 
-The repository maintains the common bootstrap from one canonical development file:
+The monorepo maintains that shared bootstrap from:
 
 ```text
 tools/prefab-bootstrap.php
 ```
 
-Before release, maintainers can synchronize the embedded copies with:
+and maintainers synchronize package copies before release with:
 
 ```bash
 php tools/sync-prefab-bootstrap.php
 ```
 
-This synchronization tool is not part of application startup and is not required by package consumers.
+Package consumers do not run that synchronization tool.
+
+## Auto-Wiring vs Fluent Extensions
+
+This distinction is important:
+
+| Feature | Purpose | Example |
+|---|---|---|
+| **Auto-Wiring** | Connect infrastructure automatically | Auth discovers Users |
+| **Fluent Extensions** | Add an explicit optional action | `$operation->notify()` |
+| **Object Interoperability** | Let compatible objects pass naturally | Input upload → Files |
+
+> **Auto-Wiring connects the plumbing. Fluent Extensions express optional actions. Your application keeps the business decisions.**

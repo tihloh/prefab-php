@@ -1,8 +1,30 @@
 # Packagist Release Guide
 
-Prefab is developed as a monorepo but published as independent Composer packages.
+Prefab is a **single development monorepo**. `tihloh/prefab-php` is the source of truth for every module, all tests, examples, documentation and release work.
 
-## Published package repositories
+Composer/Packagist expects an independently published package to expose that package's `composer.json` at the root of its VCS repository. Because Prefab intentionally keeps each module independently installable, release automation generates one **distribution mirror** per module from the monorepo. These mirrors are publication outputs only, not separate development repositories.
+
+```text
+prefab-php (development monorepo)
+        │
+        ├── packages/database ──────► prefab-database mirror ──────► Packagist
+        ├── packages/users ─────────► prefab-users mirror ─────────► Packagist
+        ├── packages/auth ──────────► prefab-auth mirror ──────────► Packagist
+        ├── packages/permissions ───► prefab-permissions mirror ───► Packagist
+        └── packages/logs ──────────► prefab-logs mirror ──────────► Packagist
+```
+
+## Source-of-truth rule
+
+All changes must be made in:
+
+```text
+tihloh/prefab-php
+```
+
+Never develop directly in a generated package mirror. If a published module needs a fix, change its source under `packages/<module>` in the monorepo, run CI, then republish the mirrors.
+
+## Distribution mirrors
 
 Create these empty public GitHub repositories once:
 
@@ -12,11 +34,11 @@ Create these empty public GitHub repositories once:
 - `tihloh/prefab-permissions`
 - `tihloh/prefab-logs`
 
-Do not develop directly in the split repositories. `tihloh/prefab-php` remains the source of truth.
+They are intentionally thin publication endpoints. Their `main` branches and release tags are generated from the corresponding monorepo subtrees.
 
 ## One-time GitHub setup
 
-Create a fine-grained personal access token with **Contents: Read and write** permission for the five split repositories.
+Create a fine-grained personal access token with **Contents: Read and write** permission for the five distribution mirrors.
 
 Add that token to the `tihloh/prefab-php` repository as an Actions secret named:
 
@@ -24,7 +46,7 @@ Add that token to the `tihloh/prefab-php` repository as an Actions secret named:
 PREFAB_SPLIT_TOKEN
 ```
 
-The workflow `.github/workflows/split-packages.yml` uses that secret to push each `packages/<module>` subtree to the matching standalone repository.
+The workflow `.github/workflows/split-packages.yml` uses that secret to publish each `packages/<module>` subtree to its matching mirror.
 
 ## Before a release
 
@@ -51,7 +73,7 @@ The recommended first public version is:
 v0.1.0
 ```
 
-After `develop` is tested and merged into `main`, create/push the tag on the monorepo:
+After `develop` is tested and merged into `main`, create/push the tag on the **monorepo**:
 
 ```bash
 git checkout main
@@ -60,17 +82,17 @@ git tag -a v0.1.0 -m "Prefab PHP v0.1.0"
 git push origin v0.1.0
 ```
 
-Pushing a `v*` tag automatically runs **Split Prefab Packages**. For each module it:
+Pushing a `v*` tag runs the package publishing workflow. For each module it:
 
 1. creates a subtree history from `packages/<module>`;
-2. updates the split repository `main` branch;
-3. applies the same release tag to the split commit.
+2. updates the generated mirror's `main` branch;
+3. applies the same release tag to the mirror commit.
 
 The workflow may also be run manually from GitHub Actions. An optional `release_tag` input can publish a version tag during a manual run.
 
 ## Packagist setup
 
-After the first successful split, submit each standalone repository to Packagist once:
+After the first successful mirror publication, submit each generated mirror to Packagist once:
 
 ```text
 https://github.com/tihloh/prefab-database
@@ -80,9 +102,9 @@ https://github.com/tihloh/prefab-permissions
 https://github.com/tihloh/prefab-logs
 ```
 
-Each repository has its own root `composer.json`, README and MIT LICENSE after splitting, so Packagist sees it as an ordinary independent Composer library.
+Each mirror has its own root `composer.json`, README and MIT LICENSE after publication, so Packagist sees it as an ordinary independent Composer library while the actual development remains centralized in the monorepo.
 
-Enable Packagist/GitHub automatic updates for each repository so later tags are discovered automatically.
+Enable Packagist/GitHub automatic updates for each mirror so later tags are discovered automatically.
 
 ## Installation after publication
 
@@ -108,6 +130,6 @@ Use semantic versioning:
 
 Because Prefab modules share interoperability contracts, release the five modules with the same version tag while those contracts are evolving. This makes compatibility easier to understand during the pre-1.0 period.
 
-## Important source-of-truth rule
+## Why mirrors are necessary
 
-Never fix a split package only in its generated repository. Make the change in `tihloh/prefab-php`, test it there, then run the split workflow again. This prevents the package mirrors from drifting away from the monorepo.
+Prefab remains a monorepo whether or not publication mirrors exist. The mirrors solve only one packaging constraint: Packagist/Composer package discovery expects the package metadata at the repository root. Without mirrors, the alternative would be to publish one large `tihloh/prefab` package containing every module, which would prevent true independent installation of `tihloh/prefab-users`, `tihloh/prefab-auth`, and the other Lego blocks.

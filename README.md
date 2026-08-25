@@ -1,289 +1,352 @@
 # Tihloh Prefab PHP
 
-Reusable, modular PHP components for rapid Lego-style development. Every module works standalone, but compatible Prefab modules automatically cooperate when they are used together.
+> ## **PHP building blocks. Your architecture.**
 
-## Packages
+### **Modular** · **Reusable** · *Independent* · **Adaptive** · ***Better Together***
 
-- `tihloh/prefab-database` — optional default/named PDO connection management
-- `tihloh/prefab-users` — user management and provider abstraction
-- `tihloh/prefab-auth` — authentication and social sign-in building blocks
-- `tihloh/prefab-permissions` — permission definitions, group inheritance and user overrides
-- `tihloh/prefab-logs` — structured audit/activity logging with technical and human-friendly views
+Start with one block. Add another. **Gain capabilities.**  
+Improve the blocks you already have.
 
-There is no required Core package. Install only the module or modules a project needs.
-
-## Main design goal
-
-Prefab is intended to stay quick and framework-independent while remaining framework-compatible.
-
-Each module follows the same rules:
-
-1. **Standalone first** — no other Prefab module is required.
-2. **Automatic cooperation** — compatible modules publish/consume capabilities automatically.
-3. **Explicit configuration wins** — a module-local option affects only that module.
-4. **Three configuration levels** — direct module config, module-specific `PrefabConfig`, then common `PrefabConfig`.
-5. **Transparent magic** — `explain()` and `PrefabRuntime::inspect()` show how automatic decisions were made.
-6. **Conflict-aware discovery** — Prefab does not silently guess when equal-priority providers are ambiguous.
-7. **No repeated feature-time discovery** — resources are resolved during module declaration/configuration and cached as direct references.
-8. **Project data stays project-owned** — Prefab can map to existing project tables without claiming ownership.
-9. **Prefab-owned storage is self-contained** — modules create only their own required tables.
-10. **Framework compatibility through capabilities/adapters** — framework resources can satisfy Prefab capabilities without replacing the framework.
-
-## Three configuration levels
-
-Every configurable setting follows the same developer-facing hierarchy.
-
-### Level 1 — direct module configuration
-
-Highest priority and local to that module instance only:
-
-```php
-$logs = new LogManager([
-    'database' => $specialLogDb,
-]);
-```
-
-### Level 2 — module-specific PrefabConfig
-
-Useful for central application configuration while customizing one module:
-
-```php
-PrefabConfig::set([
-    'modules' => [
-        'logs' => [
-            'connection' => 'logs',
-            'table' => 'activity_logs',
-        ],
-    ],
-]);
-```
-
-### Level 3 — common PrefabConfig
-
-Shared defaults that compatible modules may inherit:
-
-```php
-PrefabConfig::set([
-    'database' => $mainPdo,
-]);
-```
-
-These levels are resolved **per setting**, not per whole module. A module can therefore override its table while still inheriting the common database.
-
-```text
-Direct module setting
-        ↓
-PrefabConfig module setting
-        ↓
-PrefabConfig common setting
-        ↓
-Compatible Prefab capability
-        ↓
-Module internal default
-        ↓
-Clear error when a required resource is still unresolved
-```
-
-## Database Connection Manager
-
-Prefab Database is optional. Other modules do not depend on it.
-
-```php
-use Tihloh\Prefab\Database\Services\DatabaseManager;
-
-$database = new DatabaseManager([
-    'default' => 'main',
-    'connections' => [
-        'main' => $mainPdo,
-        'logs' => $logPdo,
-    ],
-]);
-
-$users = new UserManager();
-$permissions = new PermissionManager();
-$logs = new LogManager([
-    'connection' => 'logs',
-]);
-```
-
-Resolved behavior:
-
-```text
-Users        -> main
-Permissions  -> main
-Logs         -> logs
-```
-
-The Database module publishes capabilities such as:
-
-```text
-database
-database_manager
-database.connection.main
-database.connection.logs
-```
-
-A module consumes them only when its three configuration levels did not already provide the required resource.
-
-## Capability-based auto-integration
-
-Prefab modules communicate through small runtime capabilities rather than hard dependencies.
-
-Typical capabilities include:
-
-```text
-database
-user_provider
-actor_provider
-permission_store
-logger
-```
-
-For example:
-
-```text
-Prefab Database  -> provides database
-Prefab Users     -> consumes database, provides user_provider
-Prefab Auth      -> consumes user_provider, provides actor_provider
-Prefab Logs      -> consumes database, provides logger
-Permissions      -> consumes database
-```
-
-Adding a compatible module adds functionality; removing it does not make the remaining modules depend on it.
-
-## Transparent diagnostics
-
-Automatic integration should never become mysterious.
-
-Each main manager exposes:
-
-```php
-$database->explain();
-$users->explain();
-$auth->explain();
-$permissions->explain();
-$logs->explain();
-```
-
-For a complete development-time view:
-
-```php
-use Tihloh\Prefab\PrefabRuntime;
-
-$debug = PrefabRuntime::inspect();
-```
-
-The runtime report includes registered modules, published capabilities, provider priorities, metadata, and recorded resolution sources. Capability object values themselves are not included in the diagnostic output.
-
-Applications that want an explicit end to startup may optionally call:
-
-```php
-PrefabRuntime::ready();
-```
-
-This is **not required** for normal Prefab use.
-
-## Conflict handling
-
-If only one compatible capability is available, Prefab uses it automatically.
-
-If multiple providers exist with different priorities, the higher-priority provider wins. If multiple providers have the same highest priority, Prefab throws a clear ambiguity error instead of silently guessing.
-
-The developer can then choose explicitly through direct/module/common configuration.
-
-## Permission definitions and inheritance
-
-Permission definitions may be provided as:
-
-```text
-inline PHP array
-PHP template file returning an array
-JSON template file
-```
-
-Effective permission resolution remains:
-
-```text
-User override
-    ↓
-Group permission
-    ↓
-Permission default
-```
-
-A user-level override always takes priority. Clearing the override restores inheritance from the user's groups or the permission default.
-
-## Logging
-
-Prefab Logs stores one structured technical/audit record and can present that record in a compact ordinary-user format.
-
-```php
-$technicalLogs = $logs->recent(50);
-
-$humanLogs = $logs->humanRecent(
-    50,
-    actorResolver: fn ($id) => $users->find($id)?->name,
-    subjectResolver: function ($type, $id) use ($users) {
-        if ($type === 'user') {
-            return $users->find($id)?->name;
-        }
-
-        return null;
-    },
-);
-```
-
-A technical `permission.denied` record can therefore be presented as:
-
-```text
-Demo Admin denied View Documents for Test User.
-```
-
-without duplicating the stored log.
-
-## Embedded interoperability bootstrap
-
-Every standalone package contains `src/prefab.php`, so installing a single module never requires a separate Core package.
-
-The repository keeps one canonical development source:
-
-```text
-tools/prefab-bootstrap.php
-```
-
-and provides:
+Prefab gives PHP applications reusable building blocks without requiring a full framework or forcing a project structure.
 
 ```bash
-php tools/sync-prefab-bootstrap.php
+composer require tihloh/prefab-routes
 ```
 
-for synchronizing that bootstrap into all standalone packages before release. This is a repository-maintenance mechanism only; package users do not install or call it.
+Use one package by itself, or combine compatible packages and let Prefab handle useful integration plumbing.
 
-## Source-code documentation standard
+> **New to Prefab? Start here: [Getting Started](docs/getting-started.md)**
 
-Source documentation is part of the Prefab API:
+## In one minute
 
-- public classes describe responsibility and integration behavior with PHPDoc;
-- public methods explain important parameters, return values and side effects;
-- contracts document what implementers are expected to provide;
-- non-obvious configuration/inheritance/discovery behavior has useful comments;
-- examples use normal indentation and readable multi-line formatting;
-- comments explain why behavior exists rather than merely restating PHP syntax;
-- sensitive data such as passwords, hashes, tokens and secrets is excluded from human-friendly logs;
-- package READMEs document standalone use, automatic integration, overrides and storage ownership.
+```text
+Need routing?       Install Routes.
+Need validation?    Add Input.
+Need login?         Add Auth.
+Already have users? Add Users and map your existing table.
+Need permissions?   Add Permissions.
+Need audit logs?    Add Logs.
+```
 
-## Examples
+You do **not** install everything. There is **no required Core package**.
 
-See `examples/database-integration-test` for a runnable project demonstrating:
+## What makes Prefab different?
 
-- project-owned user and group tables;
-- Prefab Users mapping to an existing table;
-- automatic Auth integration;
-- user creation and user-group membership;
-- group permission inheritance and user overrides;
-- PHP/JSON permission templates;
-- separate Prefab Logs storage;
-- technical and human-friendly logs;
-- direct and centralized configuration patterns.
+A normal collection of packages gives you more separate APIs as you install more packages. Prefab aims to do something more useful:
 
-See also `docs/auto-integration.md` and each package README.
+> **Adding a compatible module can improve modules you already installed.**
+
+Example:
+
+```text
+Users
+  └─ user management works
+
+Users + Auth
+  └─ Auth can automatically discover Users
+
+Users + Auth + Logs
+  └─ authentication/user infrastructure can be audited
+
+Users + Notifications
+  └─ compatible operations can gain ->notify()
+
+Users + Notifications + Messaging
+  └─ compatible operations can gain ->notify()->email()
+```
+
+This is why Prefab packages are ***Independent*** but ***Better Together***.
+
+## The three integration ideas
+
+### 1. Auto-Wiring — Prefab connects infrastructure
+
+> **Add a block. Prefab connects what makes sense.**
+
+Example:
+
+```text
+Users ── user provider ──→ Auth
+Auth  ── current actor ──→ Permissions / Logs
+```
+
+You can always configure things manually. **Explicit configuration wins.**
+
+[Learn Auto-Wiring →](docs/auto-integration.md)
+
+### 2. Fluent Extensions — installed modules add useful actions
+
+A compatible module can add an optional fluent action without being hard-coded into the target module.
+
+```php
+$users->update($id, $data)
+      ->notify()
+      ->email();
+```
+
+Conceptually:
+
+```text
+Users only            update()
++ Notifications       update()->notify()
++ Messaging           update()->notify()->email()
+```
+
+The module providing the capability owns the extension. Users does not need Messaging code inside it.
+
+[Learn Fluent Extensions →](docs/fluent-extensions.md)
+
+### 3. Object Interoperability — compatible objects simply fit
+
+Not every integration needs a new method.
+
+```text
+Input UploadedFile → Files
+Files attachment   → Messaging
+Auth actor         → Permissions / Logs
+```
+
+Prefab uses the simplest integration that makes sense.
+
+## What Prefab automates — and what it does not
+
+The rule is simple:
+
+> **Prefab automates plumbing. Your application decides business behavior.**
+
+A login is naturally an authentication event, so integrated logging can audit it automatically. But changing a user's profile does not automatically mean "send an email" because that is a business decision.
+
+Your application makes that decision explicitly:
+
+```php
+$users->update($id, $data)
+      ->notify()
+      ->email();
+```
+
+Short code, but no hidden business policy.
+
+## Choose a module
+
+| I need... | Use | What it owns |
+|---|---|---|
+| Database connections / lightweight queries | [Database](packages/database/README.md) | Database infrastructure |
+| Existing/project-owned users | [Users](packages/users/README.md) | User mapping and management |
+| Login/logout/current user | [Auth](packages/auth/README.md) | Authentication |
+| Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
+| HTTP routing | [Routes](packages/routes/README.md) | Request routing |
+| Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
+| File storage | [Files](packages/files/README.md) | Filesystem/storage operations |
+| Audit/activity history | [Logs](packages/logs/README.md) | Logging |
+| Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
+| Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
+
+A useful distinction:
+
+```text
+Auth            = Who are you?
+Permissions     = What are you allowed to do?
+
+Messaging       = Send something outside the application
+Notifications   = Show/store a notice inside the application
+
+Input           = Understand/validate incoming data
+Files           = Store/manage files
+```
+
+## Start small
+
+A small project does not need central configuration or runtime knowledge.
+
+```php
+$routes = new RouteManager();
+
+$routes->get('/', fn () => 'Home');
+$routes->get('/users/{id}', 'UserController@show');
+
+$result = $routes->dispatch();
+```
+
+Or use Users directly with an existing PDO connection:
+
+```php
+$users = new UserManager([
+    'database' => $pdo,
+    'map' => $map,
+]);
+
+$user = $users->find(25);
+```
+
+Learn advanced integration only when your application actually needs it.
+
+## Grow progressively
+
+```text
+Small site
+└── Routes
+
+Growing application
+├── Routes
+└── Input
+
+Authenticated application
+├── Routes
+├── Input
+├── Users
+└── Auth
+
+Larger application
+├── Routes
+├── Input
+├── Users
+├── Auth
+├── Permissions
+├── Files
+└── Logs
+```
+
+The original APIs remain useful as the application grows.
+
+## Existing projects are first-class
+
+Prefab is designed to fit existing PHP applications instead of demanding a rewrite.
+
+You can keep your existing:
+
+- database schema and PDO connection;
+- users/employees/accounts table;
+- controllers and templates;
+- directory structure;
+- deployment model;
+- third-party libraries.
+
+For example, Prefab Users maps your table rather than requiring a special Prefab users table.
+
+```text
+Existing project
+      ↓
+add one Prefab package
+      ↓
+existing project + new capability
+      ↓
+add another compatible package
+      ↓
+more capability + useful integration
+```
+
+## Configuration — only when you need it
+
+Small applications can configure each module directly. Larger applications can share configuration through `PrefabConfig` and Auto-Wiring.
+
+Resource resolution follows this order:
+
+```text
+Direct module configuration       ← strongest
+        ↓
+Module-specific PrefabConfig
+        ↓
+Common PrefabConfig
+        ↓
+Auto-Wired compatible capability
+        ↓
+Sensible module default
+        ↓
+Clear error if unresolved
+```
+
+> **Explicit configuration wins. Auto-Wiring fills the gaps.**
+
+## Diagnostics
+
+Prefab's automatic behavior should never be mysterious.
+
+Inspect one module:
+
+```php
+$auth->explain();
+$users->explain();
+```
+
+Inspect the whole Prefab composition:
+
+```php
+$info = PrefabRuntime::inspect();
+```
+
+This can show modules, capability providers, fluent extensions and resource-resolution decisions without exposing secret connection values.
+
+## Errors
+
+Prefab aims for errors that are clear, predictable and catchable.
+
+```text
+Invalid user input          → validation result/errors
+Missing required resource   → clear exception
+Missing optional extension  → BadMethodCallException
+Ambiguous integration       → RuntimeException with conflict details
+Delivery failure            → documented result/exception
+```
+
+Prefab libraries should not unexpectedly `die()` or `exit()` for ordinary library failures. The host application decides whether an error becomes HTML, JSON, a redirect, a log entry or something else.
+
+## Documentation paths
+
+If you are learning Prefab, follow this order:
+
+1. **[Getting Started](docs/getting-started.md)** — understand Prefab without runtime internals.
+2. **The module README you actually need** — use the package standalone first.
+3. **[Auto-Wiring](docs/auto-integration.md)** — understand automatic infrastructure integration.
+4. **[Fluent Extensions](docs/fluent-extensions.md)** — understand features such as `->notify()` and `->email()`.
+5. **[Packagist / release process](docs/packagist-release.md)** — maintainer/release information.
+
+## Integration rules
+
+These rules keep ***Better Together*** from turning into hidden framework magic:
+
+1. **Standalone first.** Every module must remain useful by itself.
+2. **Auto-wire infrastructure, not business policy.**
+3. **Explicit configuration always wins.**
+4. **The provider owns its fluent extension.**
+5. **Removing an optional provider must not break the target's base API.**
+6. **Extensions must make semantic sense.** Not every method belongs everywhere.
+7. **Prefer ordinary object interoperability when it is clearer.**
+8. **Ambiguity is an error, never a guess.**
+9. **Automatic behavior must be inspectable.**
+10. **Keep the application's architecture under application control.**
+
+Initial Fluent Extension direction:
+
+| Provider | Enhances | Capability |
+|---|---|---|
+| Auth | Routes | `auth()` |
+| Permissions | Routes | `can()` |
+| Input | Routes | `validate()` |
+| Notifications | compatible operations/results | `notify()` |
+| Messaging | compatible operations/results | `email()` |
+| Logs | auditable operations/results | `audit()` |
+
+## Monorepo and releases
+
+`prefab-php` is the development source of truth. Individual distribution repositories are publication targets for standalone Composer packages.
+
+Release/Packagist details are documented separately so package users do not need to understand repository-maintenance mechanics: [Packagist / release process](docs/packagist-release.md).
+
+## Documentation standard
+
+Every public package should clearly answer:
+
+```text
+What problem does this module solve?
+What does it NOT do?
+How do I install it?
+What is the smallest working example?
+What are the common operations?
+What errors should I expect?
+How does it work alone?
+What improves when other Prefab modules are installed?
+What extensions does it provide or accept?
+How do I inspect/troubleshoot it?
+```
+
+> **Start with one block. Add more when you need them. Keep your architecture.**

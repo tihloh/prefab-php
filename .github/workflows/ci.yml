@@ -14,71 +14,102 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.1', '8.2', '8.3', '8.4']
-        package: [database, users, auth, permissions, logs]
+        package: [database, users, auth, permissions, logs, routes, input, files, messaging, notifications]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
-          extensions: pdo, pdo_sqlite
-
+          extensions: pdo, pdo_sqlite, fileinfo
       - name: Validate composer.json
         working-directory: packages/${{ matrix.package }}
         run: composer validate --strict
-
       - name: Install package
         working-directory: packages/${{ matrix.package }}
         run: composer install --no-interaction --prefer-dist --no-progress
-
       - name: PHP syntax check
         run: find packages/${{ matrix.package }}/src -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
-  interoperability-sync:
-    name: Verify embedded interoperability files
+  input-smoke:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: fileinfo
+      - working-directory: packages/input
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/input
+        run: php tests/smoke.php
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+  files-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: fileinfo
+      - working-directory: packages/files
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/files
+        run: php tests/smoke.php
+
+  messaging-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+      - working-directory: packages/messaging
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/messaging
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+
+  notifications-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: pdo, pdo_sqlite
+      - working-directory: packages/notifications
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/notifications
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+
+  interoperability-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-
-      - name: Synchronize generated files
-        run: php tools/sync-prefab-bootstrap.php
-
-      - name: Ensure generated files were already synchronized
-        run: git diff --exit-code
+      - run: php tools/sync-prefab-bootstrap.php
+      - run: git diff --exit-code
 
   sqlite-integration:
-    name: SQLite full-stack integration example
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           tools: composer:v2
           extensions: pdo, pdo_sqlite
-
-      - name: Install database integration example
-        working-directory: examples/database-integration-test
+      - working-directory: examples/database-integration-test
         run: composer update --no-interaction --prefer-dist --no-progress
-
-      - name: Syntax check example
-        run: php -l examples/database-integration-test/index.php
-
-      - name: Load full stack
-        working-directory: examples/database-integration-test
+      - run: php -l examples/database-integration-test/index.php
+      - working-directory: examples/database-integration-test
         run: php -r "require 'vendor/autoload.php'; new Tihloh\\Prefab\\Database\\Services\\DatabaseManager(new PDO('sqlite::memory:')); new Tihloh\\Prefab\\Users\\Services\\UserManager(); new Tihloh\\Prefab\\Auth\\Services\\AuthManager(); new Tihloh\\Prefab\\Permissions\\Services\\PermissionManager(['definitions' => []]); new Tihloh\\Prefab\\Logs\\Services\\LogManager(); echo 'Prefab integration OK', PHP_EOL;"

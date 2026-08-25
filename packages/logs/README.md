@@ -1,19 +1,34 @@
-# Tihloh Prefab Logs
+# Prefab Logs
 
-Framework-independent structured logging for Tihloh Prefab PHP.
+**Prefab Logs** provides framework-independent structured activity and audit logging for PHP applications.
 
-Prefab Logs is standalone. It does not require Users, Auth, Permissions, Prefab Database, Laravel, or another framework package.
+> Store structured facts once, then present them as technical audit data or human-friendly activity.
+
+Prefab Logs is standalone. It does not require Prefab Users, Auth, Permissions, Database, Routes, Laravel, or another framework package.
+
+## Requirements
+
+- PHP 8.1 or newer
+- Composer when installed as a package
+
+## Installation
+
+```bash
+composer require tihloh/prefab-logs
+```
 
 ## Goals
 
 - Accept structured audit/activity payloads from any module or project code.
-- Keep actor, subject, changes, metadata, IP address, user agent, and timestamps.
-- Store logs through `LogRepositoryInterface`.
+- Preserve actor, subject, changes, metadata, IP address, user agent and timestamps.
+- Store records through `LogRepositoryInterface`.
 - Accept plain PDO or Prefab's `DatabaseInterface` for the built-in repository.
-- Automatically integrate with compatible Prefab modules when present.
-- Present the same stored log in technical or ordinary-user-friendly form.
+- Cooperate with compatible Prefab modules when present.
+- Present one stored event in technical or ordinary-user-friendly form.
 
-## Standalone setup
+---
+
+# 1. Quick start
 
 ```php
 use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
@@ -24,50 +39,25 @@ $logs = new LogManager(
 );
 ```
 
-The historical `PdoLogRepository` class name is retained for compatibility, but it now consumes `DatabaseInterface` internally. Passing PDO is automatically adapted.
-
-A custom repository remains valid:
+Record an event:
 
 ```php
-$logs = new LogManager($customRepository);
-```
-
-## Automatic database configuration
-
-Direct configuration affects Logs only:
-
-```php
-$logs = new LogManager([
-    'database' => $logPdo,
+$logs->record([
+    'action' => 'user.updated',
+    'subject_type' => 'user',
+    'subject_id' => 25,
+    'actor_id' => 7,
+    'message' => 'User profile was updated.',
 ]);
 ```
 
-Central module-specific configuration is also supported:
+That is enough for a small standalone application.
 
-```php
-PrefabConfig::set([
-    'database' => $mainPdo,
+---
 
-    'modules' => [
-        'logs' => [
-            'connection' => 'logs',
-            'table' => 'activity_logs',
-        ],
-    ],
-]);
-```
+# 2. Structured logging
 
-When Prefab Database exists, the named connection is resolved automatically.
-
-```text
-1. direct Logs repository / database / connection
-2. Logs-specific PrefabConfig
-3. common PrefabConfig
-4. compatible database capability
-5. clear error if storage is still unresolved
-```
-
-## Record a structured log
+Prefab prefers structured events over plain text-only logging.
 
 ```php
 $logs->record([
@@ -90,61 +80,174 @@ $logs->record([
 
 A `LogEntry` DTO may also be supplied directly.
 
-## Automatic Prefab activity logging
+The structure makes the same event useful for audits, activity feeds, troubleshooting and human-friendly descriptions.
 
-When Logs exists, compatible Prefab modules can discover the `logger` capability automatically.
+---
 
-For example, Users, Auth, and Permissions can emit structured activity without the application manually forwarding every log payload.
+# 3. Actor and subject
+
+Two concepts are intentionally separate:
+
+```text
+Actor   → who performed the action
+Subject → what/who the action affected
+```
+
+Example:
+
+```text
+Actor:   Admin #7
+Action:  user.updated
+Subject: User #25
+```
+
+This allows the log to answer both "who did it?" and "what was changed?".
+
+---
+
+# 4. Changes
+
+Changes can preserve before/after values:
 
 ```php
-$users = new UserManager();
-$auth = new AuthManager();
-$permissions = new PermissionManager();
+'changes' => [
+    'office' => [
+        'old' => 'Accounting',
+        'new' => 'Budget',
+    ],
+    'active' => [
+        'old' => false,
+        'new' => true,
+    ],
+],
+```
+
+This is especially useful for administrative and audit systems where knowing that an action occurred is not enough; the application may need to know what actually changed.
+
+---
+
+# 5. Metadata
+
+Application-specific context belongs in metadata:
+
+```php
+'metadata' => [
+    'source' => 'admin-ui',
+    'request_id' => 'abc123',
+    'module' => 'users',
+],
+```
+
+Prefab does not require every project to have the same metadata schema.
+
+---
+
+# 6. Direct repository configuration
+
+A custom repository can be supplied directly:
+
+```php
+$logs = new LogManager($customRepository);
+```
+
+This is the most explicit form and is useful when an application already has its own logging persistence layer.
+
+Conceptually:
+
+```text
+Database / service / custom storage
+              ↓
+     LogRepositoryInterface
+              ↓
+          LogManager
+```
+
+---
+
+# 7. Direct database configuration
+
+For built-in database storage:
+
+```php
+$logs = new LogManager([
+    'database' => $logPdo,
+]);
+```
+
+This configuration applies only to that Logs instance.
+
+---
+
+# 8. Central Prefab configuration
+
+Module-specific settings can be supplied through PrefabConfig:
+
+```php
+PrefabConfig::set([
+    'database' => $mainPdo,
+
+    'modules' => [
+        'logs' => [
+            'connection' => 'logs',
+            'table' => 'activity_logs',
+        ],
+    ],
+]);
+
 $logs = new LogManager();
 ```
 
-Explicit repositories/databases still override automatic storage choices.
+This lets Logs use a different connection/table while the rest of the application uses common infrastructure.
 
-## Human-friendly and technical views
+---
 
-The database stores only one structured record.
+# 9. Configuration resolution
 
-Technical/audit view:
-
-```php
-$technical = $logs->recent(50);
-```
-
-Ordinary-user view:
-
-```php
-$human = $logs->humanRecent(
-    50,
-    actorResolver: fn ($id) => $users->find($id)?->name,
-    subjectResolver: fn ($type, $id) => $type === 'user'
-        ? $users->find($id)?->name
-        : null,
-);
-```
-
-For example, a technical `permission.denied` record can be presented compactly as:
+Logs follows the standard Prefab hierarchy:
 
 ```text
-Demo Admin denied View Documents for Test User.
+1. Direct Logs configuration
+2. Logs-specific PrefabConfig
+3. Common PrefabConfig
+4. Compatible auto-discovered capability
+5. Internal/default behavior where applicable
+6. Clear error if required storage remains unresolved
 ```
 
-The technical details remain available; the human representation does not duplicate database storage.
+This allows explicit standalone configuration and automatic modular configuration to coexist.
 
-## Query logs
+---
+
+# 10. Named database connection
+
+When Prefab Database provides named connections:
 
 ```php
-$logs->recent();
-$logs->find(1001);
-$logs->forSubject('user', 25);
-$logs->forActor(7);
+$database = new DatabaseManager([
+    'default' => 'main',
+    'connections' => [
+        'main' => $mainPdo,
+        'logs' => $logPdo,
+    ],
+]);
+
+$logs = new LogManager([
+    'connection' => 'logs',
+]);
 ```
 
-## Database abstraction
+Resolved architecture:
+
+```text
+Business data → main connection
+Audit logs    → logs connection
+```
+
+This is useful when audit data should be isolated from the main application database.
+
+---
+
+# 11. Database abstraction
 
 The built-in repository accepts:
 
@@ -165,26 +268,277 @@ DatabaseInterface
 PdoLogRepository
 ```
 
-The same contract can later be supplied by Prefab Database or a framework adapter.
+The historical `PdoLogRepository` name remains for compatibility while its internal dependency uses the shared database contract.
 
-Driver-specific table/index DDL remains isolated in the built-in repository for MySQL/MariaDB, PostgreSQL, SQLite, and SQL Server until a separate schema abstraction is justified.
+Framework adapters can therefore provide the same contract later without changing `LogManager`.
 
-## Ownership
+---
 
-Logs owns only its own storage table by default:
+# 12. Querying logs
+
+Common queries include:
+
+```php
+$logs->recent();
+$logs->recent(50);
+$logs->find(1001);
+$logs->forSubject('user', 25);
+$logs->forActor(7);
+```
+
+These cover common audit/activity use cases without turning Logs into a general-purpose analytics query framework.
+
+---
+
+# 13. Technical view
+
+The technical/audit representation keeps structured details available:
+
+```php
+$technical = $logs->recent(50);
+```
+
+This representation is suitable for administrators, developers, auditing and troubleshooting.
+
+Conceptually:
+
+```text
+action:       permission.denied
+actor_id:     7
+subject_type: user
+subject_id:   25
+metadata:     ...
+changes:      ...
+```
+
+---
+
+# 14. Human-friendly view
+
+The same stored records can be presented in ordinary language:
+
+```php
+$human = $logs->humanRecent(
+    50,
+    actorResolver: fn ($id) => $users->find($id)?->name,
+    subjectResolver: fn ($type, $id) => $type === 'user'
+        ? $users->find($id)?->name
+        : null,
+);
+```
+
+A technical record can therefore become:
+
+```text
+Demo Admin denied View Documents for Test User.
+```
+
+Only one structured record is stored. The human representation is derived from it rather than duplicated in another log table.
+
+---
+
+# 15. Automatic Prefab activity logging
+
+When Logs is available, compatible Prefab modules may discover the `logger` capability automatically.
+
+For example:
+
+```php
+$users = new UserManager();
+$auth = new AuthManager();
+$permissions = new PermissionManager();
+$logs = new LogManager();
+```
+
+Conceptually:
+
+```text
+Users ───────┐
+Auth ────────┼──→ structured activity → Logs
+Permissions ─┘
+```
+
+Explicit logger/repository configuration still takes precedence over automatic discovery.
+
+---
+
+# 16. Prefab Users integration
+
+Users can produce activity such as user creation, update and deletion while Logs remains responsible for persistence/presentation.
+
+When a user provider is available, actor and subject IDs can also be resolved into human-readable names for activity feeds.
+
+---
+
+# 17. Prefab Auth integration
+
+Auth can provide both authentication events and current-actor context.
+
+```text
+login attempt
+      ↓
+Prefab Auth
+      ↓
+structured event
+      ↓
+Prefab Logs
+```
+
+The logging module does not need to perform authentication itself.
+
+---
+
+# 18. Prefab Permissions integration
+
+Permission changes are especially valuable in audit history:
+
+```text
+Admin granted Approve Documents to Budget Staff.
+Admin denied Delete Users for Test User.
+```
+
+The stored record remains structured, allowing the same data to be displayed differently for administrators and ordinary users.
+
+---
+
+# 19. Prefab Routes integration
+
+Routes may attach logging metadata to an application action:
+
+```php
+$routes->post('/documents', 'DocumentController@store')
+    ->log('documents.create');
+```
+
+Middleware or another integration layer can interpret that metadata and record the appropriate activity through Prefab Logs.
+
+Routes and Logs remain separate packages.
+
+---
+
+# 20. Storage ownership
+
+By default, Logs owns only its own storage table:
 
 ```text
 prefab_logs
 ```
 
-It does not require or modify project user tables, permission tables, or business tables.
+It does not require or modify the project's user table, permission tables or business tables.
 
-## Diagnostics
+This makes the package safer to add to an existing application.
+
+---
+
+# 21. Diagnostics
 
 Use:
 
 ```php
-$logs->explain();
+$info = $logs->explain();
 ```
 
-to inspect where the repository, database, connection, and table configuration came from.
+Diagnostics show how Logs resolved its repository, database, connection and table configuration.
+
+This is useful when direct configuration, module PrefabConfig, common PrefabConfig and automatic capabilities coexist.
+
+---
+
+# 22. Practical small application
+
+```php
+$logs = new LogManager([
+    'database' => $pdo,
+]);
+
+$logs->record([
+    'action' => 'report.generated',
+    'actor_id' => 7,
+    'metadata' => [
+        'year' => 2026,
+    ],
+]);
+```
+
+No other Prefab module is required.
+
+---
+
+# 23. Practical modular application
+
+```php
+PrefabConfig::set([
+    'database' => $mainPdo,
+    'modules' => [
+        'logs' => [
+            'connection' => 'logs',
+        ],
+    ],
+]);
+
+$database = new DatabaseManager([
+    'connections' => [
+        'main' => $mainPdo,
+        'logs' => $logPdo,
+    ],
+]);
+
+$users = new UserManager();
+$auth = new AuthManager();
+$permissions = new PermissionManager();
+$logs = new LogManager();
+```
+
+Business modules can emit structured events while Logs owns the audit persistence concern.
+
+---
+
+# 24. API quick reference
+
+Common `LogManager` operations:
+
+| API | Purpose |
+|---|---|
+| `record()` | Store a structured activity/audit event |
+| `recent()` | Return recent technical log entries |
+| `humanRecent()` | Return human-friendly recent activity |
+| `find()` | Find a log entry by ID |
+| `forSubject()` | Return activity affecting a subject |
+| `forActor()` | Return activity performed by an actor |
+| `explain()` | Inspect resolved repository/database configuration |
+
+Important concepts:
+
+| Component | Purpose |
+|---|---|
+| `LogEntry` | Structured log DTO |
+| `LogRepositoryInterface` | Persistence abstraction |
+| `PdoLogRepository` | Built-in database repository |
+| actor | Entity performing the action |
+| subject | Entity affected by the action |
+| changes | Before/after structured values |
+| metadata | Project-specific event context |
+
+---
+
+# 25. Design philosophy
+
+Prefab Logs separates event facts from presentation and storage details.
+
+```text
+Application event
+       ↓
+structured LogEntry
+       ↓
+repository
+       ↓
+stored once
+   ┌───┴────┐
+   ↓        ↓
+technical  human-friendly
+view       view
+```
+
+A small application can simply call `record()`. A large system can automatically collect activity from Users, Auth, Permissions and Routes while keeping those modules independent.
+
+The core principle is: **record structured facts once; decide how to display them later.**
