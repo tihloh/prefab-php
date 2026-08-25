@@ -7,56 +7,76 @@
 Start with one block. Add another. **Gain capabilities.**  
 Improve the blocks you already have.
 
-**Stop rebuilding the same PHP plumbing—or adopting an entire framework just to get a few conveniences.**
-
-Prefab is a collection of standalone, framework-independent PHP building blocks for routing, input, authentication, permissions, files, logging, messaging, notifications and other common application infrastructure.
+Prefab gives PHP applications reusable building blocks without requiring a full framework or forcing a project structure.
 
 ```bash
 composer require tihloh/prefab-routes
-composer require tihloh/prefab-input
 ```
 
-Start with one block. Add another only when you need it. **Keep your application, database, directory structure, deployment model and architectural decisions.**
+Use one package by itself, or combine compatible packages and let Prefab handle useful integration plumbing.
 
-## The Prefab difference
+> **New to Prefab? Start here: [Getting Started](docs/getting-started.md)**
 
-Prefab blocks are useful alone, but **adding a compatible block can improve the blocks you already have**.
+## In one minute
 
 ```text
-Install Users
-    ↓
-Users works
-
-+ Auth
-    ↓
-Auth can automatically use Users
-
-+ Logs
-    ↓
-Authentication/user activity can be audited
-
-+ Notifications
-    ↓
-Compatible operations can gain ->notify()
-
-+ Messaging
-    ↓
-Compatible operations can gain ->email()
+Need routing?       Install Routes.
+Need validation?    Add Input.
+Need login?         Add Auth.
+Already have users? Add Users and map your existing table.
+Need permissions?   Add Permissions.
+Need audit logs?    Add Logs.
 ```
 
-This is built around three integration mechanisms:
+You do **not** install everything. There is **no required Core package**.
 
-### Auto-Wiring
+## What makes Prefab different?
+
+A normal collection of packages gives you more separate APIs as you install more packages. Prefab aims to do something more useful:
+
+> **Adding a compatible module can improve modules you already installed.**
+
+Example:
+
+```text
+Users
+  └─ user management works
+
+Users + Auth
+  └─ Auth can automatically discover Users
+
+Users + Auth + Logs
+  └─ authentication/user infrastructure can be audited
+
+Users + Notifications
+  └─ compatible operations can gain ->notify()
+
+Users + Notifications + Messaging
+  └─ compatible operations can gain ->notify()->email()
+```
+
+This is why Prefab packages are ***Independent*** but ***Better Together***.
+
+## The three integration ideas
+
+### 1. Auto-Wiring — Prefab connects infrastructure
 
 > **Add a block. Prefab connects what makes sense.**
 
-Infrastructure relationships can be discovered automatically without forcing package dependencies. For example, Auth can discover Users, Permissions can discover the authenticated actor, and Logs can receive standard infrastructure events.
+Example:
 
-### Fluent Extensions
+```text
+Users ── user provider ──→ Auth
+Auth  ── current actor ──→ Permissions / Logs
+```
 
-> **Add a block. Gain a capability. Improve the blocks you already have.**
+You can always configure things manually. **Explicit configuration wins.**
 
-Optional modules can register methods on compatible Prefab objects without modifying or becoming dependencies of the target package:
+[Learn Auto-Wiring →](docs/auto-integration.md)
+
+### 2. Fluent Extensions — installed modules add useful actions
+
+A compatible module can add an optional fluent action without being hard-coded into the target module.
 
 ```php
 $users->update($id, $data)
@@ -67,16 +87,18 @@ $users->update($id, $data)
 Conceptually:
 
 ```text
-Users only                 update()
-+ Notifications            update()->notify()
-+ Messaging                update()->notify()->email()
+Users only            update()
++ Notifications       update()->notify()
++ Messaging           update()->notify()->email()
 ```
 
-The provider owns the extension. Removing the optional provider removes only that capability; the base operation continues to work.
+The module providing the capability owns the extension. Users does not need Messaging code inside it.
 
-### Object Interoperability
+[Learn Fluent Extensions →](docs/fluent-extensions.md)
 
-Some integrations need no new method at all. Compatible Prefab objects simply pass naturally between blocks:
+### 3. Object Interoperability — compatible objects simply fit
+
+Not every integration needs a new method.
 
 ```text
 Input UploadedFile → Files
@@ -84,78 +106,17 @@ Files attachment   → Messaging
 Auth actor         → Permissions / Logs
 ```
 
-**Infrastructure is auto-wired. Business decisions remain explicit.** Prefab may automatically audit a login; it will not decide that every user update should send an email. Your application expresses that intent with `->email()` or `->notify()`.
+Prefab uses the simplest integration that makes sense.
 
-See [Automatic integration](docs/auto-integration.md) and [Fluent Extensions](docs/fluent-extensions.md).
+## What Prefab automates — and what it does not
 
-## Why Prefab?
+The rule is simple:
 
-A small PHP project often begins by rebuilding routing, validation, sessions, permissions, uploads and other infrastructure. A full framework solves those problems, but also brings its own application structure and conventions.
+> **Prefab automates plumbing. Your application decides business behavior.**
 
-Prefab provides a third option:
+A login is naturally an authentication event, so integrated logging can audit it automatically. But changing a user's profile does not automatically mean "send an email" because that is a business decision.
 
-- **Install only what you need.** Every package is independently useful.
-- **Add blocks and gain integrations.** Compatible modules can auto-wire and contribute fluent capabilities.
-- **Start simple and grow without rewriting.** Advanced capabilities are additive.
-- **Modernize existing PHP incrementally.** Existing PDO connections, tables, sessions, pages and libraries remain usable.
-- **Keep control of the architecture.** No required base controllers, models, ORM, project skeleton or prescribed folder structure.
-- **Mix Prefab with other libraries.** Small contracts and adapters are preferred over ecosystem lock-in.
-- **Understand the magic.** Runtime inspection exposes capabilities, extensions and resolution decisions.
-
-> **Start with one block. Add more when you need them. Never surrender your architecture.**
-
-Prefab is deliberately **not another full-stack framework**. Your application remains the architecture; Prefab handles reusable plumbing.
-
-## Documentation
-
-| Module | Main responsibility | Documentation |
-|---|---|---|
-| **Database** | PDO connections, named connections and lightweight queries | [Database](packages/database/README.md) |
-| **Users** | Mapping and managing project-owned users | [Users](packages/users/README.md) |
-| **Auth** | Authentication and current-user/session concerns | [Auth](packages/auth/README.md) |
-| **Permissions** | Authorization, groups, inheritance and overrides | [Permissions](packages/permissions/README.md) |
-| **Logs** | Structured audit/activity logging | [Logs](packages/logs/README.md) |
-| **Routes** | HTTP routing, middleware, groups and diagnostics | [Routes](packages/routes/README.md) |
-| **Input** | Validation, normalization, casting, filtering and uploads | [Input](packages/input/README.md) |
-| **Files** | File storage, retrieval, disks and safe filesystem operations | [Files](packages/files/README.md) |
-| **Messaging** | External outbound communication such as email, SMTP and provider adapters | [Messaging](packages/messaging/README.md) |
-| **Notifications** | Internal system-to-user notices and unread state | [Notifications](packages/notifications/README.md) |
-
-Architecture docs: [Automatic integration](docs/auto-integration.md) · [Fluent Extensions](docs/fluent-extensions.md) · [Packagist/release process](docs/packagist-release.md)
-
-## Which package should I use?
-
-```text
-Structured data/database?                → prefab-database
-Project-owned users?                     → prefab-users
-Login/current-user support?              → prefab-auth
-Authorization/access control?            → prefab-permissions
-Audit/activity history?                  → prefab-logs
-Application routing?                     → prefab-routes
-Clean/validated request data?            → prefab-input
-File storage/organization?               → prefab-files
-Email/external communication?            → prefab-messaging
-Internal bell/inbox notifications?       → prefab-notifications
-```
-
-There is **no required Core package**.
-
-## Start small
-
-```php
-$routes = new RouteManager();
-$result = Input::from($_POST)->process(['name' => 'trim|required|string']);
-$files = new FileManager(['root' => __DIR__ . '/storage']);
-```
-
-External and internal communication remain separate:
-
-```php
-$messaging->mail('user@example.com', 'Annual Report', 'Your report is ready.');
-$notifications->send(25, 'Document Approved', 'OBR-2026-001 has been approved.');
-```
-
-A business operation may intentionally use both through compatible extensions:
+Your application makes that decision explicitly:
 
 ```php
 $users->update($id, $data)
@@ -163,86 +124,200 @@ $users->update($id, $data)
       ->email();
 ```
 
-## Extension availability and errors
+Short code, but no hidden business policy.
 
-Fluent extensions are optional capabilities. Applications may inspect them:
+## Choose a module
+
+| I need... | Use | What it owns |
+|---|---|---|
+| Database connections / lightweight queries | [Database](packages/database/README.md) | Database infrastructure |
+| Existing/project-owned users | [Users](packages/users/README.md) | User mapping and management |
+| Login/logout/current user | [Auth](packages/auth/README.md) | Authentication |
+| Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
+| HTTP routing | [Routes](packages/routes/README.md) | Request routing |
+| Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
+| File storage | [Files](packages/files/README.md) | Filesystem/storage operations |
+| Audit/activity history | [Logs](packages/logs/README.md) | Logging |
+| Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
+| Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
+
+A useful distinction:
+
+```text
+Auth            = Who are you?
+Permissions     = What are you allowed to do?
+
+Messaging       = Send something outside the application
+Notifications   = Show/store a notice inside the application
+
+Input           = Understand/validate incoming data
+Files           = Store/manage files
+```
+
+## Start small
+
+A small project does not need central configuration or runtime knowledge.
 
 ```php
-if ($operation->hasExtension('notify')) {
-    $operation->notify();
-}
+$routes = new RouteManager();
 
-$available = $operation->extensions();
+$routes->get('/', fn () => 'Home');
+$routes->get('/users/{id}', 'UserController@show');
+
+$result = $routes->dispatch();
 ```
 
-Calling an extension that has not been registered throws a catchable `BadMethodCallException`; it is never silently ignored. Equal-priority extension conflicts produce a clear ambiguity error instead of Prefab guessing.
-
-Global diagnostics expose the assembled application:
+Or use Users directly with an existing PDO connection:
 
 ```php
-$diagnostics = PrefabRuntime::inspect();
+$users = new UserManager([
+    'database' => $pdo,
+    'map' => $map,
+]);
 
-$diagnostics['modules'];
-$diagnostics['capabilities'];
-$diagnostics['extensions'];
-$diagnostics['resolutions'];
+$user = $users->find(25);
 ```
 
-## Error handling
+Learn advanced integration only when your application actually needs it.
 
-**Errors must be useful, predictable and catchable.** Prefab should not hide failures or turn ordinary runtime problems into mysterious behavior.
+## Grow progressively
 
 ```text
-Expected invalid input          → validation errors/result
-Expected delivery outcome       → result object
-Missing optional extension      → capability check / BadMethodCallException
-Ambiguous integration           → clear RuntimeException
-Invalid API/configuration       → exception
-Unsafe/impossible operation     → exception
-Unexpected infrastructure error → exception or documented failure result
+Small site
+└── Routes
+
+Growing application
+├── Routes
+└── Input
+
+Authenticated application
+├── Routes
+├── Input
+├── Users
+└── Auth
+
+Larger application
+├── Routes
+├── Input
+├── Users
+├── Auth
+├── Permissions
+├── Files
+└── Logs
 ```
 
-Prefab libraries should not unexpectedly `die()`/`exit()`, print errors directly or expose secrets in exception messages. Applications decide how errors are logged, displayed or converted into HTTP/API responses.
+The original APIs remain useful as the application grows.
 
-## Grow without replacing the foundation
+## Existing projects are first-class
+
+Prefab is designed to fit existing PHP applications instead of demanding a rewrite.
+
+You can keep your existing:
+
+- database schema and PDO connection;
+- users/employees/accounts table;
+- controllers and templates;
+- directory structure;
+- deployment model;
+- third-party libraries.
+
+For example, Prefab Users maps your table rather than requiring a special Prefab users table.
 
 ```text
-Day 1                    PHP + Routes
-Day 10                   + Input
-Later                    + Auth + Permissions
-Larger application       + Files + Logs + other needed blocks
+Existing project
+      ↓
+add one Prefab package
+      ↓
+existing project + new capability
+      ↓
+add another compatible package
+      ↓
+more capability + useful integration
 ```
 
-Adding a package should add capability—not force migration to a new application architecture.
+## Configuration — only when you need it
 
-## Existing applications are first-class
+Small applications can configure each module directly. Larger applications can share configuration through `PrefabConfig` and Auto-Wiring.
 
-Prefab adapts to what already works. Existing applications may keep their PDO connection, user schema, session strategy, controllers, templates and third-party packages.
+Resource resolution follows this order:
 
 ```text
-Existing PHP application
-        ↓ add one Prefab block
-Existing PHP + improved capability
-        ↓ add another
-More capability + compatible integrations
+Direct module configuration       ← strongest
+        ↓
+Module-specific PrefabConfig
+        ↓
+Common PrefabConfig
+        ↓
+Auto-Wired compatible capability
+        ↓
+Sensible module default
+        ↓
+Clear error if unresolved
 ```
+
+> **Explicit configuration wins. Auto-Wiring fills the gaps.**
+
+## Diagnostics
+
+Prefab's automatic behavior should never be mysterious.
+
+Inspect one module:
+
+```php
+$auth->explain();
+$users->explain();
+```
+
+Inspect the whole Prefab composition:
+
+```php
+$info = PrefabRuntime::inspect();
+```
+
+This can show modules, capability providers, fluent extensions and resource-resolution decisions without exposing secret connection values.
+
+## Errors
+
+Prefab aims for errors that are clear, predictable and catchable.
+
+```text
+Invalid user input          → validation result/errors
+Missing required resource   → clear exception
+Missing optional extension  → BadMethodCallException
+Ambiguous integration       → RuntimeException with conflict details
+Delivery failure            → documented result/exception
+```
+
+Prefab libraries should not unexpectedly `die()` or `exit()` for ordinary library failures. The host application decides whether an error becomes HTML, JSON, a redirect, a log entry or something else.
+
+## Documentation paths
+
+If you are learning Prefab, follow this order:
+
+1. **[Getting Started](docs/getting-started.md)** — understand Prefab without runtime internals.
+2. **The module README you actually need** — use the package standalone first.
+3. **[Auto-Wiring](docs/auto-integration.md)** — understand automatic infrastructure integration.
+4. **[Fluent Extensions](docs/fluent-extensions.md)** — understand features such as `->notify()` and `->email()`.
+5. **[Packagist / release process](docs/packagist-release.md)** — maintainer/release information.
 
 ## Integration rules
 
-Prefab keeps automation useful without making it mysterious:
+These rules keep ***Better Together*** from turning into hidden framework magic:
 
-1. **Auto-wire infrastructure, not business policy.**
-2. **The provider owns its fluent extension.** Users does not contain Messaging code just to expose `email()`.
-3. **The target remains standalone.** Removing an extension provider does not break its base API.
-4. **Extensions must make semantic sense.** Not every method belongs on every object.
-5. **Prefer interoperability when no fluent method is necessary.**
-6. **Explicit configuration always wins over discovery.**
-7. **Ambiguity is an error, never a guess.**
-8. **Automatic behavior must be inspectable.**
+1. **Standalone first.** Every module must remain useful by itself.
+2. **Auto-wire infrastructure, not business policy.**
+3. **Explicit configuration always wins.**
+4. **The provider owns its fluent extension.**
+5. **Removing an optional provider must not break the target's base API.**
+6. **Extensions must make semantic sense.** Not every method belongs everywhere.
+7. **Prefer ordinary object interoperability when it is clearer.**
+8. **Ambiguity is an error, never a guess.**
+9. **Automatic behavior must be inspectable.**
+10. **Keep the application's architecture under application control.**
 
-Initial extension direction:
+Initial Fluent Extension direction:
 
-| Provider | Enhances | Fluent capability |
+| Provider | Enhances | Capability |
 |---|---|---|
 | Auth | Routes | `auth()` |
 | Permissions | Routes | `can()` |
@@ -251,46 +326,27 @@ Initial extension direction:
 | Messaging | compatible operations/results | `email()` |
 | Logs | auditable operations/results | `audit()` |
 
-## Configuration philosophy
+## Monorepo and releases
 
-```text
-1. Direct module configuration
-2. Module-specific PrefabConfig
-3. Common PrefabConfig
-4. Compatible auto-discovered capability
-5. Internal/default behavior where applicable
-6. Clear error if a required resource remains unresolved
-```
+`prefab-php` is the development source of truth. Individual distribution repositories are publication targets for standalone Composer packages.
 
-Explicit configuration wins.
-
-## Monorepo model
-
-`prefab-php` is the development source of truth. Individual distribution repositories are publication targets when modules are ready for Packagist.
-
-## Prefab design rules
-
-1. **Standalone first.**
-2. **Start simple; advanced features are additive.**
-3. **One coherent responsibility per module.**
-4. **Compatible blocks should improve one another where useful.**
-5. **Auto-wire infrastructure, not application business decisions.**
-6. **Fluent extensions belong to the capability provider, not the target.**
-7. **Explicit configuration wins.**
-8. **Automatic behavior is diagnosable.**
-9. **Project data remains project-owned.**
-10. **Provider/framework neutral.**
-11. **No unnecessary package fragmentation.**
-12. **No framework creep.**
-13. **Failures are explicit and catchable.**
-14. **Keep the exit door open; avoid architecture lock-in.**
+Release/Packagist details are documented separately so package users do not need to understand repository-maintenance mechanics: [Packagist / release process](docs/packagist-release.md).
 
 ## Documentation standard
 
-Every public package should document: purpose, installation, one-minute quick start, common usage, error handling, advanced usage, integrations, contributed/accepted fluent extensions, adapters, diagnostics/troubleshooting and responsibility boundaries.
+Every public package should clearly answer:
 
-## Documentation map
-
-**[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md) · [Files](packages/files/README.md) · [Messaging](packages/messaging/README.md) · [Notifications](packages/notifications/README.md)**
+```text
+What problem does this module solve?
+What does it NOT do?
+How do I install it?
+What is the smallest working example?
+What are the common operations?
+What errors should I expect?
+How does it work alone?
+What improves when other Prefab modules are installed?
+What extensions does it provide or accept?
+How do I inspect/troubleshoot it?
+```
 
 > **Start with one block. Add more when you need them. Keep your architecture.**
