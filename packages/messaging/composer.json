@@ -1,7 +1,7 @@
 {
     "name": "tihloh/prefab-messaging",
-    "description": "Standalone, framework-independent application messaging with direct mail, notifications and pluggable delivery channels for Prefab PHP.",
-    "keywords": ["php", "messaging", "email", "notifications", "smtp", "prefab", "modular", "framework-independent"],
+    "description": "Standalone, framework-independent external outbound messaging with mail/SMTP and pluggable delivery channels for Prefab PHP.",
+    "keywords": ["php", "messaging", "email", "smtp", "sms", "push", "prefab", "modular", "framework-independent"],
     "homepage": "https://github.com/tihloh/prefab-php",
     "type": "library",
     "license": "MIT",
@@ -14,7 +14,8 @@
     "suggest": {
         "tihloh/prefab-users": "Optional recipient/user resolution.",
         "tihloh/prefab-files": "Optional attachment/file integration.",
-        "tihloh/prefab-logs": "Optional delivery activity logging."
+        "tihloh/prefab-logs": "Optional delivery activity logging.",
+        "tihloh/prefab-notifications": "Optional internal in-application notices for the same business events."
     },
     "autoload": {"psr-4": {"Tihloh\\Prefab\\Messaging\\": "src/"}}
 }
