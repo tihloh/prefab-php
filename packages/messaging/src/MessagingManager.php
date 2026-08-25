@@ -6,7 +6,6 @@ namespace Tihloh\Prefab\Messaging;
 
 use InvalidArgumentException;
 use Tihloh\Prefab\Messaging\Contracts\ChannelInterface;
-use Tihloh\Prefab\Messaging\Contracts\NotificationInterface;
 
 final class MessagingManager
 {
@@ -60,16 +59,6 @@ final class MessagingManager
     public function mail(string $to, string $subject, string $body, ?string $html = null): DeliveryResult
     {
         return $this->send('mail', $to, new Message($subject, $body, $html));
-    }
-
-    /** @return list<DeliveryResult> */
-    public function notify(Recipient $recipient, NotificationInterface $notification): array
-    {
-        $results = [];
-        foreach ($notification->channels($recipient) as $channel) {
-            $results[] = $this->send($channel, $recipient, $notification->message($channel, $recipient));
-        }
-        return $results;
     }
 
     public function on(string $event, callable $listener): self
