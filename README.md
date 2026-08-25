@@ -20,7 +20,8 @@ Every module works standalone. Compatible modules can cooperate through small co
 | **Routes** | HTTP routing, middleware, groups and diagnostics | [Routes](packages/routes/README.md) |
 | **Input** | Validation, normalization, casting, filtering and uploads | [Input](packages/input/README.md) |
 | **Files** | File storage, retrieval, disks and safe filesystem operations | [Files](packages/files/README.md) |
-| **Messaging** | Recipient communication, direct messages, notifications and delivery channels | [Messaging](packages/messaging/README.md) |
+| **Messaging** | External outbound communication such as email, SMTP, SMS/push adapters | [Messaging](packages/messaging/README.md) |
+| **Notifications** | Internal system-to-user notices, unread state and notification inbox data | [Notifications](packages/notifications/README.md) |
 
 Architecture/maintainer docs: [Automatic integration](docs/auto-integration.md) · [Packagist/release process](docs/packagist-release.md)
 
@@ -35,7 +36,8 @@ Audit/activity history?                  → prefab-logs
 Application routing?                     → prefab-routes
 Clean/validated request data?            → prefab-input
 File storage/organization?               → prefab-files
-Email/user/recipient communication?      → prefab-messaging
+Email/SMS/external communication?        → prefab-messaging
+Internal bell/inbox notifications?       → prefab-notifications
 ```
 
 There is **no required Core package**.
@@ -57,10 +59,11 @@ External input/uploads
         ↓
 Application/business logic
 
-Database  → structured persistence
-Files     → file persistence
-Logs      → audit/activity
-Messaging → communication to recipients
+Database       → structured persistence
+Files          → file persistence
+Logs           → audit/activity
+Messaging      → external outbound communication
+Notifications  → internal system-to-user notices
 ```
 
 The modules answer different questions:
@@ -75,7 +78,8 @@ The modules answer different questions:
 | Routes | Which code handles this HTTP request? |
 | Input | Which incoming data/files are safe and usable? |
 | Files | Where/how should files be stored and retrieved? |
-| Messaging | How does the application communicate with a recipient? |
+| Messaging | How do I deliver a message outside the application? |
+| Notifications | What internal notice should this application user see? |
 
 ## Start small
 
@@ -87,42 +91,50 @@ $result = Input::from($_POST)->process(['name' => 'trim|required|string']);
 $files = new FileManager(['root' => __DIR__ . '/storage']);
 ```
 
-Messaging follows the same rule. A one-off email/message does not require a notification class:
+External email remains simple:
 
 ```php
-$result = $messaging->mail(
+$messaging->mail(
     'user@example.com',
     'Annual Report',
     'Your report is ready.',
 );
 ```
 
-When an application grows, structured notifications can deliver through several registered channels:
+Internal notices are separate:
 
-```text
-Application event
-      ↓
-Prefab Messaging
-   ┌──┼─────┐
- mail inbox custom
+```php
+$notifications->send(
+    25,
+    'Document Approved',
+    'OBR-2026-001 has been approved.',
+);
 ```
 
-See [Prefab Messaging](packages/messaging/README.md).
+A single business event can intentionally use both:
+
+```text
+Document Approved
+       │
+       ├── Notifications → internal bell/inbox
+       └── Messaging     → email/SMS/external push
+```
+
+Neither package requires the other.
 
 ## Automatic cooperation
 
 Compatible modules may cooperate through small contracts/capabilities rather than hard dependencies. Explicit application configuration always wins over automatic behavior.
 
-Typical integrations remain optional:
+Typical optional integrations:
 
 ```text
-Users ─────────→ recipient resolution ──→ Messaging
-Files ─────────→ attachments ───────────→ Messaging
-Messaging ─────→ delivery hooks ────────→ Logs
-future Jobs ───→ async delivery ────────→ Messaging
+Users ─────────→ recipient/user resolution
+Files ─────────→ Messaging attachments
+Messaging ─────→ Logs delivery hooks
+Notifications ─→ Logs notification activity
+future Jobs ───→ asynchronous external delivery
 ```
-
-Messaging does **not** become an HTTP client, webhook framework, event bus, queue worker or scheduler merely because those systems may integrate with it.
 
 ## Input and Files
 
@@ -184,7 +196,8 @@ prefab-php/
 │   ├── routes/
 │   ├── input/
 │   ├── files/
-│   └── messaging/
+│   ├── messaging/
+│   └── notifications/
 ├── examples/
 ├── docs/
 └── tools/
@@ -202,11 +215,12 @@ Distribution mirrors are created only when an individual module is ready for Pac
 6. **Transparent behavior** — automatic decisions should be diagnosable.
 7. **Project data remains project-owned** — existing schemas can be mapped rather than replaced.
 8. **Provider/framework neutral** — adapters integrate external implementations without defining the core API.
-9. **No unnecessary package fragmentation** — email is a Messaging capability; validation is an Input capability.
+9. **No unnecessary package fragmentation** — email belongs to Messaging; validation belongs to Input.
 10. **No framework creep** — a module should remain useful as a small Composer library.
+11. **Internal and external communication stay distinct** — Notifications handles in-app notices; Messaging handles outbound delivery.
 
 ## Documentation map
 
-**[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md) · [Files](packages/files/README.md) · [Messaging](packages/messaging/README.md)**
+**[Database](packages/database/README.md) · [Users](packages/users/README.md) · [Auth](packages/auth/README.md) · [Permissions](packages/permissions/README.md) · [Logs](packages/logs/README.md) · [Routes](packages/routes/README.md) · [Input](packages/input/README.md) · [Files](packages/files/README.md) · [Messaging](packages/messaging/README.md) · [Notifications](packages/notifications/README.md)**
 
 Choose the smallest module that solves the problem in front of you. Add another block only when the application actually needs it.
