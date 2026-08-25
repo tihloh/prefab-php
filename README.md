@@ -36,17 +36,202 @@ A normal collection of packages gives you more separate APIs as you install more
 
 > **Adding a compatible module can improve modules you already installed.**
 
-Example:
+The easiest way to see the difference is in ordinary application code.
+
+## Without Prefab vs. with Prefab
+
+Imagine a small PHP application that needs **Users + Authentication + Activity Logging**.
+
+### Without Prefab
+
+Plain PHP can absolutely do this, but your application has to own and connect all of the plumbing:
+
+```php
+session_start();
+
+// Find the user.
+$stmt = $pdo->prepare(
+    'SELECT * FROM users WHERE email = ? LIMIT 1'
+);
+$stmt->execute([$_POST['email']]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$user || !password_verify($_POST['password'], $user['password'])) {
+    throw new RuntimeException('Invalid credentials.');
+}
+
+// Establish the authenticated session.
+session_regenerate_id(true);
+$_SESSION['user_id'] = $user['id'];
+
+// Record the login.
+$stmt = $pdo->prepare(
+    'INSERT INTO logs (user_id, action, created_at)
+     VALUES (?, ?, NOW())'
+);
+$stmt->execute([$user['id'], 'auth.login']);
+```
+
+This works. The problem is not PHP—it is the repeated infrastructure code your application now owns:
+
+```text
+Find the user
+      ↓
+Verify the password
+      ↓
+Manage the session safely
+      ↓
+Remember the current user
+      ↓
+Create the audit entry
+      ↓
+Handle failures consistently
+```
+
+As the project grows, you normally start extracting this plumbing into your own user, authentication, session and logging classes.
+
+### With Prefab
+
+Install only the blocks the application needs:
+
+```bash
+composer require tihloh/prefab-users
+composer require tihloh/prefab-auth
+composer require tihloh/prefab-logs
+```
+
+Then the application can focus on the operation it actually wants to perform:
+
+```php
+$result = $auth->login([
+    'email'    => $_POST['email'],
+    'password' => $_POST['password'],
+]);
+
+if (!$result->ok()) {
+    // Show the application's login error.
+}
+```
+
+The idea is not merely "fewer lines of code." The installed blocks have clear responsibilities and can integrate:
+
+```text
+$auth->login(...)
+       │
+       ├── Users
+       │    └── resolve the application user
+       │
+       ├── Auth
+       │    ├── verify credentials
+       │    └── establish authentication
+       │
+       └── Logs
+            └── audit the authentication event
+```
+
+Your application still decides what happens next:
+
+```php
+$result = $auth->login($credentials);
+
+if ($result->ok()) {
+    // YOUR application decides what to do next.
+}
+```
+
+> **You decide what the application does. Prefab handles reusable plumbing.**
+
+### The modules remain independent
+
+Don't need logging yet? Don't install it.
+
+```bash
+composer require tihloh/prefab-users
+composer require tihloh/prefab-auth
+```
+
+Authentication still has a useful combination:
+
+```text
+Users + Auth
+     ↓
+User authentication
+```
+
+Later, add Logs:
+
+```bash
+composer require tihloh/prefab-logs
+```
+
+The goal is that compatible infrastructure gains integration without forcing you to redesign the application:
+
+```text
+Users + Auth + Logs
+         ↓
+Authentication
+         +
+Auditing
+```
+
+This is the meaning of ***Independent*** and ***Better Together***: each block remains useful on its own, while compatible blocks can provide more value when combined.
+
+> **Note:** Prefab is actively evolving. Documentation distinguishes established APIs from integration direction; an example should not be treated as a guarantee that every illustrated integration is available in every released package version.
+
+## Automatic plumbing vs. explicit business decisions
+
+Prefab does **not** turn every installed module into automatic behavior.
+
+Authentication logging is infrastructure: a successful login is naturally an authentication event and can be audited by an integrated Logs module.
+
+Sending an email after changing a user is different. That is a **business decision**, so the application should ask for it explicitly.
+
+```php
+$users->update($id, $data);
+```
+
+Installing Messaging should not silently turn that into an email.
+
+When the application wants communication, a compatible Fluent Extension can express it directly:
+
+```php
+$users->update($id, $data)
+      ->email();
+```
+
+Add Notifications and the same operation can become:
+
+```php
+$users->update($id, $data)
+      ->notify()
+      ->email();
+```
+
+This gives Prefab a simple rule:
+
+```text
+Automatic infrastructure integration
+              ↓
+          Auto-Wiring
+
+Explicit optional capability
+              ↓
+       Fluent Extensions
+```
+
+Short application code does **not** mean hidden business policy.
+
+## The Prefab growth idea
 
 ```text
 Users
   └─ user management works
 
 Users + Auth
-  └─ Auth can automatically discover Users
+  └─ authentication can use the Users capability
 
 Users + Auth + Logs
-  └─ authentication/user infrastructure can be audited
+  └─ authentication infrastructure can gain auditing
 
 Users + Notifications
   └─ compatible operations can gain ->notify()
@@ -54,8 +239,6 @@ Users + Notifications
 Users + Notifications + Messaging
   └─ compatible operations can gain ->notify()->email()
 ```
-
-This is why Prefab packages are ***Independent*** but ***Better Together***.
 
 ## The three integration ideas
 
