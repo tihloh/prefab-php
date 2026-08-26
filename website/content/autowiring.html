@@ -1,0 +1,137 @@
+<div class="autowire-details">
+  <h3>What actually happens when compatible modules exist</h3>
+  <p>Prefab managers register themselves with <code>PrefabRuntime</code>. During configuration passes, each manager publishes capabilities it can provide and asks the runtime for compatible capabilities it is missing. If a usable resource is discovered, the consuming module configures itself from it. You do not need to manually inject the same resource again.</p>
+
+  <pre><code>new DatabaseManager(...);
+new UserManager();
+new AuthManager();
+new LogManager();
+
+// Compatible modules register themselves.
+// Prefab re-runs configuration as modules appear.
+// Missing resources are discovered and connected.</code></pre>
+
+  <div class="callout"><b>Important:</b> Auto-discovery fills missing infrastructure only. If you explicitly provide a provider, repository, database, session, map or other supported configuration, your explicit choice wins.</div>
+
+  <h3>Example: Auth discovers Users automatically</h3>
+  <p>Auth needs a user provider. Users publishes a <code>user_provider</code> capability when it has a usable provider. If Auth was not given its own provider, it checks the runtime for that capability. When the provider came from Prefab Users, Auth automatically wraps Users with its compatibility adapter.</p>
+
+  <pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+use Tihloh\Prefab\Auth\Services\AuthManager;
+
+$users = new UserManager([
+    'database' => $pdo,
+    'map' => $map,
+]);
+
+// No $userProvider is manually passed here.
+$auth = new AuthManager();
+
+$result = $auth->attempt($email, $password);</code></pre>
+
+  <pre><code>Users
+  │
+  ├─ resolves its provider
+  └─ publishes: user_provider
+                 │
+                 ▼
+               Auth
+                 │
+                 ├─ no explicit provider?
+                 ├─ discovers user_provider
+                 ├─ recognizes prefab-users
+                 └─ auto-configures PrefabUsersAuthProvider</code></pre>
+
+  <p>Auth also creates its normal <code>NativeSessionStore</code> automatically when no custom session store was supplied. So a compatible Users module plus Auth can require much less wiring than constructing every dependency manually.</p>
+
+  <h3>Example: Database can configure Users automatically</h3>
+  <p>Users can work with a custom provider or plain PDO, but when Prefab Database is already registered, Users can discover the shared <code>database</code> capability. If no custom user provider was supplied, Users can build its PDO-backed provider from the discovered database and its configured/default mapping.</p>
+
+  <pre><code>$database = new DatabaseManager([
+    'connections' => [
+        'main' => [
+            'driver' => 'mysql',
+            'host' => '127.0.0.1',
+            'database' => 'app',
+            'username' => 'app',
+            'password' => 'secret',
+        ],
+    ],
+]);
+
+// No PDO object has to be manually passed to Users.
+$users = new UserManager([
+    'map' => $map,
+]);</code></pre>
+
+  <pre><code>DatabaseManager
+      │
+      └─ publishes database capability
+                    │
+                    ▼
+                 Users
+                    │
+                    ├─ discovers database
+                    ├─ applies configured/default UserMap
+                    └─ creates PdoUserProvider</code></pre>
+
+  <h3>Example: Logs becomes a logger for other modules</h3>
+  <p>When Logs has a repository or can build one from an available database, it publishes the <code>logger</code> capability. Auth and Users look for that capability during configuration. If it appears later, Prefab's configuration pass runs again and the modules can pick it up.</p>
+
+  <pre><code>$database = new DatabaseManager(...);
+$users    = new UserManager(...);
+$auth     = new AuthManager();
+$logs     = new LogManager();</code></pre>
+
+  <pre><code>Logs
+ └─ publishes logger
+        │
+        ├────────────→ Auth
+        │              └─ auto logger
+        │
+        └────────────→ Users
+                       └─ auto logger</code></pre>
+
+  <h3>Auth also publishes something useful</h3>
+  <p>After configuring itself, Auth publishes an <code>actor_provider</code> capability. Other compatible modules can use it to identify the current authenticated actor without importing or requiring Auth directly.</p>
+
+  <pre><code>Auth
+ └─ publishes actor_provider
+            │
+            ├────────→ Users / Logs
+            └────────→ Permissions-compatible integrations</code></pre>
+
+  <h3>Declaration order is intentionally flexible</h3>
+  <p>When a manager registers, Prefab re-runs the small configuration pass. That means a capability that was unavailable earlier can be discovered when its provider appears later.</p>
+
+  <pre><code>// This can still converge as modules register:
+$auth  = new AuthManager();
+$users = new UserManager(['database' => $pdo, 'map' => $map]);
+$logs  = new LogManager(['database' => $pdo]);</code></pre>
+
+  <p>For stricter application bootstraps, you can explicitly mark startup complete:</p>
+
+  <pre><code>PrefabRuntime::ready();</code></pre>
+
+  <p>Normal applications usually do not need to call <code>ready()</code>.</p>
+
+  <h3>How Prefab chooses a resource</h3>
+  <pre><code>1. Direct module configuration       ← strongest
+2. Module-specific PrefabConfig
+3. Common PrefabConfig
+4. Compatible discovered capability
+5. Sensible module default
+6. Clear error if unresolved</code></pre>
+
+  <p>This is why Auto-Wiring should feel convenient rather than magical: <b>Prefab discovers and configures what is missing, but it never overrides an explicit application decision.</b></p>
+
+  <h3>See what was discovered</h3>
+  <pre><code>print_r($auth->explain());
+print_r($users->explain());
+
+print_r(PrefabRuntime::inspect());</code></pre>
+
+  <p>For Auth, <code>explain()</code> can show whether its user provider came from direct configuration, Prefab configuration or the discovered <code>user_provider</code> capability, and whether a logger was discovered automatically.</p>
+
+  <div class="nextbox"><b>The mental model:</b> install/configure a block → it publishes what it can provide → other compatible blocks discover what they need → missing infrastructure is configured automatically → explicit application configuration still wins.</div>
+</div>
