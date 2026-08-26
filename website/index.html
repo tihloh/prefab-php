@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Learn Prefab PHP step by step, from first setup to advanced module integration.">
+  <title>Prefab PHP Tutorial</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="menu" id="menu" aria-label="Open navigation">☰</button>
+  <a class="brand" href="#comparison">PREFAB</a>
+  <span class="tagline">PHP building blocks. Your architecture.</span>
+  <nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-title">LEARN PREFAB</div>
+    <a href="#comparison" class="active">Without vs With</a>
+    <a href="#setup">Initial Setup</a>
+    <div class="side-title">BASICS</div>
+    <a href="#routes">1. Routes</a><a href="#input">2. Input</a><a href="#database">3. Database</a><a href="#users">4. Users</a>
+    <div class="side-title">BUILD AN APP</div>
+    <a href="#auth">5. Authentication</a><a href="#permissions">6. Permissions</a><a href="#files">7. Files</a><a href="#logs">8. Logs</a>
+    <div class="side-title">COMMUNICATION</div>
+    <a href="#notifications">9. Notifications</a><a href="#messaging">10. Messaging</a>
+    <div class="side-title">BETTER TOGETHER</div>
+    <a href="#integration">Module Integration</a><a href="#autowiring">Auto-Wiring</a><a href="#extensions">Fluent Extensions</a>
+    <div class="side-title">ADVANCED</div>
+    <a href="#configuration">Configuration</a><a href="#diagnostics">Diagnostics</a><a href="#errors">Error Handling</a><a href="#production">Production</a>
+  </aside>
+  <main>
+    <section class="hero" id="comparison">
+      <span class="eyebrow">START HERE</span>
+      <h1>Learn Prefab by building with it.</h1>
+      <p class="lead">Start with ordinary PHP, see the plumbing you normally write yourself, then replace it step by step with small independent Prefab blocks.</p>
+      <div class="principles"><b>Modular</b><b>Reusable</b><b>Independent</b><b>Adaptive</b><strong>Better Together</strong></div>
+    </section>
+
+    <section>
+      <h2>Without Prefab vs. With Prefab</h2>
+      <p>Imagine a login that needs <b>Users + Authentication + Activity Logging</b>.</p>
+      <div class="compare">
+        <article><h3>Without Prefab</h3><pre><code>session_start();
+
+$stmt = $pdo->prepare(
+  'SELECT * FROM users WHERE email = ? LIMIT 1'
+);
+$stmt->execute([$_POST['email']]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$user || !password_verify(
+    $_POST['password'], $user['password'])) {
+    throw new RuntimeException('Invalid credentials.');
+}
+
+session_regenerate_id(true);
+$_SESSION['user_id'] = $user['id'];
+
+$stmt = $pdo->prepare(
+  'INSERT INTO logs (user_id, action, created_at)
+   VALUES (?, ?, NOW())'
+);
+$stmt->execute([$user['id'], 'auth.login']);</code></pre></article>
+        <article class="prefab"><h3>With Prefab</h3><pre><code>$result = $auth->login([
+    'email'    => $_POST['email'],
+    'password' => $_POST['password'],
+]);
+
+if (!$result->ok()) {
+    // Show your application's error.
+}</code></pre><div class="flow"><b>Users</b><span>→</span><b>Auth</b><span>→</span><b>Logs</b></div><p>Prefab handles reusable infrastructure. Your application still decides what happens next.</p></article>
+      </div>
+      <blockquote>You decide what the application does. <b>Prefab handles reusable plumbing.</b></blockquote>
+    </section>
+
+    <section id="setup"><span class="eyebrow">INITIAL SETUP</span><h2>Start with only what you need</h2><p>Prefab has no required Core package. Install one block or combine compatible blocks.</p><pre><code>composer require tihloh/prefab-routes</code></pre><p>Composer provides autoloading as usual:</p><pre><code>require __DIR__ . '/vendor/autoload.php';</code></pre></section>
+
+    <section id="routes"><span class="eyebrow">BASIC · STEP 1</span><h2>Routes</h2><p>Start with request routing. A small application can use Routes by itself.</p><pre><code>$routes = new RouteManager();
+$routes->get('/', fn () => 'Hello Prefab');
+$routes->get('/users/{id}', 'UserController@show');
+$routes->dispatch();</code></pre></section>
+
+    <section id="input"><span class="eyebrow">BASIC · STEP 2</span><h2>Input</h2><p>Add structured input processing and validation when your application begins accepting data.</p><pre><code>$input->validate([
+    'email' => 'required|email',
+    'age'   => 'required|integer|min:18',
+]);</code></pre></section>
+
+    <section id="database"><span class="eyebrow">BASIC · STEP 3</span><h2>Database</h2><p>Use Prefab Database when you want lightweight database infrastructure, or keep your existing PDO connection.</p></section>
+    <section id="users"><span class="eyebrow">BASIC · STEP 4</span><h2>Users</h2><p>Map Prefab Users to your existing users, employees or accounts table instead of replacing your schema.</p><pre><code>$user = $users->find(25);
+$users->update(25, $data);</code></pre></section>
+    <section id="auth"><span class="eyebrow">BUILD AN APP · STEP 5</span><h2>Authentication</h2><p>Add Auth when the application needs login, logout and a current authenticated actor.</p><pre><code>$result = $auth->login($credentials);</code></pre></section>
+    <section id="permissions"><span class="eyebrow">BUILD AN APP · STEP 6</span><h2>Permissions</h2><p>Authentication answers who the user is. Permissions answers what that user may do.</p></section>
+    <section id="files"><span class="eyebrow">BUILD AN APP · STEP 7</span><h2>Files</h2><p>Add safe file storage and management without coupling the application to the rest of Prefab.</p></section>
+    <section id="logs"><span class="eyebrow">BUILD AN APP · STEP 8</span><h2>Logs</h2><p>Add audit and activity history. Compatible infrastructure such as authentication can expose meaningful events to Logs.</p></section>
+    <section id="notifications"><span class="eyebrow">COMMUNICATION · STEP 9</span><h2>Notifications</h2><p>Use Notifications for notices that live inside the application: bell items, inbox notices and read state.</p></section>
+    <section id="messaging"><span class="eyebrow">COMMUNICATION · STEP 10</span><h2>Messaging</h2><p>Use Messaging for communication leaving the application, such as email.</p></section>
+
+    <section id="integration"><span class="eyebrow">BETTER TOGETHER</span><h2>Modules improve each other</h2><pre><code>Users                 → user management
+Users + Auth          → authentication
+Users + Auth + Logs   → authentication + auditing</code></pre><p>Each block remains useful alone. Compatible blocks can provide more value together.</p></section>
+    <section id="autowiring"><h2>Auto-Wiring</h2><p>Prefab can connect compatible infrastructure when the relationship is natural. Explicit configuration always wins.</p><pre><code>Users ── user provider ──→ Auth
+Auth  ── current actor ──→ Permissions / Logs</code></pre></section>
+    <section id="extensions"><h2>Fluent Extensions</h2><p>Optional modules can add explicit capabilities without being hard-coded into the module they enhance.</p><pre><code>$users->update($id, $data)
+      ->notify()
+      ->email();</code></pre><p>Installing Messaging should not silently email every changed user. Business decisions remain explicit.</p></section>
+    <section id="configuration"><span class="eyebrow">ADVANCED</span><h2>Configuration</h2><p>Small systems configure modules directly. Larger systems can share configuration while retaining explicit overrides.</p></section>
+    <section id="diagnostics"><h2>Diagnostics</h2><pre><code>$auth->explain();
+$info = PrefabRuntime::inspect();</code></pre><p>Automatic behavior should be inspectable, not mysterious.</p></section>
+    <section id="errors"><h2>Error Handling</h2><p>Prefab libraries should return documented results or throw clear, catchable exceptions. They should not unexpectedly terminate the host application.</p></section>
+    <section id="production"><h2>Production</h2><p>Keep the same Composer workflow in production. Optimize Composer autoloading and PHP OPcache as appropriate for your server.</p></section>
+
+    <footer><b>Prefab PHP</b> · Start with one block. Add more when you need them. Keep your architecture.</footer>
+  </main>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
