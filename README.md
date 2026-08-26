@@ -15,7 +15,7 @@ composer require tihloh/prefab-routes
 
 Use one package by itself, or combine compatible packages and let Prefab handle useful integration plumbing.
 
-> **New to Prefab? Start here: [Getting Started](docs/getting-started.md)**
+> **New to Prefab? [Start the step-by-step Tutorial](https://tihloh.github.io/prefab-php/) · [Getting Started](docs/getting-started.md)**
 
 ## In one minute
 
@@ -477,11 +477,12 @@ Prefab libraries should not unexpectedly `die()` or `exit()` for ordinary librar
 
 If you are learning Prefab, follow this order:
 
-1. **[Getting Started](docs/getting-started.md)** — understand Prefab without runtime internals.
-2. **The module README you actually need** — use the package standalone first.
-3. **[Auto-Wiring](docs/auto-integration.md)** — understand automatic infrastructure integration.
-4. **[Fluent Extensions](docs/fluent-extensions.md)** — understand features such as `->notify()` and `->email()`.
-5. **[Packagist / release process](docs/packagist-release.md)** — maintainer/release information.
+1. **[Interactive Tutorial](https://tihloh.github.io/prefab-php/)** — learn progressively from Without vs With through advanced integration.
+2. **[Getting Started](docs/getting-started.md)** — understand Prefab without runtime internals.
+3. **The module README you actually need** — use the package standalone first.
+4. **[Auto-Wiring](docs/auto-integration.md)** — understand automatic infrastructure integration.
+5. **[Fluent Extensions](docs/fluent-extensions.md)** — understand features such as `->notify()` and `->email()`.
+6. **[Packagist / release process](docs/packagist-release.md)** — maintainer/release information.
 
 ## Integration rules
 
