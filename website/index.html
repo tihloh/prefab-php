@@ -22,20 +22,15 @@ $_SESSION['user_id'] = $user['id'];
 $log = $pdo->prepare(
     'INSERT INTO logs (event, user_id, created_at) VALUES (?, ?, NOW())'
 );
-$log->execute(['auth.login', $user['id']]);</code></pre><p>Your application manually connects user lookup, password verification, session handling and audit logging.</p></article><article class="prefab"><h3>With Prefab</h3><pre><code>// prefab-users + prefab-auth + prefab-logs
-$users = new UserManager([...]);
-$logs  = new LogManager([...]);
-
-$auth = new AuthManager();
-$auth->prefabConfigure();
+$log->execute(['auth.login', $user['id']]);</code></pre><p>Your application manually connects user lookup, password verification, session handling and audit logging.</p></article><article class="prefab"><h3>With Prefab</h3><pre><code>$auth = new AuthManager();
 
 $result = $auth->attempt($email, $password);
 
 if (!$result->success) {
     // Your app decides the response.
-}</code></pre><p><b>Users</b> provides the user provider. <b>Logs</b> provides the logger. <b>Auth</b> discovers both compatible capabilities, configures the missing plumbing, authenticates the user and can audit the authentication event.</p><pre><code>Users ── user_provider ──┐
+}</code></pre><p>With Prefab Users and Prefab Logs available, <b>Auth uses their compatible capabilities automatically</b>. The developer uses Auth; Prefab handles the integration.</p><pre><code>Users ── user_provider ──┐
                          ├──→ Auth
-Logs  ── logger ─────────┘</code></pre></article></div><blockquote>Modules stay independent. <b>Install compatible modules and Prefab makes them better together.</b></blockquote></section><section id="setup"><span class="eyebrow">STEP 1</span><h2>Create the project</h2><p><b>Goal:</b> create an empty Composer app we can grow.</p><pre><code>mkdir prefab-tutorial
+Logs  ── logger ─────────┘</code></pre></article></div><blockquote>Install it. Use it. <b>Compatible modules make it better automatically.</b></blockquote></section><section id="setup"><span class="eyebrow">STEP 1</span><h2>Create the project</h2><p><b>Goal:</b> create an empty Composer app we can grow.</p><pre><code>mkdir prefab-tutorial
 cd prefab-tutorial
 composer init
 mkdir public
@@ -50,53 +45,36 @@ $result=$routes->dispatch();
 if (is_string($result)) echo $result;</code></pre><p><b>Try:</b> open <code>http://127.0.0.1:8000/</code>.</p><div class="nextbox"><b>Expected:</b> <code>Hello Prefab!</code>. One Prefab block is already useful alone.</div></section><section id="database"><span class="eyebrow">STEP 3</span><h2>Connect a database</h2><p><b>Goal:</b> make a database resource available to later modules.</p><pre><code>composer require tihloh/prefab-database</code></pre><pre><code>$pdo = new PDO(
  'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
  'root','',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]
-);</code></pre><div class="callout"><b>Rule:</b> explicit resources win. Prefab discovery fills missing configuration when a compatible resource is available.</div></section><section id="users"><span class="eyebrow">STEP 4</span><h2>Add Users</h2><p><b>Goal:</b> manage users and publish a reusable <code>user_provider</code>.</p><pre><code>composer require tihloh/prefab-users</code></pre><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+);</code></pre><div class="callout"><b>Rule:</b> explicit resources win. Prefab discovery fills missing configuration when a compatible resource is available.</div></section><section id="users"><span class="eyebrow">STEP 4</span><h2>Add Users</h2><p><b>Goal:</b> manage users and make user lookup available to compatible modules.</p><pre><code>composer require tihloh/prefab-users</code></pre><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+
 $users = new UserManager([
-    'database'=>$pdo,
-    'table'=>'users',
-]);
-$users->prefabConfigure();</code></pre><pre><code>Users
-  └── publishes → user_provider</code></pre><div class="callout"><b>Schema note:</b> the current Users package expects the mapped table to exist. Self-schema creation is a feature we are adding for database-backed modules; the tutorial will only show it once the implementation exists.</div><div class="nextbox"><b>Remember this:</b> in Step 6 we will not manually pass Users to Auth.</div></section><section id="input"><span class="eyebrow">STEP 5</span><h2>Create a user safely</h2><p><b>Goal:</b> validate browser data before handing it to Users.</p><pre><code>composer require tihloh/prefab-input</code></pre><pre><code>use Tihloh\Prefab\Input\Input;
+    'database' => $pdo,
+    'table' => 'users',
+]);</code></pre><div class="callout"><b>Schema note:</b> the current Users package expects the mapped table to exist. Self-schema creation is a feature we are adding for database-backed modules; the tutorial will only show it once the implementation exists.</div><div class="nextbox"><b>That's enough here.</b> Compatible modules can use the user capability when they need it; you do not manually connect Users to every consumer.</div></section><section id="input"><span class="eyebrow">STEP 5</span><h2>Create a user safely</h2><p><b>Goal:</b> validate browser data before handing it to Users.</p><pre><code>composer require tihloh/prefab-input</code></pre><pre><code>use Tihloh\Prefab\Input\Input;
 $result=Input::from($_POST)->process([
  'name'=>'trim|required|string|max:100',
  'email'=>'trim|lowercase|required|email',
  'password'=>'required|string|min:8',
 ]);
 if ($result->fails()) { print_r($result->errors()); return; }
-$users->create($result->validated());</code></pre><p><b>Try:</b> submit an invalid email, then a valid one. Only declared validated fields proceed.</p></section><section id="auth"><span class="eyebrow">STEP 6 · PREFAB HIGHLIGHT</span><h2>Add login—and watch Prefab connect itself</h2><p><b>Goal:</b> authenticate without manually wiring Auth to Users.</p><pre><code>composer require tihloh/prefab-auth</code></pre><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+$users->create($result->validated());</code></pre><p><b>Try:</b> submit an invalid email, then a valid one. Only declared validated fields proceed.</p></section><section id="auth"><span class="eyebrow">STEP 6 · PREFAB HIGHLIGHT</span><h2>Add login</h2><p><b>Goal:</b> authenticate without manually wiring Auth to Users.</p><pre><code>composer require tihloh/prefab-auth</code></pre><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+
 $auth = new AuthManager();
-$auth->prefabConfigure();
-$result=$auth->attempt($email,$password);</code></pre><h3>What just happened?</h3><pre><code>Users already configured
-   └─ publishes user_provider
-              ↓
-Auth has no explicit provider
-   ├─ discovers user_provider
-   ├─ recognizes Prefab Users
-   ├─ creates compatibility adapter
-   └─ uses default NativeSessionStore</code></pre><p><b>Prove it:</b></p><pre><code>print_r($auth->explain());</code></pre><div class="nextbox"><b>This is the point:</b> compatible installed modules can discover available resources and auto-configure missing plumbing. Explicit configuration still wins.</div></section><section id="permissions"><span class="eyebrow">STEP 7</span><h2>Protect features</h2><p><b>Goal:</b> separate identity from authorization.</p><pre><code>composer require tihloh/prefab-permissions</code></pre><pre><code>Auth
-  └── publishes actor_provider
-                ↓
-            Permissions</code></pre><p>Auth answers who the actor is. Permissions answers what that actor may do.</p></section><section id="logs"><span class="eyebrow">STEP 8 · BETTER TOGETHER</span><h2>Add audit logs</h2><p><b>Goal:</b> let authentication events become auditable without controller-side INSERT statements.</p><pre><code>composer require tihloh/prefab-logs</code></pre><pre><code>Logs ── publishes logger ──┬─→ Auth
-                           └─→ Users</code></pre><p>Configure Logs with a database/repository, then configure Prefab modules. Auth can discover <code>logger</code> and log infrastructure events such as login, failed login and logout.</p><pre><code>print_r($auth->explain());</code></pre><div class="nextbox"><b>Growth without dependency:</b> Auth worked before Logs existed. Adding Logs improves compatible Auth behavior.</div></section><section id="files"><span class="eyebrow">STEP 9</span><h2>Upload files</h2><p><b>Goal:</b> validate with Input, store with Files.</p><pre><code>composer require tihloh/prefab-files</code></pre><pre><code>Input → validates upload → UploadedFile → Files → stores it</code></pre><p>Each block keeps one responsibility.</p></section><section id="notifications"><span class="eyebrow">STEP 10</span><h2>Add notifications</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><p>Use Notifications for notices inside the application. A user update should not automatically notify merely because the module is installed—that is a business decision.</p></section><section id="messaging"><span class="eyebrow">STEP 11</span><h2>Add email</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><p>Messaging owns outbound communication. Compatible Fluent Extensions are intended to make explicit actions concise:</p><pre><code>$users->update($id,$data)
+$result = $auth->attempt($email, $password);</code></pre><h3>What does Prefab handle?</h3><pre><code>Auth needs user lookup
+   ↓
+Prefab Users is available
+   ↓
+Auth uses its compatible user capability
+   ↓
+No manual provider wiring</code></pre><div class="nextbox"><b>Developer-facing rule:</b> if Prefab can safely discover and configure something itself, the normal tutorial does not ask you to do it.</div></section><section id="permissions"><span class="eyebrow">STEP 7</span><h2>Protect features</h2><p><b>Goal:</b> separate identity from authorization.</p><pre><code>composer require tihloh/prefab-permissions</code></pre><p>Auth answers who the actor is. Permissions answers what that actor may do. Compatible identity information is shared without making every controller rebuild it.</p></section><section id="logs"><span class="eyebrow">STEP 8 · BETTER TOGETHER</span><h2>Add audit logs</h2><p><b>Goal:</b> improve compatible modules with logging without adding audit INSERT statements around them.</p><pre><code>composer require tihloh/prefab-logs</code></pre><pre><code>Logs ── logger ──┬─→ Auth
+                  └─→ Users</code></pre><p>Once the logging capability is available, compatible modules can use it automatically for their infrastructure events.</p><div class="nextbox"><b>Growth without dependency:</b> Auth worked before Logs existed. Adding Logs gives compatible modules another capability.</div></section><section id="files"><span class="eyebrow">STEP 9</span><h2>Upload files</h2><p><b>Goal:</b> validate with Input, store with Files.</p><pre><code>composer require tihloh/prefab-files</code></pre><pre><code>Input → validates upload → UploadedFile → Files → stores it</code></pre><p>Each block keeps one responsibility.</p></section><section id="notifications"><span class="eyebrow">STEP 10</span><h2>Add notifications</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><p>Use Notifications for notices inside the application. A user update should not automatically notify merely because the module is installed—that is a business decision.</p></section><section id="messaging"><span class="eyebrow">STEP 11</span><h2>Add email</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><p>Messaging owns outbound communication. Compatible Fluent Extensions are intended to make explicit actions concise:</p><pre><code>$users->update($id,$data)
       ->notify()
-      ->email();</code></pre><p>Installed capability becomes available; your application chooses to use it.</p></section><section id="inspect"><span class="eyebrow">STEP 12</span><h2>Inspect what Prefab assembled</h2><pre><code>print_r($auth->explain());
-print_r($users->explain());
-$info=PrefabRuntime::inspect();
-print_r($info);</code></pre><pre><code>Direct module configuration
-        ↓
-Module PrefabConfig
-        ↓
-Common PrefabConfig
-        ↓
-Discovered compatible capability
-        ↓
-Sensible default
-        ↓
-Clear error</code></pre><p>Automatic integration should be convenient, not mysterious.</p></section><section id="production"><span class="eyebrow">STEP 13</span><h2>Production</h2><pre><code>composer install --no-dev --optimize-autoloader</code></pre><p>Use OPcache, externalize secrets, disable public display-errors and log exceptions server-side.</p><div class="nextbox"><b>Tutorial complete:</b> you started with one block and progressively gained capabilities without adopting a full framework architecture.</div></section><section id="autowiring"><span class="eyebrow">GUIDE</span><h2>Auto-Wiring</h2><p>Modules publish named capabilities. Compatible consumers resolve only resources they are missing.</p><pre><code>Database → Users → user_provider → Auth
+      ->email();</code></pre><p>Installed capability becomes available; your application chooses to use it.</p></section><section id="inspect"><span class="eyebrow">STEP 12</span><h2>Inspect when you need to debug</h2><p>Normal application code should stay simple. Inspection belongs here because developers only need it when diagnosing integration.</p><pre><code>print_r($auth->explain());
+print_r($users->explain());</code></pre><p>Inspection can show which compatible resources were resolved without requiring those internals in normal application code.</p></section><section id="production"><span class="eyebrow">STEP 13</span><h2>Production</h2><pre><code>composer install --no-dev --optimize-autoloader</code></pre><p>Use OPcache, externalize secrets, disable public display-errors and log exceptions server-side.</p><div class="nextbox"><b>Tutorial complete:</b> you started with one block and progressively gained capabilities without adopting a full framework architecture.</div></section><section id="autowiring"><span class="eyebrow">GUIDE</span><h2>Auto-Wiring</h2><p>Internally, modules publish named capabilities and compatible consumers resolve what they are missing. This is implementation knowledge for developers who need to understand or override the defaults—not ceremony required in normal usage.</p><pre><code>Database → Users → user_provider → Auth
 Logs → logger ───────────────────→ Auth / Users
-Auth → actor_provider ───────────→ compatible consumers</code></pre></section><section id="extensions"><span class="eyebrow">GUIDE</span><h2>Fluent Extensions</h2><p>Auto-Wiring handles infrastructure. Extensions expose optional explicit actions from installed compatible modules.</p><pre><code>$users->update($id,$data);           // Users
+Auth → actor_provider ───────────→ compatible consumers</code></pre></section><section id="extensions"><span class="eyebrow">GUIDE</span><h2>Fluent Extensions</h2><p>Auto-Wiring handles infrastructure. Extensions expose optional explicit business actions from installed compatible modules.</p><pre><code>$users->update($id,$data);           // Users
 $users->update($id,$data)->notify(); // + Notifications
-$users->update($id,$data)->email();  // + Messaging</code></pre></section><section id="existing"><span class="eyebrow">GUIDE</span><h2>Existing projects</h2><p>Keep your tables, PDO, controllers, views and structure. Map or provide what already exists; Prefab discovers only what is missing.</p></section><section id="errors"><span class="eyebrow">GUIDE</span><h2>Error handling</h2><p>Prefab should fail as a library, not take over the host application. Validation returns errors; unresolved resources and ambiguous integration produce clear catchable exceptions.</p><pre><code>try {
+$users->update($id,$data)->email();  // + Messaging</code></pre></section><section id="existing"><span class="eyebrow">GUIDE</span><h2>Existing projects</h2><p>Keep your tables, PDO, controllers, views and structure. Provide what already exists; Prefab handles compatible missing plumbing where it safely can.</p></section><section id="errors"><span class="eyebrow">GUIDE</span><h2>Error handling</h2><p>Prefab should fail as a library, not take over the host application. Validation returns errors; unresolved resources and ambiguous integration produce clear catchable exceptions.</p><pre><code>try {
  $result=$auth->attempt($email,$password);
 } catch (RuntimeException $e) {
  // Your app chooses HTML, JSON, redirect or logging.
