@@ -15,10 +15,10 @@ use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 /**
  * Standalone authentication service with optional Prefab auto-integration.
  *
- * Auth can use an explicit provider/session, PrefabConfig values, or a compatible
- * `user_provider` capability. When Prefab Users provides the discovered user
- * provider, Auth wraps the Users module with PrefabUsersAuthProvider so existing
- * Auth behavior remains unchanged.
+ * Auth can use an explicit provider/session, PrefabConfig values, or compatible
+ * Prefab capabilities discovered at runtime. Missing configuration is resolved
+ * lazily on first use so normal application code does not need to call
+ * prefabConfigure() manually.
  */
 final class AuthManager
 {
@@ -58,7 +58,7 @@ final class AuthManager
         PrefabRuntime::register('auth', $this);
     }
 
-    /** Resolve missing session/provider/logger references during startup. */
+    /** Resolve missing session/provider/logger references during startup/use. */
     public function prefabConfigure(): void
     {
         if (!$this->session) {
@@ -77,7 +77,7 @@ final class AuthManager
                     'auth',
                     'session_key',
                     $this->config,
-                    'prefab_auth_user',
+                    'auth:user_id',
                 );
 
                 $this->session = new NativeSessionStore((string) $sessionKey['value']);
@@ -145,11 +145,9 @@ final class AuthManager
             }
         }
 
-        /* Auth publishes the current-actor capability for Logs/Users/etc. */
         PrefabRuntime::provide('actor_provider', $this, 'prefab-auth');
     }
 
-    /** Explain how this module resolved its integrations. */
     public function explain(): array
     {
         return PrefabRuntime::explain('auth');
@@ -254,12 +252,13 @@ final class AuthManager
     private function provider(): AuthUserProviderInterface
     {
         if (!$this->users) {
-            throw new RuntimeException(
-                'Prefab Auth needs an auth provider or compatible user_provider capability.',
-            );
+            $this->prefabConfigure();
         }
 
-        return $this->users;
+        return $this->users
+            ?? throw new RuntimeException(
+                'Prefab Auth needs an auth provider or compatible user_provider capability.',
+            );
     }
 
     private function session(): AuthSessionStoreInterface
