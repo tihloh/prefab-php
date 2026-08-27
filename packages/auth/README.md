@@ -24,12 +24,13 @@ Prefab Auth handles authentication concerns such as:
 - password login and logout;
 - current authenticated user/session lookup;
 - custom user-provider integration;
+- automatic use of compatible Prefab Users and Prefab Logs capabilities when available;
+- isolated native PHP sessions by default;
 - social sign-in;
 - social account linking and unlinking;
 - OAuth state validation;
 - password-reset/social-account storage support;
-- structured authentication log payloads;
-- optional Bootstrap UI recipes.
+- structured authentication log payloads.
 
 It deliberately does not require the application to replace its existing user model or database design.
 
@@ -37,28 +38,16 @@ It deliberately does not require the application to replace its existing user mo
 
 # 1. Password authentication
 
-A minimal standalone setup uses a user provider and session store:
+If Prefab Users is already available, normal usage is intentionally small:
 
 ```php
 use Tihloh\Prefab\Auth\Services\AuthManager;
-use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 
-$auth = new AuthManager(
-    $userProvider,
-    new NativeSessionStore(),
-);
-```
+$auth = new AuthManager();
 
-Attempt a login:
-
-```php
 $result = $auth->attempt(
     $_POST['identifier'] ?? '',
     $_POST['password'] ?? '',
-    [
-        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
-        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
-    ],
 );
 
 if ($result->success) {
@@ -66,13 +55,19 @@ if ($result->success) {
 }
 ```
 
-Authentication returns a result instead of forcing HTML, JSON or redirects. The host application decides how the result is presented.
+Auth resolves missing compatible resources on first use. You do not normally call internal Prefab configuration methods yourself.
+
+For a completely standalone Auth installation, provide your own user provider explicitly:
+
+```php
+$auth = new AuthManager($userProvider);
+```
+
+A custom session implementation may also be supplied when needed.
 
 ---
 
 # 2. Current authenticated user
-
-The common current-user API is intentionally small:
 
 ```php
 $auth->check();
@@ -90,21 +85,76 @@ if ($auth->check()) {
 }
 ```
 
-Logout:
+---
 
-```php
-$auth->logout();
+# 3. Automatic session isolation
+
+Prefab Auth separates its native PHP session from other applications by default.
+
+For example:
+
+```text
+http://localhost/web1
+→ PREFAB_WEB1_SESSION
+→ cookie path /web1
+
+http://localhost/web2
+→ PREFAB_WEB2_SESSION
+→ cookie path /web2
 ```
 
-The session implementation remains replaceable through the Auth session abstraction.
+No session configuration is required for this protection.
+
+Prefab also namespaces its own session keys so that even when PHP was started before Auth, Prefab authentication values remain application-scoped.
+
+The default resolution is:
+
+```text
+Explicit session.namespace
+        ↓
+app.id
+        ↓
+Detected application URL path
+        ↓
+Detected host / stable fallback
+```
+
+An explicit shared namespace may be configured through the global Prefab configuration:
+
+```php
+PrefabConfig::set([
+    'session' => [
+        'namespace' => 'company_sso',
+    ],
+]);
+```
+
+Using the same explicit namespace gives applications the same Prefab session identity. By default an explicit namespace uses cookie path `/`; `path` and `domain` can be overridden for unusual deployments or cross-host sharing.
+
+Optional shared session settings include:
+
+```php
+PrefabConfig::set([
+    'session' => [
+        'namespace' => 'company_sso',
+        'name' => 'COMPANY_SESSION',
+        'path' => '/',
+        'domain' => '.example.com',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'lifetime' => 0,
+    ],
+]);
+```
+
+Session isolation is the default. Sharing must be intentional through common configuration.
 
 ---
 
-# 3. User-provider ownership
+# 4. User-provider ownership
 
 Prefab Auth authenticates users; it does not require its own `users` table.
-
-Conceptually:
 
 ```text
 Your users / employees / accounts
@@ -114,394 +164,182 @@ AuthUserProviderInterface
          Prefab Auth
 ```
 
-A compatible user object implements `AuthenticatableUserInterface`. This allows an existing project model, Prefab Users, Laravel model adapter, or another implementation to participate without making Auth dependent on it.
-
-This separation is important: authentication can change without forcing the project to redesign its business/user data.
+A compatible user object implements `AuthenticatableUserInterface`. Existing project models, Prefab Users, Laravel model adapters or another implementation can participate without making Auth dependent on one storage design.
 
 ---
 
-# 4. Authentication result and logging
+# 5. Cooperation with Prefab Users
 
-Authentication operations can produce structured log information:
+Prefab Users publishes a compatible user-provider capability. Auth can discover it automatically:
+
+```text
+Prefab Users
+     ↓
+user_provider
+     ↓
+Prefab Auth
+```
+
+Normal application code remains:
+
+```php
+$auth = new AuthManager();
+$result = $auth->attempt($email, $password);
+```
+
+Explicit configuration always remains available and wins over automatic discovery.
+
+---
+
+# 6. Cooperation with Prefab Logs
+
+When Prefab Logs is available, Auth can discover its logger capability and record infrastructure authentication events such as login, failed login and logout.
+
+```text
+Prefab Logs
+    ↓
+ logger
+    ↓
+Prefab Auth
+```
+
+The application does not need to insert audit rows around every authentication call.
+
+---
+
+# 7. Authentication result
+
+Authentication returns a result instead of forcing HTML, JSON, redirects or exceptions for normal credential failure:
 
 ```php
 $result = $auth->attempt($identifier, $password);
 
-if ($result->success) {
-    $logs?->record($result->log);
+if (!$result->success) {
+    // The host application decides how to respond.
 }
 ```
 
-This allows Prefab Logs or project-specific logging to store authentication activity without Auth requiring a logging package.
-
-Useful request context may be supplied during authentication:
+Useful request context can be supplied:
 
 ```php
-[
+$result = $auth->attempt($identifier, $password, [
     'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
     'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
-]
+]);
 ```
 
 ---
 
-# 5. Social authentication
+# 8. Social authentication
 
-Social authentication is optional. Applications that do not need OAuth/OIDC can ignore this section entirely.
-
-Providers are registered through `SocialProviderRegistry`:
+Social authentication is optional. Providers are registered through `SocialProviderRegistry` and may implement Prefab's provider contract directly or use a callback adapter.
 
 ```php
 $registry->register($googleProvider);
 $registry->register($githubProvider);
 ```
 
-A provider may implement the Prefab social-provider contract directly or be wrapped with `CallbackSocialProvider`. This allows integration with libraries such as Laravel Socialite, `league/oauth2-client`, or another OAuth/OIDC SDK without coupling Prefab Auth to that library.
-
-Create the social manager:
-
-```php
-$social = new SocialAuthManager(
-    $registry,
-    new PdoSocialAccountStore($pdo),
-    new NativeSessionSocialStateStore(),
-    $userProvider,
-    $socialUserResolver,
-    $auth,
-);
-```
+Native OAuth state storage uses the same isolated Prefab session scope as password authentication.
 
 ---
 
-# 6. Starting social sign-in
-
-Request the provider authorization URL:
+# 9. Starting social sign-in
 
 ```php
 $url = $social->authorizationUrl('google');
-
 header('Location: ' . $url);
 exit;
 ```
 
-Flow:
-
-```text
-Your application
-      ↓
-authorizationUrl('google')
-      ↓
-Google / provider
-      ↓
-user approves sign-in
-      ↓
-callback URL
-      ↓
-Prefab Auth callback()
-```
-
-OAuth state is validated as part of the social authentication flow.
-
 ---
 
-# 7. Handling the social callback
+# 10. Handling the social callback
 
 ```php
-$result = $social->callback(
-    'google',
-    $_GET,
-    [
-        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
-        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
-    ],
-);
-
-if ($result->success) {
-    // The user is authenticated.
-}
+$result = $social->callback('google', $_GET, [
+    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
+    'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+]);
 ```
 
-The host application remains responsible for choosing the HTTP response or redirect.
+OAuth state is validated as part of the flow.
 
 ---
 
-# 8. Resolving a new social user
+# 11. Permissions and Routes
 
-When the provider account has not been linked previously, `SocialUserResolverInterface` decides what happens.
-
-A project may choose to:
-
-- find an existing user by verified email;
-- create a new local user;
-- require registration or approval;
-- reject the sign-in.
-
-This keeps application-specific account policy outside the generic authentication engine.
-
----
-
-# 9. Social account management
-
-Inspect available providers:
-
-```php
-$social->providers();
-```
-
-Inspect accounts linked to a user:
-
-```php
-$social->accountsForUser($userId);
-```
-
-Unlink an account:
-
-```php
-$social->unlink($userId, 'google');
-```
-
-An application can therefore build its own "Connected Accounts" screen without Auth forcing a UI.
-
----
-
-# 10. Database independence
-
-Auth is not tied to Prefab Database. Storage implementations may use plain PDO, Prefab's database abstraction, or another compatible adapter where supported.
-
-Conceptually:
+Auth answers who the current user is. Permissions answers what that user may do. Routes may consume authentication/authorization capabilities through compatible integration.
 
 ```text
-Project/framework database
-          ↓
-compatible Auth storage/provider
-          ↓
-       Prefab Auth
-```
-
-This keeps Auth usable as an independent Composer package.
-
----
-
-# 11. Cooperation with Prefab Users
-
-Prefab Users can provide the user-provider capability used by Auth.
-
-A full Prefab application can therefore conceptually resolve:
-
-```text
-Prefab Users
-     ↓
-user provider
-     ↓
-Prefab Auth
-     ↓
-current user
-```
-
-Neither package needs to become a hard dependency of the other.
-
-Explicit configuration always remains available when automatic cooperation is not desired.
-
----
-
-# 12. Cooperation with Prefab Logs
-
-Authentication events can be represented as structured log payloads.
-
-```text
-login attempt
-     ↓
-Prefab Auth
-     ↓
-structured auth event
-     ↓
-Prefab Logs / custom logger
-```
-
-This allows technical audit history without coupling authentication to one logging implementation.
-
----
-
-# 13. Cooperation with Prefab Permissions
-
-Auth answers:
-
-> Who is the current user?
-
-Permissions answers:
-
-> Is that user allowed to perform this action?
-
-They remain separate responsibilities:
-
-```text
+Routes
+  ↓
 Auth
- ↓
-current user
- ↓
+  ↓
 Permissions
- ↓
-can('documents.approve')
-```
-
-Keeping authentication and authorization separate makes both modules easier to replace and reuse.
-
----
-
-# 14. Cooperation with Prefab Routes
-
-Routes can protect an endpoint through middleware or route integration metadata while Auth supplies the current-user capability.
-
-Conceptually:
-
-```text
-GET /admin
-    ↓
-Prefab Routes
-    ↓
-auth middleware
-    ↓
-Prefab Auth
-    ↓
+  ↓
 controller
 ```
 
-The modules remain individually installable.
+The modules remain independently installable.
 
 ---
 
-# 15. HTTP integration
+# 12. Error handling
 
-Prefab Auth deliberately does not force a router or response system.
-
-A login endpoint can be implemented with any router:
+Prefab Auth should fail as a library, not take over the host application. Missing required providers/resources produce clear, catchable exceptions. Invalid credentials return a normal authentication result.
 
 ```php
-$routes->post('/login', function () use ($auth) {
-    return $auth->attempt(
-        $_POST['email'] ?? '',
-        $_POST['password'] ?? '',
-    );
-});
-```
-
-The same AuthManager can therefore be used by plain PHP, Prefab Routes, Laravel adapters, APIs or other application architectures.
-
----
-
-# 16. UI recipes
-
-Prefab Auth contains optional Bootstrap examples under:
-
-```text
-examples/bootstrap/
-```
-
-These are recipes, not runtime dependencies.
-
-You may copy and customize them for login, social sign-in and related screens. Auth never automatically injects Bootstrap, HTML, CSS or JavaScript into the host application.
-
----
-
-# 17. Security responsibilities
-
-Prefab Auth handles authentication mechanics, but the host application still owns its overall security policy. Applications should use HTTPS, secure session/cookie settings, CSRF protection for state-changing browser requests, appropriate OAuth redirect URIs, secure secrets/configuration and suitable rate limiting around login/reset endpoints.
-
-Authentication should not be confused with authorization: successfully signing in does not automatically grant permission to every application action.
-
----
-
-# 18. Practical small application
-
-For a small project:
-
-```php
-$auth = new AuthManager(
-    $userProvider,
-    new NativeSessionStore(),
-);
-
-$result = $auth->attempt($email, $password);
-
-if ($result->success) {
-    echo 'Logged in';
+try {
+    $result = $auth->attempt($email, $password);
+} catch (RuntimeException $e) {
+    // Your application chooses HTML, JSON, redirect or logging.
 }
 ```
 
-Nothing related to social providers, permissions or logging is required.
-
 ---
 
-# 19. Practical larger application
+# 13. Diagnostics
 
-A larger application may combine independent capabilities:
+Automatic integration can be inspected when troubleshooting:
 
-```text
-Prefab Database
-      ↓
-Prefab Users
-      ↓
-Prefab Auth
-      ↓
-Prefab Permissions
-      ↓
-Prefab Routes
-      ↓
-application controller
-
-Prefab Logs observes activity where configured
+```php
+print_r($auth->explain());
 ```
 
-Each module remains independently configurable and replaceable.
+Normal application code does not need this.
 
 ---
 
-# 20. API quick reference
-
-Common AuthManager operations:
+# 14. API quick reference
 
 | API | Purpose |
 |---|---|
 | `attempt()` | Authenticate credentials |
+| `login()` | Authenticate an already-resolved compatible user |
 | `check()` | Determine whether a user is authenticated |
 | `id()` | Return the authenticated user's ID |
 | `user()` | Return the authenticated user |
 | `logout()` | End the current authenticated session |
-
-Common social operations:
-
-| API | Purpose |
-|---|---|
-| `authorizationUrl()` | Begin provider authentication |
-| `callback()` | Complete provider authentication |
-| `providers()` | List configured providers |
-| `accountsForUser()` | List a user's linked social accounts |
-| `unlink()` | Remove a social-account link |
+| `explain()` | Inspect resolved Prefab integrations |
 
 ---
 
-# 21. Design philosophy
-
-Prefab Auth separates authentication from user ownership, routing, authorization, logging and presentation.
+# 15. Design philosophy
 
 ```text
-Small application
-      ↓
-password login + session
+Auth alone
+  → explicit provider + isolated session
 
-Application grows
-      ↓
-custom provider + logging
++ Prefab Users
+  → user provider discovered automatically
 
-Application grows further
-      ↓
-social authentication
++ Prefab Logs
+  → authentication auditing available automatically
 
-Large modular application
-      ↓
-Users + Auth + Permissions + Routes + Logs
++ Permissions / Routes
+  → current actor can participate in access control
 ```
 
-The simple authentication API remains valid as the rest of the application grows.
+The simple authentication API remains the same as the application grows.
 
-That is the goal of Prefab Auth: **authentication that can stand alone, cooperate automatically when useful, and never require the application to become a specific framework.**
+That is the goal of Prefab Auth: **authentication that can stand alone, cooperate automatically when useful, isolate itself safely by default, and never require the application to become a specific framework.**
