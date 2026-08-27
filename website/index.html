@@ -1,14 +1,41 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Build your first Prefab PHP application step by step."><title>Prefab PHP Tutorial</title><link rel="stylesheet" href="assets/css/app.css"></head><body><header class="topbar"><button class="menu" id="menu" aria-label="Open navigation">☰</button><a class="brand" href="#start">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"><div class="side-title">TUTORIAL</div><a href="#start" class="active">Start Here</a><a href="#compare">Why Prefab?</a><a href="#setup">1. Create Project</a><a href="#route">2. First Route</a><a href="#database">3. Database</a><a href="#users">4. Users</a><a href="#input">5. User Form</a><a href="#auth">6. Login</a><a href="#permissions">7. Permissions</a><a href="#logs">8. Audit Logs</a><a href="#files">9. Files</a><a href="#notifications">10. Notifications</a><a href="#messaging">11. Email</a><a href="#inspect">12. Inspect</a><a href="#production">13. Production</a><div class="side-title">GUIDES</div><a href="#autowiring">Auto-Wiring</a><a href="#extensions">Fluent Extensions</a><a href="#existing">Existing Projects</a><a href="#errors">Error Handling</a><div class="side-title">REFERENCE</div><a href="https://github.com/tihloh/prefab-php#choose-a-module">Module Reference ↗</a></aside><main><section class="hero" id="start"><span class="eyebrow">HANDS-ON TUTORIAL</span><h1>Build your first Prefab application.</h1><p class="lead">Build one small user-management app. Every step changes something real, gives you something to run, and builds on the previous step.</p><div class="principles"><b>Modular</b><b>Reusable</b><b>Independent</b><b>Adaptive</b><strong>Better Together</strong></div><div class="nextbox"><b>By the end:</b> routing, database access, users, validation, login, permissions, audit logs, files, notifications and email—with compatible modules discovering and configuring each other.</div></section><section id="compare"><span class="eyebrow">BEFORE WE BUILD</span><h2>Why Prefab?</h2><div class="compare"><article><h3>Without Prefab</h3><pre><code>$stmt=$pdo->prepare('SELECT * FROM users WHERE email=?');
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Build your first Prefab PHP application step by step."><title>Prefab PHP Tutorial</title><link rel="stylesheet" href="assets/css/app.css"></head><body><header class="topbar"><button class="menu" id="menu" aria-label="Open navigation">☰</button><a class="brand" href="#start">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"><div class="side-title">TUTORIAL</div><a href="#start" class="active">Start Here</a><a href="#compare">Why Prefab?</a><a href="#setup">1. Create Project</a><a href="#route">2. First Route</a><a href="#database">3. Database</a><a href="#users">4. Users</a><a href="#input">5. User Form</a><a href="#auth">6. Login</a><a href="#permissions">7. Permissions</a><a href="#logs">8. Audit Logs</a><a href="#files">9. Files</a><a href="#notifications">10. Notifications</a><a href="#messaging">11. Email</a><a href="#inspect">12. Inspect</a><a href="#production">13. Production</a><div class="side-title">GUIDES</div><a href="#autowiring">Auto-Wiring</a><a href="#extensions">Fluent Extensions</a><a href="#existing">Existing Projects</a><a href="#errors">Error Handling</a><div class="side-title">REFERENCE</div><a href="https://github.com/tihloh/prefab-php#choose-a-module">Module Reference ↗</a></aside><main><section class="hero" id="start"><span class="eyebrow">HANDS-ON TUTORIAL</span><h1>Build your first Prefab application.</h1><p class="lead">Build one small user-management app. Every step changes something real, gives you something to run, and builds on the previous step.</p><div class="principles"><b>Modular</b><b>Reusable</b><b>Independent</b><b>Adaptive</b><strong>Better Together</strong></div><div class="nextbox"><b>By the end:</b> routing, database access, users, validation, login, permissions, audit logs, files, notifications and email—with compatible modules discovering and configuring each other.</div></section><section id="compare"><span class="eyebrow">BEFORE WE BUILD</span><h2>Why Prefab?</h2><p>Take one common feature: authenticate a user and keep an audit trail. That already crosses <b>three concerns</b>—Users, Auth and Logs.</p><div class="compare"><article><h3>Without Prefab</h3><pre><code>// USERS: find the account
+$stmt = $pdo->prepare(
+    'SELECT * FROM users WHERE email = ? LIMIT 1'
+);
 $stmt->execute([$email]);
-$user=$stmt->fetch();
-if (!$user || !password_verify($password,$user['password'])) {
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// AUTH: verify + create session
+if (!$user || !password_verify($password, $user['password'])) {
+    // LOGS: audit failed login
+    $log = $pdo->prepare(
+        'INSERT INTO logs (event, message, created_at) VALUES (?, ?, NOW())'
+    );
+    $log->execute(['auth.login_failed', $email]);
     throw new RuntimeException('Invalid credentials');
 }
-$_SESSION['user_id']=$user['id'];
-// then audit it...</code></pre></article><article class="prefab"><h3>With Prefab</h3><pre><code>$result = $auth->attempt($email, $password);
+
+session_regenerate_id(true);
+$_SESSION['user_id'] = $user['id'];
+
+// LOGS: audit successful login
+$log = $pdo->prepare(
+    'INSERT INTO logs (event, user_id, created_at) VALUES (?, ?, NOW())'
+);
+$log->execute(['auth.login', $user['id']]);</code></pre><p>Your application manually connects user lookup, password verification, session handling and audit logging.</p></article><article class="prefab"><h3>With Prefab</h3><pre><code>// prefab-users + prefab-auth + prefab-logs
+$users = new UserManager([...]);
+$logs  = new LogManager([...]);
+
+$auth = new AuthManager();
+$auth->prefabConfigure();
+
+$result = $auth->attempt($email, $password);
+
 if (!$result->success) {
     // Your app decides the response.
-}</code></pre><p>Users provides lookup. Auth authenticates. Logs can audit. Your application keeps the business decision.</p></article></div><blockquote>You decide what the application does. <b>Prefab handles reusable plumbing.</b></blockquote></section><section id="setup"><span class="eyebrow">STEP 1</span><h2>Create the project</h2><p><b>Goal:</b> create an empty Composer app we can grow.</p><pre><code>mkdir prefab-tutorial
+}</code></pre><p><b>Users</b> provides the user provider. <b>Logs</b> provides the logger. <b>Auth</b> discovers both compatible capabilities, configures the missing plumbing, authenticates the user and can audit the authentication event.</p><pre><code>Users ── user_provider ──┐
+                         ├──→ Auth
+Logs  ── logger ─────────┘</code></pre></article></div><blockquote>Modules stay independent. <b>Install compatible modules and Prefab makes them better together.</b></blockquote></section><section id="setup"><span class="eyebrow">STEP 1</span><h2>Create the project</h2><p><b>Goal:</b> create an empty Composer app we can grow.</p><pre><code>mkdir prefab-tutorial
 cd prefab-tutorial
 composer init
 mkdir public
