@@ -6,12 +6,26 @@ use Tihloh\Prefab\Auth\Contracts\AuthSessionStoreInterface;
 
 final class NativeSessionStore implements AuthSessionStoreInterface
 {
-    public function __construct(private string $key = 'prefab_auth_user_id')
+    private string $scopedKey;
+
+    public function __construct(private string $key = 'auth:user_id')
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+        SessionScope::start();
+        $this->scopedKey = SessionScope::key($this->key);
     }
 
-    public function put(int|string $userId): void { $_SESSION[$this->key] = $userId; }
-    public function userId(): int|string|null { return $_SESSION[$this->key] ?? null; }
-    public function forget(): void { unset($_SESSION[$this->key]); }
+    public function put(int|string $userId): void
+    {
+        $_SESSION[$this->scopedKey] = $userId;
+    }
+
+    public function userId(): int|string|null
+    {
+        return $_SESSION[$this->scopedKey] ?? null;
+    }
+
+    public function forget(): void
+    {
+        unset($_SESSION[$this->scopedKey]);
+    }
 }
