@@ -31,6 +31,46 @@ const i=pages.findIndex(p=>p[1]===current);const prev=i>0?pages[i-1]:null;const 
 function nav(){const n=document.createElement('nav');n.className='page-nav';if(prev)n.innerHTML+=`<a class="prev" href="${prev[1]}">← ${prev[2]}</a>`;else n.innerHTML+='<span></span>';if(next)n.innerHTML+=`<a class="next" href="${next[1]}">${next[2]} →</a>`;return n;}
 const article=document.querySelector('main article');if(article){article.prepend(nav());article.append(nav());}
 
+// Add a compact copy button to every tutorial code block.
+document.querySelectorAll('pre').forEach(pre=>{
+  if(pre.querySelector('.code-copy-btn')) return;
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='code-copy-btn';
+  button.setAttribute('aria-label','Copy code');
+  button.setAttribute('title','Copy');
+  button.textContent='Copy';
+  button.addEventListener('click',async()=>{
+    const code=pre.querySelector('code');
+    const text=code?code.textContent:pre.textContent;
+    try{
+      await navigator.clipboard.writeText(text);
+      button.textContent='Copied';
+      button.classList.add('copied');
+      setTimeout(()=>{
+        button.textContent='Copy';
+        button.classList.remove('copied');
+      },1200);
+    }catch{
+      const area=document.createElement('textarea');
+      area.value=text;
+      area.style.position='fixed';
+      area.style.opacity='0';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+      button.textContent='Copied';
+      button.classList.add('copied');
+      setTimeout(()=>{
+        button.textContent='Copy';
+        button.classList.remove('copied');
+      },1200);
+    }
+  });
+  pre.appendChild(button);
+});
+
 // Operating-system tabs. The student's choice is remembered across every tutorial page.
 const osKey='prefab-docs-os';
 let selectedOS=localStorage.getItem(osKey);
