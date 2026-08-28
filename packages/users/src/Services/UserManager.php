@@ -32,6 +32,7 @@ final class UserManager
     private ?object $events = null;
     private ?object $autoLogger = null;
     private ?object $actorProvider = null;
+    private ?object $groups = null;
 
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
@@ -148,6 +149,24 @@ final class UserManager
                     'driver' => $this->database->driver(),
                 ],
             );
+        }
+
+        $groupEntry = PrefabRuntime::resolveEntry('group_provider');
+        if ($groupEntry && $groupEntry['provider'] !== 'prefab-users') {
+            $candidate = $groupEntry['value'];
+            if (is_object($candidate) && method_exists($candidate, 'groupIdsForUser')) {
+                $this->groups = $candidate;
+                PrefabRuntime::recordResolution('users', 'group_provider', 'prefab-capability', ['provider' => $groupEntry['provider']]);
+            }
+        }
+
+        if (!$this->groups && $this->database) {
+            $this->groups = new GroupManager($this->database);
+            PrefabRuntime::recordResolution('users', 'group_provider', 'users-database', ['provider' => GroupManager::class]);
+        }
+
+        if ($this->groups) {
+            PrefabRuntime::provide('group_provider', $this->groups, 'prefab-users', priority: 10);
         }
 
         if (!$this->autoLogger) {
@@ -300,6 +319,7 @@ final class UserManager
         return match ($name) {
             'database' => $this->database,
             'user_provider' => $this->provider,
+            'group_provider' => $this->groups,
             default => null,
         };
     }
@@ -319,6 +339,17 @@ final class UserManager
     {
         $this->events = $events;
         return $this;
+    }
+
+    /** Simple group management; Permissions can enhance the same group provider. */
+    public function groups(): object
+    {
+        if (!$this->groups) {
+            $this->prefabConfigure();
+        }
+
+        return $this->groups
+            ?? throw new RuntimeException('Prefab Users groups need a database or compatible group_provider capability.');
     }
 
     public function find(int|string $id): ?PrefabUser
