@@ -26,12 +26,8 @@ $user = $users-&gt;find(1);
 &lt;h1&gt;User&lt;/h1&gt;
 &lt;p&gt;&lt;?= htmlspecialchars($user?-&gt;name ?? 'Not found') ?&gt;&lt;/p&gt;</code></pre><p>Run the project:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/users.php</code>.</p><div class="nextbox"><b>Checkpoint:</b> the browser displays <b>Alice</b>. Stop here until it works.</div><h2>4. List users</h2><p>Replace the single <code>$user = ...</code> line with:</p><pre><code>$list = $users-&gt;all();</code></pre><p>Then replace the current heading/paragraph at the bottom with:</p><pre><code>&lt;h1&gt;Users&lt;/h1&gt;
 &lt;?php foreach ($list as $user): ?&gt;
-    &lt;p&gt;
-        #&lt;?= $user-&gt;id ?&gt;
-        &lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;
-        — &lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;
-    &lt;/p&gt;
-&lt;?php endforeach; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Alice appears in the list.</div><h2>5. Add a create form</h2><p>Now make the page interactive. Add this <b>before</b> <code>$list = $users-&gt;all();</code>:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    &lt;p&gt;#&lt;?= $user-&gt;id ?&gt; &lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt; — &lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/p&gt;
+&lt;?php endforeach; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Alice appears in the list.</div><h2>5. Add a create form</h2><p>Add this <b>before</b> <code>$list = $users-&gt;all();</code>:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $users-&gt;create([
         'name' =&gt; trim($_POST['name'] ?? ''),
         'email' =&gt; trim($_POST['email'] ?? ''),
@@ -42,9 +38,8 @@ $user = $users-&gt;find(1);
     &lt;input name="name" placeholder="Name" required&gt;
     &lt;input name="email" type="email" placeholder="Email" required&gt;
     &lt;button&gt;Create&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>Create Bob from the browser.</p><div class="nextbox"><b>Checkpoint:</b> Bob appears below Alice without manually inserting SQL.</div><h2>6. Find by ID or email</h2><p>Once create/list works, try the lookup methods separately:</p><pre><code>$user = $users-&gt;find(1);
+&lt;/form&gt;</code></pre><p>Create Bob from the browser.</p><div class="nextbox"><b>Checkpoint:</b> Bob appears below Alice without manually inserting SQL.</div><h2>6. Find by ID or email</h2><pre><code>$user = $users-&gt;find(1);
 $byEmail = $users-&gt;findByEmail('alice@example.com');
-
 print_r($byEmail?-&gt;toArray());</code></pre><h2>7. Update a user</h2><p>Add a small update test before loading the list:</p><pre><code>if (isset($_POST['rename'])) {
     $users-&gt;update((int) $_POST['id'], [
         'name' =&gt; trim($_POST['name']),
@@ -53,22 +48,20 @@ print_r($byEmail?-&gt;toArray());</code></pre><h2>7. Update a user</h2><p>Add a 
     &lt;input type="hidden" name="id" value="&lt;?= $user-&gt;id ?&gt;"&gt;
     &lt;input name="name" value="&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;"&gt;
     &lt;button name="rename" value="1"&gt;Rename&lt;/button&gt;
-&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> rename Bob and refresh. The new name remains.</div><h2>8. Active/inactive users</h2><p>The table already has an <code>active</code> column. Update it like any mapped core field:</p><pre><code>$users-&gt;update($userId, ['active' =&gt; false]);</code></pre><p>Inspect it with:</p><pre><code>$user = $users-&gt;find($userId);
-var_dump($user?-&gt;active);</code></pre><h2>9. Delete — enable it intentionally</h2><p>Deletion is disabled by default. Change your map only when you are ready to test destructive operations:</p><pre><code>$map = new UserMap(
+&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> rename Bob and refresh. The new name remains.</div><h2>8. Active/inactive users</h2><pre><code>$users-&gt;update($userId, ['active' =&gt; false]);</code></pre><p>Inspect it with:</p><pre><code>$user = $users-&gt;find($userId);
+var_dump($user?-&gt;active);</code></pre><h2>9. Delete — enable it intentionally</h2><p>Deletion is disabled by default. Enable it only when you are ready:</p><pre><code>$map = new UserMap(
     table: 'users',
     allowDelete: true,
-);</code></pre><p>Then test:</p><pre><code>$users-&gt;delete($userId);</code></pre><div class="nextbox"><b>Checkpoint:</b> create a temporary user, delete it, and confirm it disappears.</div><h2>10. Build on it — custom project fields</h2><p>Now that basic CRUD is clear, add project-specific columns:</p><pre><code>ALTER TABLE users
-ADD office VARCHAR(100) NULL,
-ADD password_hash VARCHAR(255) NULL;</code></pre><p>Expand the map:</p><pre><code>$map = new UserMap(
+);</code></pre><p>Then:</p><pre><code>$users-&gt;delete($userId);</code></pre><div class="nextbox"><b>Checkpoint:</b> create a temporary user, delete it, and confirm it disappears.</div><h2>10. Build on it — custom project fields</h2><p>Add a field that actually belongs to the user profile:</p><pre><code>ALTER TABLE users
+ADD office VARCHAR(100) NULL;</code></pre><p>Expand the map:</p><pre><code>$map = new UserMap(
     table: 'users',
     attributes: [
         'office' =&gt; 'office',
-        'password_hash' =&gt; 'password_hash',
     ],
     allowDelete: true,
-);</code></pre><p>Prefab exposes those attributes on the user object:</p><pre><code>echo $user-&gt;office;
+);</code></pre><p>Access it through the user object:</p><pre><code>echo $user-&gt;office;
 echo $user-&gt;get('office');
-print_r($user-&gt;attributes());</code></pre><h2>11. Advanced — map an existing schema</h2><p>Your application does not need to rename its existing columns to use Prefab.</p><pre><code>$map = new UserMap(
+print_r($user-&gt;attributes());</code></pre><div class="callout"><b>Passwords do not belong here.</b> The Authentication module can keep password credentials in its own storage, so your user/profile table does not need a password column.</div><h2>11. Advanced — map an existing schema</h2><pre><code>$map = new UserMap(
     table: 'employees',
     id: 'employee_id',
     name: 'full_name',
@@ -88,4 +81,4 @@ print_r($user-&gt;attributes());</code></pre><h2>11. Advanced — map an existin
     allowCreate: false,
     allowUpdate: false,
     allowDelete: false,
-);</code></pre><h2>13. Advanced — diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><div class="callout"><b>Next:</b> Authentication will build on this page. Before moving on, make sure you can read, list and create users. Editing, deletion and custom mappings can be learned afterward without blocking the basic Auth lesson.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+);</code></pre><h2>13. Advanced — diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><div class="callout"><b>Next:</b> Authentication will use Alice's ID and email, but Auth will own her password separately.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
