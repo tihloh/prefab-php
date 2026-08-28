@@ -1,16 +1,128 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users & Groups</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users and simple Groups</h1><p class="lead">Prefab Users manages user records and simple group organization. Permissions remain optional.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>Create the manager</h2><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Create a real users table and browser page so you can test mapping, create, list, find, update, delete, custom attributes and diagnostics.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>Create the table</h2><p>Use the same <code>prefab_tutorial</code> database from the Database tutorial:</p><pre><code>CREATE TABLE users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    office VARCHAR(100) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);</code></pre><h2>Create <code>public/users.php</code></h2><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
 
-$users = new UserManager([
-    'database' =&gt; $pdo,
-    'table' =&gt; 'users',
-]);</code></pre><h2>Common user operations</h2><pre><code>$user = $users-&gt;find(1);
-$all  = $users-&gt;all();
+use Tihloh\Prefab\Users\Mapping\UserMap;
+use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
+use Tihloh\Prefab\Users\Services\UserManager;
 
-$result = $users-&gt;create([
-    'name' =&gt; 'Demo User',
-    'email' =&gt; 'demo@example.com',
-    'password' =&gt; password_hash('secret123', PASSWORD_DEFAULT),
-]);</code></pre><h2>Simple groups</h2><pre><code>$groups = $users-&gt;groups();
-$staff = $groups-&gt;create('Staff', 'Application staff');
-$groups-&gt;addUser($userId, $staff-&gt;id);
-$groups-&gt;syncUserGroups($userId, [1, 2]);</code></pre><p>A simple group contains an ID, name, optional description and membership. When Permissions is installed later, it can add authorization to these same logical groups.</p><div class="nextbox"><b>Checkpoint:</b> create a user and one group, then attach the user to the group.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root',
+    '',
+    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);
+
+$map = new UserMap(
+    table: 'users',
+    id: 'id',
+    name: 'name',
+    email: 'email',
+    active: 'active',
+    attributes: [
+        'password_hash' =&gt; 'password_hash',
+        'office' =&gt; 'office',
+    ],
+    allowCreate: true,
+    allowUpdate: true,
+    allowDelete: true,
+);
+
+$users = new UserManager(new PdoUserProvider($pdo, $map));
+$message = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? 'create';
+
+    if ($action === 'create') {
+        $user = $users-&gt;create([
+            'name' =&gt; trim($_POST['name'] ?? ''),
+            'email' =&gt; trim($_POST['email'] ?? ''),
+            'password_hash' =&gt; password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT),
+            'office' =&gt; trim($_POST['office'] ?? ''),
+            'active' =&gt; isset($_POST['active']),
+        ]);
+        $message = "Created user #{$user-&gt;id}";
+    }
+
+    if ($action === 'update') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $users-&gt;update($id, [
+            'name' =&gt; trim($_POST['name'] ?? ''),
+            'office' =&gt; trim($_POST['office'] ?? ''),
+            'active' =&gt; isset($_POST['active']),
+        ]);
+        $message = "Updated user #{$id}";
+    }
+
+    if ($action === 'delete') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $users-&gt;delete($id);
+        $message = "Deleted user #{$id}";
+    }
+}
+
+$list = $users-&gt;all();
+?&gt;
+&lt;!doctype html&gt;
+&lt;html&gt;&lt;body&gt;
+&lt;h1&gt;Prefab Users Test&lt;/h1&gt;
+&lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;
+
+&lt;h2&gt;Create user&lt;/h2&gt;
+&lt;form method="post"&gt;
+    &lt;input type="hidden" name="action" value="create"&gt;
+    &lt;p&gt;&lt;input name="name" placeholder="Name" required&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="email" type="email" placeholder="Email" required&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="password" type="password" placeholder="Password" required&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="office" placeholder="Office"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;label&gt;&lt;input type="checkbox" name="active" checked&gt; Active&lt;/label&gt;&lt;/p&gt;
+    &lt;button&gt;Create&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;h2&gt;Users&lt;/h2&gt;
+&lt;?php foreach ($list as $user): ?&gt;
+    &lt;form method="post" style="border:1px solid #ccc;padding:10px;margin:10px 0"&gt;
+        &lt;input type="hidden" name="id" value="&lt;?= $user-&gt;id ?&gt;"&gt;
+        &lt;p&gt;#&lt;?= $user-&gt;id ?&gt; — &lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/p&gt;
+        &lt;input name="name" value="&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;"&gt;
+        &lt;input name="office" value="&lt;?= htmlspecialchars($user-&gt;office ?? '') ?&gt;"&gt;
+        &lt;label&gt;&lt;input type="checkbox" name="active" &lt;?= $user-&gt;active ? 'checked' : '' ?&gt;&gt; Active&lt;/label&gt;
+        &lt;button name="action" value="update"&gt;Update&lt;/button&gt;
+        &lt;button name="action" value="delete" onclick="return confirm('Delete this user?')"&gt;Delete&lt;/button&gt;
+    &lt;/form&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/body&gt;&lt;/html&gt;</code></pre><h2>Run and test</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/users.php</code>. Create at least two users, edit one, deactivate one, then delete one.</p><h2>Find users in code</h2><pre><code>$user = $users-&gt;find(1);
+$byEmail = $users-&gt;findByEmail('demo@example.com');
+$all = $users-&gt;all();
+
+print_r($user?-&gt;toArray());</code></pre><h2>Custom project columns</h2><p>The tutorial maps <code>office</code> and <code>password_hash</code> as project-specific attributes. Access them through the resulting user object:</p><pre><code>echo $user-&gt;office;
+echo $user-&gt;get('office');
+print_r($user-&gt;attributes());</code></pre><h2>Read-only or restricted mappings</h2><pre><code>$map = new UserMap(
+    table: 'employees',
+    id: 'employee_id',
+    name: 'full_name',
+    email: 'email_address',
+    active: 'is_active',
+    allowCreate: false,
+    allowUpdate: false,
+    allowDelete: false,
+);</code></pre><h2>Existing schema mapping</h2><pre><code>$map = new UserMap(
+    table: 'employees',
+    id: 'employee_id',
+    name: 'full_name',
+    email: 'email_address',
+    active: 'is_active',
+    attributes: [
+        'office' =&gt; 'office_name',
+        'position' =&gt; 'position_title',
+        'employee_no' =&gt; 'employee_no',
+    ],
+);</code></pre><h2>Diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><div class="callout"><b>Groups note:</b> the previous tutorial showed a Groups API that is not part of the current documented Users API. It has been removed here rather than teaching an API that cannot be verified against the package.</div><div class="nextbox"><b>Checkpoint:</b> the browser page can create, list, update, activate/deactivate and delete real database users, and you can inspect mapped custom attributes.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
