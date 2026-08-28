@@ -1,14 +1,61 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Validate browser input before passing it to Users, database code, or business logic.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-input</code></pre><h2>Validate a registration form</h2><pre><code>use Tihloh\Prefab\Input\Input;
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Build a real browser form, submit invalid and valid data, and see exactly what Prefab Input accepts.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-input</code></pre><h2>Create <code>public/input.php</code></h2><p>This example is intentionally standalone. It does not require Database, Users, Routes, Auth, or another Prefab module.</p><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
 
-$result = Input::from($_POST)-&gt;process([
-    'name' =&gt; 'trim|required|string|max:100',
-    'email' =&gt; 'trim|lowercase|required|email',
-    'password' =&gt; 'required|string|min:8',
-]);
+use Tihloh\Prefab\Input\Input;
 
-if ($result-&gt;fails()) {
-    print_r($result-&gt;errors());
-    return;
+$errors = [];
+$valid = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $result = Input::from($_POST)-&gt;process([
+        'name' =&gt; 'trim|required|string|max:100',
+        'email' =&gt; 'trim|lowercase|required|email',
+        'age' =&gt; 'required|integer|min:18',
+    ]);
+
+    if ($result-&gt;fails()) {
+        $errors = $result-&gt;errors();
+    } else {
+        $valid = $result-&gt;validated();
+    }
 }
+?&gt;
+&lt;!doctype html&gt;
+&lt;html&gt;
+&lt;body&gt;
+    &lt;h1&gt;Prefab Input Test&lt;/h1&gt;
 
-$users-&gt;create($result-&gt;validated());</code></pre><h2>Why use validated data?</h2><p><code>validated()</code> returns only fields accepted by your rules. The application still decides whether errors become HTML, JSON, redirects, or API responses.</p><div class="nextbox"><b>Checkpoint:</b> submit an invalid email, then a valid one. Only the valid request should reach user creation.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+    &lt;form method="post"&gt;
+        &lt;p&gt;
+            &lt;label&gt;Name&lt;br&gt;
+                &lt;input name="name" value="&lt;?= htmlspecialchars($_POST['name'] ?? '') ?&gt;"&gt;
+            &lt;/label&gt;
+        &lt;/p&gt;
+        &lt;p&gt;
+            &lt;label&gt;Email&lt;br&gt;
+                &lt;input name="email" value="&lt;?= htmlspecialchars($_POST['email'] ?? '') ?&gt;"&gt;
+            &lt;/label&gt;
+        &lt;/p&gt;
+        &lt;p&gt;
+            &lt;label&gt;Age&lt;br&gt;
+                &lt;input name="age" value="&lt;?= htmlspecialchars($_POST['age'] ?? '') ?&gt;"&gt;
+            &lt;/label&gt;
+        &lt;/p&gt;
+        &lt;button type="submit"&gt;Validate&lt;/button&gt;
+    &lt;/form&gt;
+
+    &lt;?php if ($errors): ?&gt;
+        &lt;h2&gt;Validation errors&lt;/h2&gt;
+        &lt;pre&gt;&lt;?= htmlspecialchars(print_r($errors, true)) ?&gt;&lt;/pre&gt;
+    &lt;?php endif; ?&gt;
+
+    &lt;?php if ($valid !== null): ?&gt;
+        &lt;h2&gt;Validated data&lt;/h2&gt;
+        &lt;pre&gt;&lt;?= htmlspecialchars(print_r($valid, true)) ?&gt;&lt;/pre&gt;
+    &lt;?php endif; ?&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre><h2>Run it</h2><p>If your local server is not already running:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/input.php</code>.</p><h2>Test invalid input</h2><p>Try:</p><pre><code>Name:   Demo User
+Email:  not-an-email
+Age:    15</code></pre><p>You should see validation errors for <code>email</code> and <code>age</code>.</p><h2>Test valid input</h2><p>Now try:</p><pre><code>Name:   Demo User
+Email:  DEMO@EXAMPLE.COM
+Age:    25</code></pre><p>The validated result should contain a lowercased email and integer age. This demonstrates validation, transformation, type casting, and the validated-field whitelist in one browser test.</p><h2>Why use <code>validated()</code>?</h2><p><code>validated()</code> contains only fields declared by your schema that passed processing. After this boundary, you can safely pass the accepted data to your own database code, Users module, service layer, or business logic.</p><div class="nextbox"><b>Checkpoint:</b> invalid data displays errors; valid data displays a clean array containing only <code>name</code>, <code>email</code>, and <code>age</code>.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
