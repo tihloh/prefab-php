@@ -188,3 +188,8 @@ osGrids.forEach(grid=>{
 function applyOS(os){selectedOS=os;localStorage.setItem(osKey,os);document.documentElement.dataset.os=os;document.querySelectorAll('.os-tabs button').forEach(button=>{const active=button.dataset.osChoice===os;button.classList.toggle('active',active);button.setAttribute('aria-selected',active?'true':'false');});document.querySelectorAll('.os-grid > section').forEach(panel=>{panel.hidden=panel.dataset.os!==os;});}
 document.querySelectorAll('.os-tabs button').forEach(button=>button.addEventListener('click',()=>applyOS(button.dataset.osChoice)));
 if(osGrids.length) applyOS(selectedOS);
+
+// Module coexistence and automatic-integration reference.
+const interopScript=document.createElement('script');
+interopScript.src='assets/js/interoperability.js';
+document.body.appendChild(interopScript);
