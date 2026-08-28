@@ -1,10 +1,63 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Add reusable technical audit history without scattering manual <code>INSERT</code> statements around your application.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>Better together</h2><pre><code>Users ── user_provider ──┐
-                         ├──→ Auth
-Logs  ── logger ─────────┘
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Record real events from a browser form and immediately inspect recent, actor-specific and subject-specific audit records.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>Create <code>public/logs.php</code></h2><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
 
-Permissions ── authorization events ──→ Logs</code></pre><p>When Logs is available, compatible modules can publish infrastructure events such as login, logout, failed login, user changes and permission changes.</p><div class="callout"><b>Logs should not invent business events.</b> Installing it may enhance compatible infrastructure behavior, but your application still chooses business actions such as “document approved” or “invoice paid”.</div><h2>Typical direct use</h2><pre><code>$logs-&gt;record([
-    'action' =&gt; 'document.approved',
-    'subject_type' =&gt; 'document',
-    'subject_id' =&gt; $documentId,
-    'message' =&gt; 'Document was approved.',
-]);</code></pre><div class="nextbox"><b>Checkpoint:</b> perform a login or user change and confirm the event reaches the configured log store.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
+use Tihloh\Prefab\Logs\Services\LogManager;
+
+$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root', '', [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);
+
+$logs = new LogManager(new PdoLogRepository($pdo));
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $logs-&gt;record([
+        'action' =&gt; $_POST['action'] ?? 'document.updated',
+        'subject_type' =&gt; 'document',
+        'subject_id' =&gt; $_POST['subject_id'] ?? '1001',
+        'actor_id' =&gt; $_POST['actor_id'] ?? '1',
+        'message' =&gt; $_POST['message'] ?? 'Tutorial event',
+        'changes' =&gt; [
+            'status' =&gt; ['old' =&gt; 'pending', 'new' =&gt; 'approved'],
+        ],
+        'metadata' =&gt; ['source' =&gt; 'tutorial-form'],
+        'ip_address' =&gt; $_SERVER['REMOTE_ADDR'] ?? null,
+        'user_agent' =&gt; $_SERVER['HTTP_USER_AGENT'] ?? null,
+    ]);
+}
+
+$recent = $logs-&gt;recent(20);
+?&gt;
+&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;
+&lt;h1&gt;Prefab Logs Test&lt;/h1&gt;
+&lt;form method="post"&gt;
+    &lt;p&gt;&lt;input name="action" value="document.approved"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="actor_id" value="1" placeholder="Actor ID"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="subject_id" value="1001" placeholder="Subject ID"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="message" value="Document was approved." size="50"&gt;&lt;/p&gt;
+    &lt;button&gt;Record event&lt;/button&gt;
+&lt;/form&gt;
+&lt;h2&gt;Recent logs&lt;/h2&gt;
+&lt;pre&gt;&lt;?= htmlspecialchars(print_r($recent, true)) ?&gt;&lt;/pre&gt;
+&lt;/body&gt;&lt;/html&gt;</code></pre><p><code>PdoLogRepository</code> automatically creates the <code>prefab_logs</code> storage table for supported databases.</p><h2>Query examples</h2><pre><code>$logs-&gt;recent();
+$logs-&gt;recent(50);
+$logs-&gt;find(1);
+$logs-&gt;forSubject('document', 1001);
+$logs-&gt;forActor(1);</code></pre><h2>Structured changes and metadata</h2><pre><code>$logs-&gt;record([
+    'action' =&gt; 'user.updated',
+    'subject_type' =&gt; 'user',
+    'subject_id' =&gt; 25,
+    'actor_id' =&gt; 7,
+    'changes' =&gt; [
+        'office' =&gt; ['old' =&gt; 'Accounting', 'new' =&gt; 'Budget'],
+    ],
+    'metadata' =&gt; [
+        'source' =&gt; 'admin-ui',
+        'request_id' =&gt; 'abc123',
+    ],
+]);</code></pre><h2>Human-friendly view</h2><pre><code>$human = $logs-&gt;humanRecent(
+    50,
+    actorResolver: fn ($id) =&gt; "User #{$id}",
+    subjectResolver: fn ($type, $id) =&gt; "{$type} #{$id}",
+);</code></pre><h2>Diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><div class="nextbox"><b>Checkpoint:</b> submit several events, refresh, and verify they remain persisted and can be filtered by actor and subject.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
