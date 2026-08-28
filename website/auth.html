@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Authentication</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="auth.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 5</span><h1>Authentication</h1><p class="lead">Authentication answers one question: <b>who is signed in?</b></p><h2>Install</h2><pre><code>composer require tihloh/prefab-auth</code></pre><h2>Login</h2><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+
+$auth = new AuthManager();
+$result = $auth-&gt;attempt($email, $password);
+
+if (!$result-&gt;success) {
+    echo 'Invalid login';
+}</code></pre><p>If Prefab Users is installed and compatible, Auth can discover its user provider. Normal application code does not need to call internal configuration methods just to connect them.</p><h2>Current user</h2><pre><code>$auth-&gt;check();
+$auth-&gt;id();
+$auth-&gt;user();
+$auth-&gt;logout();</code></pre><h2>Session safety</h2><p>Prefab's native session handling isolates applications by default so apps such as <code>localhost/web1</code> and <code>localhost/web2</code> do not accidentally share authentication state. The dedicated Session Isolation reference explains the rules.</p><div class="nextbox"><b>Checkpoint:</b> test a failed login, a successful login, current-user lookup and logout.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
