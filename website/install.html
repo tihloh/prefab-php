@@ -1,9 +1,156 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Install PHP & Composer</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="install.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Getting Started</span><h1>Install PHP and Composer</h1><p class="lead">Choose the instructions for your operating system. Once installed, the rest of the tutorial uses the same PHP code on both platforms.</p><div class="os-grid"><section><span class="os-label">Windows</span><h2>PowerShell</h2><p>You may use PHP from XAMPP, Laragon, or a standalone PHP installation. Add its PHP directory to Windows <b>PATH</b>, open a new PowerShell window, then verify:</p><pre><code>php -v
-where.exe php</code></pre><p>Install Composer for Windows and let the installer use the same PHP executable. Then:</p><pre><code>composer --version
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Beginner installation guide for PHP and Composer on Windows and Ubuntu/Debian Linux before using Prefab PHP.">
+<title>Prefab PHP — Install PHP & Composer</title>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body data-page="install.html">
+<header class="topbar"><button class="menu" id="menu" aria-label="Open navigation">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header>
+<div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc">
+<span class="crumb">Getting Started</span>
+<h1>Install PHP and Composer</h1>
+<p class="lead">This page assumes you have never installed PHP or Composer before. Follow only the section for your operating system and do not continue until every verification step works.</p>
+<div class="callout"><b>What are we installing?</b><p><b>PHP</b> runs your PHP programs. <b>Composer</b> downloads PHP packages such as Prefab and creates the autoloader used by your project. Composer needs a working PHP installation, so PHP must be installed and verified first.</p></div>
+<h2>Choose your operating system</h2>
+<p>If you use Windows, follow <b>Windows</b>. If your server or computer uses Ubuntu or Debian Linux, follow <b>Linux</b>. Commands shown in one section should not be copied into the other operating system.</p>
+
+<h2>Windows — from a computer with no PHP</h2>
+<span class="os-label">Windows</span>
+<h3>Step 1 — Check whether PHP is already installed</h3>
+<p>Open the Start menu, type <b>PowerShell</b>, and open <b>Windows PowerShell</b> or <b>Terminal</b>. Type:</p>
+<pre><code>php -v</code></pre>
+<p>If you see a PHP version such as <code>PHP 8.1</code>, <code>PHP 8.2</code>, <code>PHP 8.3</code> or newer, PHP is already available. Prefab requires PHP 8.1 or newer. You may skip to Step 4.</p>
+<p>If PowerShell says that <code>php</code> is not recognized, PHP is either not installed or its folder is not in Windows PATH. Continue below.</p>
+
+<h3>Step 2 — Install PHP</h3>
+<p>For a beginner development computer, a PHP development stack such as <b>Laragon</b> or <b>XAMPP</b> is often easier because it can provide PHP and a local database together. A standalone PHP installation also works. Whichever method you choose, make sure the installed PHP version is <b>8.1 or newer</b>.</p>
+<div class="warning"><b>Do not install several PHP packages just to follow this tutorial.</b> Use one PHP installation and learn where its <code>php.exe</code> is located.</div>
+<p>Typical examples of PHP folders are:</p>
+<pre><code>C:\laragon\bin\php\php-8.x.x\
+C:\xampp\php\
+C:\php\</code></pre>
+<p>Your actual folder may be different. Open it in File Explorer and confirm that <code>php.exe</code> exists.</p>
+
+<h3>Step 3 — Add PHP to Windows PATH</h3>
+<p>PATH lets you type <code>php</code> from any folder instead of typing the full location of <code>php.exe</code>.</p>
+<ol>
+<li>Copy the folder containing <code>php.exe</code>. Copy the folder path, not <code>php.exe</code> itself.</li>
+<li>Open Start and search for <b>environment variables</b>.</li>
+<li>Open <b>Edit the system environment variables</b>.</li>
+<li>Click <b>Environment Variables</b>.</li>
+<li>Under your user variables, select <b>Path</b> and click <b>Edit</b>.</li>
+<li>Click <b>New</b> and paste the PHP folder.</li>
+<li>Click OK on the open dialogs.</li>
+<li><b>Close PowerShell and open a new PowerShell window.</b> Existing terminals do not automatically receive the changed PATH.</li>
+</ol>
+<p>Now verify:</p>
+<pre><code>php -v
+where.exe php</code></pre>
+<p><code>php -v</code> must show PHP 8.1 or newer. <code>where.exe php</code> shows which <code>php.exe</code> Windows is actually using.</p>
+<div class="nextbox"><b>Checkpoint:</b> Do not continue until <code>php -v</code> works from a newly opened PowerShell window.</div>
+
+<h3>Step 4 — Check the PHP extensions Prefab examples need</h3>
+<p>Run:</p>
+<pre><code>php -m | findstr /I "PDO pdo_mysql mbstring openssl"</code></pre>
+<p>For the MySQL/MariaDB examples in this tutorial, you should have <code>PDO</code> and <code>pdo_mysql</code>. <code>mbstring</code> and <code>openssl</code> are also commonly needed by PHP applications and Composer packages.</p>
+<p>If <code>pdo_mysql</code> is missing, find the configuration file PHP is using:</p>
+<pre><code>php --ini</code></pre>
+<p>Open the reported <code>php.ini</code>. Depending on the PHP distribution, ensure the PDO MySQL extension is enabled. After changing PHP configuration, close and reopen PowerShell and run the extension check again.</p>
+
+<h3>Step 5 — Install Composer on Windows</h3>
+<p>Download and run the official <b>Composer-Setup.exe</b> installer from Composer. During installation it may ask for the PHP executable. Select the same <code>php.exe</code> that worked in the previous steps.</p>
+<p>Finish the installer, then <b>close PowerShell and open it again</b>. Verify:</p>
+<pre><code>composer --version
+where.exe composer</code></pre>
+<p>You should see a Composer 2.x version. If <code>composer</code> is not recognized, reopen the terminal first. If it still fails, check that Composer was added to PATH by its installer.</p>
+
+<h3>Step 6 — Final Windows test</h3>
+<p>Create a temporary folder and confirm that PHP and Composer work outside their installation directories:</p>
+<pre><code>cd $HOME
+mkdir prefab-test
+cd prefab-test
+php -r "echo 'PHP works';"
+composer --version</code></pre>
+<p>If the terminal prints <code>PHP works</code> and a Composer version, your Windows command-line environment is ready.</p>
+
+<h2>Linux — Ubuntu / Debian from a computer with no PHP</h2>
+<span class="os-label">Linux</span>
+<h3>Step 1 — Open a terminal and check PHP</h3>
+<pre><code>php -v</code></pre>
+<p>If PHP 8.1 or newer is already installed, continue to the extension checks. If the command is not found, install PHP below.</p>
+
+<h3>Step 2 — Update the package list</h3>
+<pre><code>sudo apt update</code></pre>
+<p><code>sudo</code> runs the command with administrator privileges. Linux may ask for your account password. When typing the password, the terminal normally shows no characters; type it and press Enter.</p>
+
+<h3>Step 3 — Install PHP and common extensions</h3>
+<pre><code>sudo apt install php-cli php-mysql php-mbstring php-xml php-curl unzip curl</code></pre>
+<p>When <code>apt</code> asks whether to continue, type <code>Y</code> and press Enter. Then verify:</p>
+<pre><code>php -v
+which php
+php -m | grep -Ei 'PDO|pdo_mysql|mbstring|openssl'</code></pre>
+<p><code>php -v</code> must report PHP 8.1 or newer. <code>which php</code> normally reports a path such as <code>/usr/bin/php</code>.</p>
+<div class="nextbox"><b>Checkpoint:</b> Do not install Composer until <code>php -v</code> works and reports PHP 8.1 or newer.</div>
+
+<h3>Step 4 — Install Composer</h3>
+<p>Composer can be installed using its official installer. Run these commands one at a time:</p>
+<pre><code>cd ~
+php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+php composer-setup.php
+php -r "unlink('composer-setup.php');"
+sudo mv composer.phar /usr/local/bin/composer</code></pre>
+<p>Then verify:</p>
+<pre><code>composer --version
+which composer</code></pre>
+<p>You should see Composer 2.x and a location such as <code>/usr/local/bin/composer</code>.</p>
+<div class="warning"><b>Security note:</b> Composer publishes an installer-signature verification procedure on its official download page. For production or security-sensitive machines, follow the current official verification instructions before running the installer.</div>
+
+<h3>Step 5 — Final Linux test</h3>
+<pre><code>cd ~
+mkdir -p prefab-test
+cd prefab-test
+php -r "echo 'PHP works';"
+composer --version</code></pre>
+<p>If both commands work, the Linux command-line environment is ready.</p>
+
+<h2>Understand what the commands mean</h2>
+<p>A new student should know what was just installed:</p>
+<table><thead><tr><th>Command</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>php -v</code></td><td>Shows the PHP command-line version.</td></tr>
+<tr><td><code>php -m</code></td><td>Lists enabled PHP extensions.</td></tr>
+<tr><td><code>where.exe php</code></td><td>Windows: shows which PHP executable will run.</td></tr>
+<tr><td><code>which php</code></td><td>Linux: shows which PHP executable will run.</td></tr>
+<tr><td><code>composer --version</code></td><td>Checks that Composer is installed and accessible.</td></tr>
+<tr><td><code>PDO</code></td><td>PHP's common database access interface.</td></tr>
+<tr><td><code>pdo_mysql</code></td><td>PDO driver used to connect to MySQL/MariaDB.</td></tr>
+<tr><td><code>PATH</code></td><td>Folders the operating system searches when you type a command.</td></tr>
+</tbody></table>
+
+<h2>Common beginner problems</h2>
+<h3>“php is not recognized” on Windows</h3>
+<p>PHP's folder is not in PATH, the PATH points to the wrong folder, or the terminal was opened before PATH was changed. Run <code>where.exe php</code> after opening a new PowerShell window.</p>
+<h3>“composer is not recognized” on Windows</h3>
+<p>Close and reopen PowerShell after installing Composer. Then run <code>where.exe composer</code>.</p>
+<h3>Composer uses the wrong PHP version</h3>
+<p>Check <code>php -v</code> and the PHP path. Multiple PHP installations can cause confusion. The command-line PHP is the one that matters to Composer.</p>
+<h3><code>pdo_mysql</code> is missing</h3>
+<p>Windows users should check the active <code>php.ini</code> using <code>php --ini</code>. Ubuntu/Debian users can install the MySQL extension with <code>sudo apt install php-mysql</code>.</p>
+<h3>My browser can open PHP, but <code>php -v</code> fails</h3>
+<p>Your web server may know where PHP is while your terminal does not. This tutorial uses Composer and PHP's development server from the terminal, so command-line PHP must work too.</p>
+
+<h2>Before going to the next page</h2>
+<p>Run the commands for your operating system one final time.</p>
+<div class="os-grid"><section><span class="os-label">Windows</span><pre><code>php -v
+where.exe php
+composer --version
 where.exe composer
-php -m | findstr /I "PDO pdo_mysql"</code></pre></section><section><span class="os-label">Linux</span><h2>Ubuntu / Debian</h2><pre><code>sudo apt update
-sudo apt install php-cli php-mysql php-mbstring php-xml unzip curl
-php -v
-which php</code></pre><p>Install Composer using the official Composer installer or your distribution package, then verify:</p><pre><code>composer --version
+php -m | findstr /I "PDO pdo_mysql"</code></pre></section><section><span class="os-label">Linux</span><pre><code>php -v
+which php
+composer --version
 which composer
-php -m | grep -Ei 'PDO|pdo_mysql'</code></pre></section></div><div class="warning"><b>CLI PHP matters.</b> Apache/Nginx can use a different PHP installation. Composer and <code>php -S</code> use the PHP shown by your terminal.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+php -m | grep -Ei 'PDO|pdo_mysql'</code></pre></section></div>
+<div class="nextbox"><b>Ready to continue when:</b> PHP is 8.1+, Composer reports a version, PHP and Composer have known executable locations, and PDO/pdo_mysql are enabled. The next page explains which Prefab packages can be installed before you create the tutorial project.</div>
+</article></main></div><script src="assets/js/app.js"></script></body></html>

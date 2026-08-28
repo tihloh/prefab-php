@@ -5,7 +5,7 @@ mkdir public
 mkdir storage</code></pre></section><section><span class="os-label">Linux</span><h2>Bash</h2><pre><code>mkdir prefab-tutorial
 cd prefab-tutorial
 composer init
-mkdir -p public storage</code></pre></section></div><h2>Install the first module</h2><pre><code>composer require tihloh/prefab-routes</code></pre><p>If no stable package is available yet, use the development form described on the previous page.</p><h2>Create <code>public/index.php</code></h2><pre><code>&lt;?php
+mkdir -p public storage</code></pre></section></div><h2>Install the first module</h2><p>Prefab modules are installed with Composer just like other PHP packages. For this tutorial, install Routes:</p><pre><code>composer require tihloh/prefab-routes</code></pre><p>Composer downloads the package and its dependencies into <code>vendor/</code> and updates your project's <code>composer.json</code> and <code>composer.lock</code>. You do not need to add <code>:dev-main</code> or change Composer's minimum-stability.</p><div class="nextbox"><b>Checkpoint:</b> the command should finish successfully and <code>vendor/</code> should exist. If Composer reports an error, stop here and fix the installation instead of continuing with a partially configured project.</div><h2>Create <code>public/index.php</code></h2><pre><code>&lt;?php
 
 declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
