@@ -1,0 +1,183 @@
+name: Materialize Tutorial Interoperability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/materialize-interoperability.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write interoperability sections into tutorial HTML
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          sections = {
+          'routes.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Routes stays independent, but a route can carry neutral metadata that Auth, Permissions, Logs, or middleware can interpret. This keeps routing reusable without forcing those modules to be installed.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Auth</code></td><td><strong>Compatible hook</strong></td><td><code>->auth()</code></td><td>Marks the route as requiring authentication. Middleware or an integration layer reads the metadata and checks Auth.</td></tr>
+<tr><td><code>Permissions</code></td><td><strong>Compatible hook</strong></td><td><code>->permission('documents.view')</code></td><td>Attaches a permission key that permission middleware can enforce with <code>PermissionManager::can()</code>.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Compatible hook</strong></td><td><code>->log('documents.view')</code></td><td>Attaches an audit action that logging middleware can record around the route handler.</td></tr>
+<tr><td><code>Auth + Permissions + Logs</code></td><td><strong>Composable</strong></td><td>middleware pipeline</td><td>A request can authenticate the user, check a permission, run the controller, and then record the activity.</td></tr>
+</tbody></table>
+<div class="callout"><b>Important:</b> Routes does not silently enforce Auth or Permissions. The helpers attach metadata; application middleware decides how to enforce it.</div>
+</section>''',
+          'database.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Database is shared infrastructure. Once configured, it publishes a database capability that compatible modules can discover and reuse instead of opening their own separate PDO connections.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Users</code></td><td><strong>Automatic</strong></td><td>shared database capability</td><td>Users can build its PDO-backed provider from the configured database automatically.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Automatic when needed</strong></td><td>shared database / PDO</td><td>Auth can store password credentials, PINs, and login tokens in its own tables while reusing the same connection.</td></tr>
+<tr><td><code>Permissions</code></td><td><strong>Automatic</strong></td><td>shared database capability</td><td>Permissions can create and use its permission store without another database setup.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td>shared database capability</td><td>Logs can create and use its audit-log repository on the shared connection.</td></tr>
+<tr><td><code>Named connections</code></td><td><strong>Automatic capability</strong></td><td><code>database.connection.NAME</code></td><td>Modules that support a connection name can target a published named connection.</td></tr>
+</tbody></table>
+<div class="callout"><b>Why this matters:</b> A larger Prefab project usually configures Database once. Individual modules may still receive an explicit PDO or store when isolation is required.</div>
+</section>''',
+          'users.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Users owns identity and profile data. It publishes its user provider so other modules can reuse the same people instead of inventing another account system.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td>database capability</td><td>Users can discover the shared database and construct its default PDO provider.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Automatic</strong></td><td><code>user_provider</code> capability</td><td>Auth reuses the same user records through an adapter. Password fields do not need to be added to the Users table.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Automatic logging</strong></td><td>logger capability</td><td><code>create()</code>, <code>update()</code>, and <code>delete()</code> produce structured audit activity that Logs can record automatically.</td></tr>
+<tr><td><code>Auth → Users logs</code></td><td><strong>Automatic actor context</strong></td><td><code>actor_provider</code></td><td>When Auth is present, the currently logged-in user can be attached as the actor of user-management changes.</td></tr>
+<tr><td><code>Permissions</code></td><td><strong>Compatible</strong></td><td>user ID / groups</td><td>The same user ID can be checked directly by Permissions or exposed through a permission subject adapter.</td></tr>
+</tbody></table>
+<div class="callout"><b>Separation of responsibilities:</b> Users owns profile data, Auth owns credentials, Permissions owns authorization, and Logs owns history. They cooperate without duplicating the user record.</div>
+</section>''',
+          'input.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Input is deliberately request-focused. It validates and normalizes data, then hands trusted values to whichever module should perform the real application action.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Files</code></td><td><strong>Direct compatible handoff</strong></td><td><code>UploadedFile → FileManager::storeUploaded()</code></td><td>Input validates the temporary upload; Files stores the same normalized object permanently.</td></tr>
+<tr><td><code>Users</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated() → create()/update()</code></td><td>Only validated and whitelisted fields are persisted.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Direct compatible handoff</strong></td><td>validated identifier/password/PIN</td><td>A login form can normalize its fields first and then call <code>attempt()</code> or <code>attemptPin()</code>.</td></tr>
+<tr><td><code>Any service</code></td><td><strong>Direct compatible handoff</strong></td><td><code>InputResult::validated()</code></td><td>Validated output is ordinary PHP data that can safely become service arguments.</td></tr>
+</tbody></table>
+<div class="callout"><b>Why it is not automatic:</b> Validation should never silently cause a database write, login, or file save. The application explicitly decides what happens after validation succeeds.</div>
+</section>''',
+          'auth.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Auth is a major interoperability hub. It can discover the project user provider, reuse shared storage, publish the current actor, and automatically send authentication activity to Prefab Logs.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Users</code></td><td><strong>Automatic</strong></td><td><code>user_provider</code></td><td>Auth detects Prefab Users and resolves email, username, or other configured identifiers against the same user records.</td></tr>
+<tr><td><code>Database</code></td><td><strong>Automatic when storage is needed</strong></td><td>database capability</td><td>Auth uses the shared database for its password, PIN, and token tables when custom stores are not supplied.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Automatic logging</strong></td><td>logger capability</td><td>Login, logout, failures, and other Auth events can be recorded without manually calling <code>LogManager::record()</code> after every operation.</td></tr>
+<tr><td><code>Users / Permissions / other modules</code></td><td><strong>Automatic shared actor</strong></td><td><code>actor_provider</code></td><td>Auth publishes the logged-in user ID so compatible modules can attach the current actor to their audit events.</td></tr>
+<tr><td><code>Permissions</code></td><td><strong>Direct composition</strong></td><td><code>$auth->id() → $permissions->can()</code></td><td>Auth answers who is logged in; Permissions answers what that user may do.</td></tr>
+<tr><td><code>Routes</code></td><td><strong>Compatible hook</strong></td><td><code>route.auth()</code> + middleware</td><td>Protected routes can ask Auth whether the request has an authenticated session.</td></tr>
+<tr><td><code>Social login</code></td><td><strong>Built-in optional subsystem</strong></td><td><code>SocialAuthManager</code></td><td>Password, PIN, token, and social login all establish the same local Auth session.</td></tr>
+</tbody></table>
+<div class="callout"><b>Automatic discovery is overridable:</b> An explicit provider, store, or session implementation still takes priority when a project needs custom behavior.</div>
+</section>''',
+          'permissions.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Permissions can reuse shared infrastructure and participate automatically in audit history while remaining independent from Auth and Users.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td>database capability</td><td>Permissions can create/use its PDO permission store from the shared database.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Automatic actor context</strong></td><td><code>actor_provider</code></td><td>Permission grant, deny, and clear events can identify the currently authenticated user as the actor.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Automatic logging</strong></td><td>Prefab runtime log emission</td><td><code>set()</code> and <code>clear()</code> produce structured permission-change records that Logs can capture.</td></tr>
+<tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td>user ID / <code>PermissionSubjectInterface</code></td><td>A user ID can be checked directly, or a subject can expose both user and group IDs.</td></tr>
+<tr><td><code>Routes</code></td><td><strong>Compatible hook</strong></td><td><code>route.permission()</code></td><td>Permission middleware can read the route requirement and call <code>PermissionManager::can()</code>.</td></tr>
+<tr><td><code>Groups</code></td><td><strong>Built-in</strong></td><td><code>GroupManager</code></td><td>Reusable group membership and group overrides are included in the package.</td></tr>
+</tbody></table>
+<div class="callout"><b>Important:</b> Permissions does not require Auth. Auth simply provides useful current-user and actor context for normal web applications.</div>
+</section>''',
+          'logs.html': '''<section class="interop-reference-static">
+<h2>Automatic logging and module coexistence</h2>
+<p>Prefab Logs is designed to be shared by the rest of the Prefab application. When Logs is installed and configured, it publishes a logger capability. Compatible modules can discover that capability and record their normal operations automatically, so application code does not need to repeat <code>LogManager::record()</code> after every create, update, login, or permission change.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>Events / source</th><th>What is recorded</th></tr></thead><tbody>
+<tr><td><code>Users</code></td><td><strong>Automatic logging</strong></td><td><code>user.created</code>, <code>user.updated</code>, <code>user.deleted</code></td><td>UserManager creates structured changes and forwards them to the discovered logger. When Auth is present, the current user can also become the actor automatically.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Automatic logging</strong></td><td><code>auth.*</code></td><td>Login, logout, failed login, token/PIN login, and related authentication activity can be recorded by Logs.</td></tr>
+<tr><td><code>Permissions</code></td><td><strong>Automatic logging</strong></td><td><code>permission.granted</code>, <code>permission.denied</code>, <code>permission.cleared</code></td><td>Permission changes emit structured log payloads that Prefab forwards to the shared logger.</td></tr>
+<tr><td><code>Database</code></td><td><strong>Automatic storage reuse</strong></td><td>database capability</td><td>Logs can build its PDO repository from the shared database without separate connection code.</td></tr>
+<tr><td><code>Other modules / application code</code></td><td><strong>Compatible</strong></td><td>logger capability / <code>record()</code></td><td>Any compatible module can emit a structured audit payload. Domain-specific application actions can call <code>record()</code> directly.</td></tr>
+<tr><td><code>Human presentation</code></td><td><strong>Built-in</strong></td><td><code>human()</code>, <code>humanRecent()</code></td><td>Technical audit records can be presented as human-friendly activity without changing the raw stored event.</td></tr>
+</tbody></table>
+<h3>What automatic logging means</h3>
+<p>Automatic logging does not mean that Logs watches the database. Instead, compatible Prefab modules create a structured audit payload while they perform an operation. If a logger capability is available, that payload is sent to Logs automatically.</p>
+<pre><code>UserManager::update()
+    ↓
+creates user.updated payload
+    ↓
+Prefab runtime finds logger capability
+    ↓
+LogManager records it
+    ↓
+Auth actor is included when available</code></pre>
+<div class="callout"><b>Important:</b> Automatic logging covers modules that actually emit compatible events. A project-specific action such as <code>document.approved</code> or <code>invoice.cancelled</code> should still create its own domain audit event.</div>
+</section>''',
+          'files.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Files stays focused on storage. Its APIs are designed to work naturally with validated uploads, routes, authorization, and audit logging without taking ownership of those concerns.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Input</code></td><td><strong>Direct compatible handoff</strong></td><td><code>UploadedFile → storeUploaded()</code></td><td>Input validates the upload and Files permanently stores the normalized upload object.</td></tr>
+<tr><td><code>Routes</code></td><td><strong>Direct composition</strong></td><td><code>download()</code> / <code>temporaryUrl()</code></td><td>A route/controller can stream files or verify signed temporary URLs without Files depending on an HTTP framework.</td></tr>
+<tr><td><code>Auth + Permissions</code></td><td><strong>Direct composition</strong></td><td>authorize before read/download</td><td>Private-file endpoints can check the current user and permission before reading the stored file.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Hook-based composition</strong></td><td><code>on('stored'|'deleted'|'copied'|'moved')</code></td><td>Lifecycle hooks can be forwarded to Logs when a project wants file-level audit history.</td></tr>
+</tbody></table>
+<div class="callout"><b>Why file logging is not forced:</b> Files is also useful for public assets, CLI jobs, and background tasks where authorization and audit requirements may be different.</div>
+</section>''',
+          'notifications.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Notifications represents in-application notifications. It remains separate from external delivery so a project can decide whether an event should also send email, SMS, chat, or push.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Messaging</code></td><td><strong>Direct composition</strong></td><td>notification + message</td><td>One application action can create an in-app notification and also send an external message when both are appropriate.</td></tr>
+<tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td><code>recipientId = user ID</code></td><td>The same Prefab user ID can be used as the notification recipient without making Notifications depend on Users.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Direct composition</strong></td><td><code>$auth->id()</code></td><td>The current authenticated user ID can load unread notifications and counters.</td></tr>
+<tr><td><code>Database</code></td><td><strong>Explicit persistent store</strong></td><td><code>PdoNotificationStore</code></td><td>Persistent notification storage currently receives its store explicitly rather than through PrefabRuntime auto-discovery.</td></tr>
+</tbody></table>
+<div class="callout"><b>Important:</b> Creating an in-app notification does not automatically send email. Internal notification state and external message delivery are separate choices.</div>
+</section>''',
+          'messaging.html': '''<section class="interop-reference-static">
+<h2>Works with other Prefab modules</h2>
+<p>Prefab Messaging is the outbound-delivery layer. Any module can compose with it when an event should reach a user outside the application, but external messages are never sent silently.</p>
+<table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>Notifications</code></td><td><strong>Direct composition</strong></td><td>send both when needed</td><td>Create an in-app notification and an external message from the same application action.</td></tr>
+<tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td>user email → <code>Recipient::email()</code></td><td>A user profile email can become a mail recipient without a hard dependency on Prefab Users.</td></tr>
+<tr><td><code>Auth</code></td><td><strong>Direct composition</strong></td><td>security messages</td><td>Password-reset, login-token, and security flows can deliver links or tokens through registered channels.</td></tr>
+<tr><td><code>Logs</code></td><td><strong>Hook-based composition</strong></td><td><code>on('sending'|'sent'|'failed')</code></td><td>Delivery lifecycle hooks can be forwarded to Logs when delivery auditing is required.</td></tr>
+<tr><td><code>Custom providers</code></td><td><strong>Built-in extension</strong></td><td><code>ChannelInterface</code></td><td>Email, SMS, chat, push, or another provider can be added while application code keeps using <code>MessagingManager::send()</code>.</td></tr>
+</tbody></table>
+<div class="callout"><b>Why sending is explicit:</b> External communication is a side effect. Applications should decide exactly when a user receives a message.</div>
+</section>'''
+          }
+
+          base = Path('website')
+          for name, section in sections.items():
+              path = base / name
+              text = path.read_text()
+              start = text.find('<section class="interop-reference-static">')
+              if start != -1:
+                  end = text.find('</section>', start)
+                  if end != -1:
+                      text = text[:start] + text[end+10:]
+              marker = '</article>'
+              if marker not in text:
+                  raise SystemExit(f'{name}: </article> not found')
+              text = text.replace(marker, '\n' + section + '\n' + marker, 1)
+              path.write_text(text)
+
+          app = base / 'assets/js/app.js'
+          s = app.read_text()
+          loader = "\n// Module coexistence and automatic-integration reference.\nconst interopScript=document.createElement('script');\ninteropScript.src='assets/js/interoperability.js';\ndocument.body.appendChild(interopScript);"
+          s = s.replace(loader, '')
+          app.write_text(s)
+          PY
+      - name: Commit materialized tutorials
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add website/*.html website/assets/js/app.js
+          git commit -m "Write module interoperability into tutorial pages"
+          git push
