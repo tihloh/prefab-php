@@ -1,8 +1,94 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">Create a reusable database connection before adding database-backed modules.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-database</code></pre><h2>Create a tutorial database</h2><p>Create a database named <code>prefab_tutorial</code> in MariaDB/MySQL using phpMyAdmin, Adminer, MySQL CLI, or another database tool.</p><h2>Connect with PDO</h2><pre><code>$pdo = new PDO(
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">Create a real tutorial table, then test connections, the query builder, raw SQL, transactions, multiple connections, runtime connection management and diagnostics.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-database</code></pre><h2>Create the tutorial database</h2><p>Create a MariaDB/MySQL database named <code>prefab_tutorial</code>, then run:</p><pre><code>CREATE TABLE users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);</code></pre><h2>Create <code>database-test.php</code></h2><pre><code>&lt;?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Tihloh\Prefab\Database\Services\DatabaseManager;
+
+$database = new DatabaseManager([
+    'connections' =&gt; [
+        'main' =&gt; [
+            'driver' =&gt; 'mysql',
+            'host' =&gt; '127.0.0.1',
+            'database' =&gt; 'prefab_tutorial',
+            'username' =&gt; 'root',
+            'password' =&gt; '',
+        ],
+    ],
+]);
+
+var_dump($database-&gt;ping('main'));</code></pre><pre><code>php database-test.php</code></pre><h2>Insert</h2><pre><code>$id = $database-&gt;table('users')-&gt;insertGetId([
+    'name' =&gt; 'Demo User',
+    'email' =&gt; 'demo@example.com',
+    'active' =&gt; true,
+]);
+echo "Inserted ID: {$id}";</code></pre><h2>Select</h2><pre><code>$user = $database-&gt;table('users')-&gt;where('id', $id)-&gt;first();
+print_r($user);
+
+$active = $database-&gt;table('users')
+    -&gt;where('active', true)
+    -&gt;orderBy('name')
+    -&gt;limit(20)
+    -&gt;get();
+print_r($active);</code></pre><h2>Update</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;update([
+    'name' =&gt; 'Updated Demo User',
+]);</code></pre><h2>Delete</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;delete();</code></pre><h2>Raw SQL</h2><pre><code>$rows = $database-&gt;select(
+    'SELECT * FROM users WHERE active = ?',
+    [1],
+);
+print_r($rows);
+
+$database-&gt;statement(
+    'UPDATE users SET active = ? WHERE email = ?',
+    [false, 'demo@example.com'],
+);</code></pre><h2>Transactions</h2><pre><code>$database-&gt;transaction(function ($db) {
+    $db-&gt;table('users')-&gt;insert([
+        'name' =&gt; 'Transactional User',
+        'email' =&gt; 'transaction@example.com',
+    ]);
+});</code></pre><h2>Use an existing PDO connection</h2><pre><code>$pdo = new PDO(
     'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
     'root',
     '',
     [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
 );
 
-$pdo-&gt;query('SELECT 1');</code></pre><div class="callout"><b>Windows and Linux use the same PHP/PDO code.</b> Database service installation and credentials may differ.</div><div class="nextbox"><b>Checkpoint:</b> the test query runs without an exception.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+$database = new DatabaseManager([
+    'connections' =&gt; ['main' =&gt; $pdo],
+]);</code></pre><h2>Multiple connections</h2><pre><code>$database = new DatabaseManager([
+    'default' =&gt; 'main',
+    'connections' =&gt; [
+        'main' =&gt; $pdo,
+        'logs' =&gt; [
+            'driver' =&gt; 'sqlite',
+            'database' =&gt; __DIR__ . '/storage/logs.sqlite',
+        ],
+    ],
+]);
+
+$main = $database-&gt;connection('main');
+$logs = $database-&gt;connection('logs');</code></pre><h2>Query a named connection</h2><pre><code>$rows = $database
+    -&gt;table('prefab_logs', 'logs')
+    -&gt;orderBy('id', 'desc')
+    -&gt;limit(20)
+    -&gt;get();</code></pre><h2>Raw PDO escape hatch</h2><pre><code>$pdo = $database-&gt;connection('main');
+$defaultPdo = $database-&gt;pdo();</code></pre><h2>Runtime connection management</h2><pre><code>echo $database-&gt;defaultName();
+print_r($database-&gt;names());
+var_dump($database-&gt;has('main'));
+echo $database-&gt;driver('main');
+var_dump($database-&gt;ping('main'));
+
+$database-&gt;set('archive', $archivePdo);
+$database-&gt;useDefault('archive');</code></pre><h2>Shared database contract</h2><p>Other Prefab modules can consume the small <code>DatabaseInterface</code> capability rather than requiring the whole Database package. Plain PDO is adapted automatically, so modules can stay standalone.</p><h2>Configuration precedence</h2><pre><code>Direct module instance
+    ↓
+Module-specific PrefabConfig
+    ↓
+Common PrefabConfig
+    ↓
+Auto-discovered database capability
+    ↓
+Default / clear error</code></pre><h2>Diagnostics</h2><pre><code>print_r($database-&gt;explain());</code></pre><p>When using broader Prefab configuration, you can also inspect runtime capability resolution with <code>PrefabRuntime::inspect()</code>.</p><div class="nextbox"><b>Checkpoint:</b> you can create, read, update and delete a real row; run raw SQL and a transaction; inspect connections; and switch between named connections without undefined setup.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
