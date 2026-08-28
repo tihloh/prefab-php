@@ -1,10 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">In this tutorial, you will start by reading a single user, then gradually add listing, creation, editing and deletion. The final sections cover custom mappings and diagnostics.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Create the users table</h2><p>Use the <code>prefab_tutorial</code> database created in the Database tutorial.</p><pre><code>CREATE TABLE users (
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Prefab Users gives an application one consistent way to read and manage users even when the actual database table is different from project to project. This tutorial starts with one record, then gradually builds a small user-management page.</p><h2>1. Install</h2><p>The Users package contains the user manager, database provider and mapping classes used in this tutorial. Composer installs the package and makes its classes available through the project autoloader.</p><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Create the users table</h2><p>A user needs a place to store identity and profile data. For this first example, the table contains only four fields: an ID, a display name, an email address and an active flag.</p><pre><code>CREATE TABLE users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(190) NOT NULL UNIQUE,
     active TINYINT(1) NOT NULL DEFAULT 1
-);</code></pre><p>Add a sample user:</p><pre><code>INSERT INTO users (name, email)
-VALUES ('Alice', 'alice@example.com');</code></pre><div class="nextbox"><b>Checkpoint:</b> The <code>users</code> table should now contain Alice.</div><h2>3. Load a user with Prefab Users</h2><p>Create <code>public/users.php</code>:</p><pre><code>&lt;?php
+);</code></pre><p><code>id</code> uniquely identifies each user. <code>email</code> is unique because it is commonly used to find a user during login or account lookup. <code>active</code> lets the application disable an account without deleting the user record.</p><p>Add one sample user so there is something to retrieve in the next step:</p><pre><code>INSERT INTO users (name, email)
+VALUES ('Alice', 'alice@example.com');</code></pre><div class="nextbox"><b>Checkpoint:</b> The <code>users</code> table should now contain Alice.</div><h2>3. Load a user with Prefab Users</h2><p>Create <code>public/users.php</code>. This first version only connects the package to the table and retrieves one user.</p><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Users\Mapping\UserMap;
@@ -24,44 +24,44 @@ $users = new UserManager(new PdoUserProvider($pdo, $map));
 $user = $users-&gt;find(1);
 ?&gt;
 &lt;h1&gt;User&lt;/h1&gt;
-&lt;p&gt;&lt;?= htmlspecialchars($user?-&gt;name ?? 'Not found') ?&gt;&lt;/p&gt;</code></pre><p>Start the PHP development server:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/users.php</code>.</p><div class="nextbox"><b>Checkpoint:</b> The page should display <b>Alice</b>.</div><h2>4. List all users</h2><p>Replace the single <code>$user = ...</code> line with:</p><pre><code>$list = $users-&gt;all();</code></pre><p>Replace the heading and paragraph at the bottom with:</p><pre><code>&lt;h1&gt;Users&lt;/h1&gt;
+&lt;p&gt;&lt;?= htmlspecialchars($user?-&gt;name ?? 'Not found') ?&gt;&lt;/p&gt;</code></pre><p>The three Prefab objects have different jobs. <code>UserMap</code> tells Prefab which table and columns represent a user. <code>PdoUserProvider</code> performs the database queries. <code>UserManager</code> is the API the rest of the application uses, so pages do not need to know how the data is stored.</p><p><code>$users-&gt;find(1)</code> asks the manager for user ID 1. The provider queries the mapped table and converts the returned row into a Prefab user object.</p><p>Start the PHP development server:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/users.php</code>.</p><div class="nextbox"><b>Checkpoint:</b> The page should display <b>Alice</b>. This confirms that the database connection, table mapping and user provider are working together.</div><h2>4. List all users</h2><p><code>find()</code> returns one user. Most user-management screens need every user, so replace it with <code>all()</code>:</p><pre><code>$list = $users-&gt;all();</code></pre><p><code>$list</code> now contains a collection of user objects. Display each one with a loop:</p><pre><code>&lt;h1&gt;Users&lt;/h1&gt;
 &lt;?php foreach ($list as $user): ?&gt;
     &lt;p&gt;#&lt;?= $user-&gt;id ?&gt; &lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt; — &lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/p&gt;
-&lt;?php endforeach; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Alice should appear in the list.</div><h2>5. Create users from a form</h2><p>Add this before <code>$list = $users-&gt;all();</code>:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+&lt;?php endforeach; ?&gt;</code></pre><p><code>htmlspecialchars()</code> is used before printing user-controlled text so characters such as <code>&lt;</code> and <code>&gt;</code> are displayed as text instead of being interpreted as HTML.</p><div class="nextbox"><b>Checkpoint:</b> Alice should appear in the list.</div><h2>5. Create users from a form</h2><p>The page can now read users, but it cannot create one. A browser form sends values through <code>POST</code>; the PHP handler passes those values to <code>$users-&gt;create()</code>.</p><p>Add this before <code>$list = $users-&gt;all();</code>:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $users-&gt;create([
         'name' =&gt; trim($_POST['name'] ?? ''),
         'email' =&gt; trim($_POST['email'] ?? ''),
         'active' =&gt; true,
     ]);
-}</code></pre><p>Add the form above the user list:</p><pre><code>&lt;h2&gt;Create user&lt;/h2&gt;
+}</code></pre><p><code>trim()</code> removes accidental spaces from the beginning or end of the submitted values. The user is marked active immediately because this simple form does not yet include an active/inactive option.</p><p>Add the form above the user list:</p><pre><code>&lt;h2&gt;Create user&lt;/h2&gt;
 &lt;form method="post"&gt;
     &lt;input name="name" placeholder="Name" required&gt;
     &lt;input name="email" type="email" placeholder="Email" required&gt;
     &lt;button&gt;Create&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>Enter Bob as a second user and submit the form.</p><div class="nextbox"><b>Checkpoint:</b> Bob should appear below Alice.</div><h2>6. Find a user</h2><p>Users can be retrieved by ID or email address:</p><pre><code>$user = $users-&gt;find(1);
+&lt;/form&gt;</code></pre><p>The <code>name</code> attributes are important because they become the keys in <code>$_POST</code>. For example, <code>name="email"</code> becomes <code>$_POST['email']</code>.</p><p>Enter Bob as a second user and submit the form.</p><div class="nextbox"><b>Checkpoint:</b> Bob should appear below Alice. That confirms the form, POST handler and Prefab create operation are connected correctly.</div><h2>6. Find a user</h2><p>Different pages need different lookup methods. A profile page may know the numeric ID, while a login or account-recovery page often starts with an email address.</p><pre><code>$user = $users-&gt;find(1);
 $byEmail = $users-&gt;findByEmail('alice@example.com');
-print_r($byEmail?-&gt;toArray());</code></pre><h2>7. Update a user</h2><p>Add an update handler before loading the list:</p><pre><code>if (isset($_POST['rename'])) {
+print_r($byEmail?-&gt;toArray());</code></pre><p><code>toArray()</code> is useful while learning or debugging because it shows the fields currently available on the mapped user object.</p><h2>7. Update a user</h2><p>Updating needs two pieces of information: which user to change and which fields should receive new values.</p><p>Add an update handler before loading the list:</p><pre><code>if (isset($_POST['rename'])) {
     $users-&gt;update((int) $_POST['id'], [
         'name' =&gt; trim($_POST['name']),
     ]);
-}</code></pre><p>Inside the existing <code>foreach</code>, add:</p><pre><code>&lt;form method="post"&gt;
+}</code></pre><p>The hidden <code>id</code> field identifies the record. Only <code>name</code> is included in the update array, so the email and other fields remain unchanged.</p><p>Inside the existing <code>foreach</code>, add:</p><pre><code>&lt;form method="post"&gt;
     &lt;input type="hidden" name="id" value="&lt;?= $user-&gt;id ?&gt;"&gt;
     &lt;input name="name" value="&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;"&gt;
     &lt;button name="rename" value="1"&gt;Rename&lt;/button&gt;
-&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Rename Bob and refresh the page. The new name should remain.</div><h2>8. Active and inactive users</h2><p>The <code>active</code> field can be updated like other mapped fields:</p><pre><code>$users-&gt;update($userId, ['active' =&gt; false]);</code></pre><p>Read the updated value:</p><pre><code>$user = $users-&gt;find($userId);
-var_dump($user?-&gt;active);</code></pre><h2>9. Delete a user</h2><p>Deletion is disabled by default. Enable it in the map when the application needs delete operations:</p><pre><code>$map = new UserMap(
+&lt;/form&gt;</code></pre><p>The button has <code>name="rename"</code>, so the server can distinguish this action from the create form.</p><div class="nextbox"><b>Checkpoint:</b> Rename Bob and refresh the page. The new name should remain because it was saved in the database.</div><h2>8. Active and inactive users</h2><p>Disabling a user is often safer than deleting the record. Other tables may still refer to that user, and audit history may need the account to remain identifiable.</p><pre><code>$users-&gt;update($userId, ['active' =&gt; false]);</code></pre><p>Read the updated value:</p><pre><code>$user = $users-&gt;find($userId);
+var_dump($user?-&gt;active);</code></pre><p>Later, the Authentication module can use this value to reject login attempts from inactive accounts.</p><h2>9. Delete a user</h2><p>Deletion is intentionally disabled by default because it permanently removes data. Enable it only in applications where deleting users is an allowed operation.</p><pre><code>$map = new UserMap(
     table: 'users',
     allowDelete: true,
-);</code></pre><p>A user can then be deleted by ID:</p><pre><code>$users-&gt;delete($userId);</code></pre><div class="nextbox"><b>Checkpoint:</b> Create a temporary user, delete it, and confirm that it no longer appears in the list.</div><h2>10. Custom project fields</h2><p>User tables often contain application-specific profile fields. Add an <code>office</code> field:</p><pre><code>ALTER TABLE users
-ADD office VARCHAR(100) NULL;</code></pre><p>Map the field as an attribute:</p><pre><code>$map = new UserMap(
+);</code></pre><p>After the map allows deletion, remove a user by ID:</p><pre><code>$users-&gt;delete($userId);</code></pre><div class="nextbox"><b>Checkpoint:</b> Create a temporary user, delete it, and confirm that it no longer appears in the list.</div><h2>10. Custom project fields</h2><p>Real applications usually store more than name and email. Prefab calls project-specific fields <em>attributes</em>. They are mapped without changing the core Users API.</p><p>Add an <code>office</code> field:</p><pre><code>ALTER TABLE users
+ADD office VARCHAR(100) NULL;</code></pre><p>Tell Prefab how the attribute maps to the database column:</p><pre><code>$map = new UserMap(
     table: 'users',
     attributes: [
         'office' =&gt; 'office',
     ],
     allowDelete: true,
-);</code></pre><p>The attribute is now available from the user object:</p><pre><code>echo $user-&gt;office;
+);</code></pre><p>The key on the left is the name used by the application. The value on the right is the actual database column. They can be different when working with an existing schema.</p><p>The attribute is now available from the user object:</p><pre><code>echo $user-&gt;office;
 echo $user-&gt;get('office');
-print_r($user-&gt;attributes());</code></pre><p>Password credentials are handled by the Authentication module and do not need to be stored in the user profile table.</p><h2>11. Advanced: map an existing schema</h2><p>Prefab Users can map an existing table even when its column names are different:</p><pre><code>$map = new UserMap(
+print_r($user-&gt;attributes());</code></pre><p>Password credentials are intentionally not part of this profile mapping. Authentication owns password storage so the Users module remains focused on identity and profile information.</p><h2>11. Advanced: map an existing schema</h2><p>Prefab Users does not require a table to use names such as <code>id</code>, <code>name</code> or <code>email</code>. The map translates Prefab's standard concepts to the column names already used by an application.</p><pre><code>$map = new UserMap(
     table: 'employees',
     id: 'employee_id',
     name: 'full_name',
@@ -72,7 +72,7 @@ print_r($user-&gt;attributes());</code></pre><p>Password credentials are handled
         'position' =&gt; 'position_title',
         'employee_no' =&gt; 'employee_no',
     ],
-);</code></pre><h2>12. Advanced: restrict writes</h2><p>Existing data sources can be configured as read-only:</p><pre><code>$map = new UserMap(
+);</code></pre><p>This is useful when adding Prefab to an existing project because the database does not need to be redesigned just to satisfy the package.</p><h2>12. Advanced: restrict writes</h2><p>Some systems should be readable but not editable by this application. For example, an employee directory may be maintained by another HR system.</p><pre><code>$map = new UserMap(
     table: 'employees',
     id: 'employee_id',
     name: 'full_name',
@@ -81,4 +81,4 @@ print_r($user-&gt;attributes());</code></pre><p>Password credentials are handled
     allowCreate: false,
     allowUpdate: false,
     allowDelete: false,
-);</code></pre><h2>13. Advanced: diagnostics</h2><p>Use <code>explain()</code> to inspect the current Users configuration:</p><pre><code>print_r($users-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Authentication to add password login and sessions to these users.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+);</code></pre><p>The application can still retrieve users, but write operations are blocked by the mapping policy.</p><h2>13. Advanced: diagnostics</h2><p>When a module behaves differently from what is expected, <code>explain()</code> shows how Prefab resolved its configuration and integrations.</p><pre><code>print_r($users-&gt;explain());</code></pre><p>This is especially helpful once several Prefab modules are installed and some dependencies are discovered automatically.</p><div class="nextbox"><b>Next:</b> Continue to Authentication to add password login and sessions while keeping user identity and password credentials as separate responsibilities.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
