@@ -189,7 +189,3 @@ function applyOS(os){selectedOS=os;localStorage.setItem(osKey,os);document.docum
 document.querySelectorAll('.os-tabs button').forEach(button=>button.addEventListener('click',()=>applyOS(button.dataset.osChoice)));
 if(osGrids.length) applyOS(selectedOS);
 
-// Module coexistence and automatic-integration reference.
-const interopScript=document.createElement('script');
-interopScript.src='assets/js/interoperability.js';
-document.body.appendChild(interopScript);
