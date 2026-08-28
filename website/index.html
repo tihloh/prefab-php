@@ -1,81 +1,93 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Build your first Prefab PHP application step by step."><title>Prefab PHP Tutorial</title><link rel="stylesheet" href="assets/css/app.css"></head><body><header class="topbar"><button class="menu" id="menu" aria-label="Open navigation">☰</button><a class="brand" href="#start">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"><div class="side-title">TUTORIAL</div><a href="#start" class="active">Start Here</a><a href="#compare">Why Prefab?</a><a href="#setup">1. Create Project</a><a href="#route">2. First Route</a><a href="#database">3. Database</a><a href="#users">4. Users</a><a href="#input">5. User Form</a><a href="#auth">6. Login</a><a href="#permissions">7. Permissions</a><a href="#logs">8. Audit Logs</a><a href="#files">9. Files</a><a href="#notifications">10. Notifications</a><a href="#messaging">11. Email</a><a href="#inspect">12. Inspect</a><a href="#production">13. Production</a><div class="side-title">GUIDES</div><a href="#autowiring">Auto-Wiring</a><a href="#extensions">Fluent Extensions</a><a href="#existing">Existing Projects</a><a href="#errors">Error Handling</a><div class="side-title">REFERENCE</div><a href="https://github.com/tihloh/prefab-php#choose-a-module">Module Reference ↗</a></aside><main><section class="hero" id="start"><span class="eyebrow">HANDS-ON TUTORIAL</span><h1>Build your first Prefab application.</h1><p class="lead">Build one small user-management app. Every step changes something real, gives you something to run, and builds on the previous step.</p><div class="principles"><b>Modular</b><b>Reusable</b><b>Independent</b><b>Adaptive</b><strong>Better Together</strong></div><div class="nextbox"><b>By the end:</b> routing, database access, users, validation, login, permissions, audit logs, files, notifications and email—with compatible modules discovering and configuring each other.</div></section><section id="compare"><span class="eyebrow">BEFORE WE BUILD</span><h2>Why Prefab?</h2><p>Take one common feature: authenticate a user and keep an audit trail. That already crosses <b>three concerns</b>—Users, Auth and Logs.</p><div class="compare"><article><h3>Without Prefab</h3><pre><code>// USERS: find the account
-$stmt = $pdo->prepare(
-    'SELECT * FROM users WHERE email = ? LIMIT 1'
-);
-$stmt->execute([$email]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// AUTH: verify + create session
-if (!$user || !password_verify($password, $user['password'])) {
-    // LOGS: audit failed login
-    $log = $pdo->prepare(
-        'INSERT INTO logs (event, message, created_at) VALUES (?, ?, NOW())'
-    );
-    $log->execute(['auth.login_failed', $email]);
-    throw new RuntimeException('Invalid credentials');
-}
-
-session_regenerate_id(true);
-$_SESSION['user_id'] = $user['id'];
-
-// LOGS: audit successful login
-$log = $pdo->prepare(
-    'INSERT INTO logs (event, user_id, created_at) VALUES (?, ?, NOW())'
-);
-$log->execute(['auth.login', $user['id']]);</code></pre><p>Your application manually connects user lookup, password verification, session handling and audit logging.</p></article><article class="prefab"><h3>With Prefab</h3><pre><code>$auth = new AuthManager();
-
-$result = $auth->attempt($email, $password);
-
-if (!$result->success) {
-    // Your app decides the response.
-}</code></pre><p>With Prefab Users and Prefab Logs available, <b>Auth uses their compatible capabilities automatically</b>. The developer uses Auth; Prefab handles the integration.</p><pre><code>Users ── user_provider ──┐
-                         ├──→ Auth
-Logs  ── logger ─────────┘</code></pre></article></div><blockquote>Install it. Use it. <b>Compatible modules make it better automatically.</b></blockquote></section><section id="setup"><span class="eyebrow">STEP 1</span><h2>Create the project</h2><p><b>Goal:</b> create an empty Composer app we can grow.</p><pre><code>mkdir prefab-tutorial
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Complete beginner-friendly Prefab PHP tutorial and reference."><title>Prefab PHP — Tutorial & Reference</title><link rel="stylesheet" href="assets/css/app.css"></head><body><header class="topbar"><button class="menu" id="menu" aria-label="Open navigation">☰</button><a class="brand" href="#start">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"><div class="side-title">GETTING STARTED</div><a href="#start" class="active">Start Here</a><a href="#prerequisites">Prerequisites</a><a href="#install-tools">Install PHP & Composer</a><a href="#package-status">Package availability</a><a href="#project">Create a Project</a><div class="side-title">BUILD THE APP</div><a href="#routes">1. Routing</a><a href="#database">2. Database</a><a href="#users">3. Users & Groups</a><a href="#input">4. Validation</a><a href="#auth">5. Authentication</a><a href="#permissions">6. Permissions</a><a href="#logs">7. Audit Logs</a><a href="#files">8. Files</a><a href="#notifications">9. Notifications</a><a href="#messaging">10. Messaging</a><div class="side-title">REFERENCE</div><a href="#config">Shared Configuration</a><a href="#sessions">Session Isolation</a><a href="#autowiring">Auto-Wiring</a><a href="#errors">Troubleshooting</a><a href="#production">Production Checklist</a></aside><main><section class="hero" id="start"><span class="eyebrow">TUTORIAL + REFERENCE</span><h1>Learn Prefab from an empty folder.</h1><p class="lead">This guide assumes only a basic understanding of plain PHP: variables, arrays, functions, classes, <code>require</code>, forms and simple database concepts. You do not need Laravel or another framework.</p><div class="principles"><b>Beginner friendly</b><b>Plain PHP</b><b>Composer</b><b>Modular</b><strong>Reference included</strong></div><div class="nextbox"><b>What you will build:</b> a small PHP application with routes, database access, users and groups, validation, login, permissions and audit logs, then learn how Files, Notifications and Messaging fit into the same architecture.</div><h3>How to use this page</h3><p>If you are new to Composer, start at Prerequisites and follow every checkpoint. Experienced PHP developers can jump directly to a module section. Commands marked <b>Verify</b> are useful whenever something does not work.</p></section><section id="prerequisites"><span class="eyebrow">BEFORE PREFAB</span><h2>Minimum prerequisites</h2><p>You need a command line, PHP, Composer and a text editor. A database is needed when the tutorial reaches Users. Git is recommended but is not required just to run Prefab.</p><div class="grid-cards"><div><b>PHP 8.1+</b><p>Prefab Routes currently requires PHP 8.1 or newer.</p></div><div><b>Composer 2</b><p>Downloads packages and generates the PHP autoloader.</p></div><div><b>Editor</b><p>VS Code, PhpStorm, Notepad++ or any editor that saves plain PHP files.</p></div><div><b>Database</b><p>MariaDB/MySQL is easiest for this tutorial. PDO must be enabled.</p></div><div><b>Terminal</b><p>PowerShell/CMD on Windows, or a shell on Linux/macOS.</p></div><div><b>Basic PHP</b><p>You should recognize <code>$variables</code>, arrays, classes and <code>require</code>.</p></div></div><h3>Verify your machine first</h3><pre><code>php -v
+composer --version
+php -m</code></pre><p>Look for <code>PDO</code> and the driver you plan to use, normally <code>pdo_mysql</code>. If <code>php</code> or <code>composer</code> is “not recognized”, fix that before creating the project.</p></section><section id="install-tools"><span class="eyebrow">BEGINNER SETUP</span><h2>Install PHP and Composer</h2><h3>Windows</h3><p>If you already use XAMPP, Laragon or another PHP stack, you may use its PHP executable. Make sure its PHP directory is on your PATH so <code>php -v</code> works from a new terminal. Then install Composer and let its installer use that PHP executable.</p><h3>Linux</h3><pre><code>sudo apt update
+sudo apt install php-cli php-mysql php-mbstring php-xml unzip
+php -v</code></pre><p>Install Composer using the official Composer installer for your operating system, then verify with <code>composer --version</code>.</p><div class="warning"><b>Do not continue with a broken CLI setup.</b> The web server PHP and terminal PHP can be different installations. The <code>php -v</code> and <code>php -m</code> commands show what Composer and the built-in server will actually use.</div></section><section id="package-status"><span class="eyebrow">IMPORTANT</span><h2>Package availability and the “minimum-stability” error</h2><p>The source repository can contain a Prefab module before Packagist has a stable release for it. In that situation this command:</p><pre><code>composer require tihloh/prefab-routes</code></pre><p>can report:</p><pre><code>Could not find a version of package tihloh/prefab-routes
+matching your minimum-stability (stable).</code></pre><p>This does <b>not</b> mean PHP or Composer is broken. Composer is saying it cannot currently resolve a stable published version matching your project.</p><h3>For normal users</h3><p>Use the plain <code>composer require</code> command once that module has a stable Packagist release. The tutorial intentionally keeps stable installation as the normal path.</p><h3>For development/testing before a stable release</h3><p>Use an explicit development version only when you deliberately want unreleased code:</p><pre><code>composer require tihloh/prefab-routes:dev-main</code></pre><div class="warning"><b>Development versions are not the beginner default.</b> They can change without a stable release boundary. Once a stable version is published, return to the ordinary command.</div></section><section id="project"><span class="eyebrow">PROJECT SETUP</span><h2>Create the tutorial project</h2><pre><code>mkdir prefab-tutorial
 cd prefab-tutorial
-composer init
-mkdir public
-mkdir storage
-composer require tihloh/prefab-routes</code></pre><p>Create <code>public/index.php</code>:</p><pre><code>&lt;?php
-require __DIR__ . '/../vendor/autoload.php';</code></pre><p><b>Run:</b></p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><div class="nextbox"><b>Checkpoint:</b> keep the server running. We use this same application throughout.</div></section><section id="route"><span class="eyebrow">STEP 2</span><h2>Make your first route</h2><p><b>Goal:</b> answer a browser request.</p><pre><code>&lt;?php
+composer init</code></pre><p>Composer asks several questions. For a local tutorial you can accept sensible defaults. When finished, the important file is <code>composer.json</code>.</p><pre><code>mkdir public
+mkdir storage</code></pre><p>Install Routes. If no stable package is published yet, use the development command explained above instead.</p><pre><code>composer require tihloh/prefab-routes</code></pre><p>Create <code>public/index.php</code>:</p><pre><code>&lt;?php
+
+declare(strict_types=1);
+
 require __DIR__ . '/../vendor/autoload.php';
+
+echo 'Prefab is loaded';</code></pre><p>Start PHP's development server:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000</code>. You should see <b>Prefab is loaded</b>.</p><div class="nextbox"><b>Checkpoint:</b> if this works, PHP, Composer, the generated <code>vendor/</code> directory and Composer autoloading are all working.</div></section><section id="routes"><span class="eyebrow">MODULE 1</span><h2>Routing</h2><p>A route connects an HTTP method and URL path to PHP code. Without a router, plain PHP applications commonly grow into manual checks of <code>$_SERVER['REQUEST_URI']</code>.</p><h3>Install</h3><pre><code>composer require tihloh/prefab-routes</code></pre><h3>Minimal use</h3><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
+
 use Tihloh\Prefab\Routes\RouteManager;
+
 $routes = new RouteManager();
-$routes->get('/', fn () => 'Hello Prefab!');
-$result=$routes->dispatch();
-if (is_string($result)) echo $result;</code></pre><p><b>Try:</b> open <code>http://127.0.0.1:8000/</code>.</p><div class="nextbox"><b>Expected:</b> <code>Hello Prefab!</code>. One Prefab block is already useful alone.</div></section><section id="database"><span class="eyebrow">STEP 3</span><h2>Connect a database</h2><p><b>Goal:</b> make a database resource available to later modules.</p><pre><code>composer require tihloh/prefab-database</code></pre><pre><code>$pdo = new PDO(
- 'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
- 'root','',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]
-);</code></pre><div class="callout"><b>Rule:</b> explicit resources win. Prefab discovery fills missing configuration when a compatible resource is available.</div></section><section id="users"><span class="eyebrow">STEP 4</span><h2>Add Users</h2><p><b>Goal:</b> manage users and make user lookup available to compatible modules.</p><pre><code>composer require tihloh/prefab-users</code></pre><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+$routes->get('/', fn () =&gt; 'Home');
+$routes->get('/hello', fn () =&gt; 'Hello Prefab!');
+
+$result = $routes->dispatch();
+if (is_string($result)) {
+    echo $result;
+}</code></pre><p>Try both <code>/</code> and <code>/hello</code>. Prefab Routes is framework-independent; it does not require Users, Auth or Permissions.</p></section><section id="database"><span class="eyebrow">MODULE 2</span><h2>Database</h2><p>Before adding Users, create a database named <code>prefab_tutorial</code>. Prefab modules can work with compatible shared database resources, while plain PDO remains a valid way to provide an existing connection.</p><pre><code>composer require tihloh/prefab-database</code></pre><pre><code>$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root',
+    '',
+    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);</code></pre><h3>Test before continuing</h3><pre><code>$pdo-&gt;query('SELECT 1');
+echo 'Database OK';</code></pre><div class="callout"><b>Reference:</b> Prefab modules prefer explicit module configuration first, then shared Prefab configuration/capabilities where compatible. You can therefore start with plain PDO and progressively adopt more Prefab modules.</div></section><section id="users"><span class="eyebrow">MODULE 3</span><h2>Users and simple Groups</h2><p>Prefab Users owns user-management behavior and supports simple groups consisting of an ID, name, optional description and membership. Permissions are deliberately separate.</p><pre><code>composer require tihloh/prefab-users</code></pre><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
 
 $users = new UserManager([
-    'database' => $pdo,
-    'table' => 'users',
-]);</code></pre><div class="callout"><b>Schema note:</b> the current Users package expects the mapped table to exist. Self-schema creation is a feature we are adding for database-backed modules; the tutorial will only show it once the implementation exists.</div><div class="nextbox"><b>That's enough here.</b> Compatible modules can use the user capability when they need it; you do not manually connect Users to every consumer.</div></section><section id="input"><span class="eyebrow">STEP 5</span><h2>Create a user safely</h2><p><b>Goal:</b> validate browser data before handing it to Users.</p><pre><code>composer require tihloh/prefab-input</code></pre><pre><code>use Tihloh\Prefab\Input\Input;
-$result=Input::from($_POST)->process([
- 'name'=>'trim|required|string|max:100',
- 'email'=>'trim|lowercase|required|email',
- 'password'=>'required|string|min:8',
+    'database' =&gt; $pdo,
+    'table' =&gt; 'users',
+]);</code></pre><h3>Typical user operations</h3><pre><code>$user = $users-&gt;find(1);
+$all  = $users-&gt;all();
+
+$result = $users-&gt;create([
+    'name' =&gt; 'Demo User',
+    'email' =&gt; 'demo@example.com',
+    'password' =&gt; password_hash('secret123', PASSWORD_DEFAULT),
+]);</code></pre><h3>Groups</h3><pre><code>$groups = $users-&gt;groups();
+$group = $groups-&gt;create('Staff', 'Application staff');
+$groups-&gt;addUser($userId, $group-&gt;id);
+$groups-&gt;syncUserGroups($userId, [1, 2]);</code></pre><p>When Prefab Permissions is also installed, it can use the same logical group system and add authorization information rather than creating a second unrelated group concept.</p></section><section id="input"><span class="eyebrow">MODULE 4</span><h2>Input and validation</h2><p>Never pass arbitrary browser input directly into user management or SQL. Validate and normalize it first.</p><pre><code>composer require tihloh/prefab-input</code></pre><pre><code>use Tihloh\Prefab\Input\Input;
+
+$result = Input::from($_POST)-&gt;process([
+    'name' =&gt; 'trim|required|string|max:100',
+    'email' =&gt; 'trim|lowercase|required|email',
+    'password' =&gt; 'required|string|min:8',
 ]);
-if ($result->fails()) { print_r($result->errors()); return; }
-$users->create($result->validated());</code></pre><p><b>Try:</b> submit an invalid email, then a valid one. Only declared validated fields proceed.</p></section><section id="auth"><span class="eyebrow">STEP 6 · PREFAB HIGHLIGHT</span><h2>Add login</h2><p><b>Goal:</b> authenticate without manually wiring Auth to Users.</p><pre><code>composer require tihloh/prefab-auth</code></pre><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+
+if ($result-&gt;fails()) {
+    print_r($result-&gt;errors());
+    return;
+}
+
+$users-&gt;create($result-&gt;validated());</code></pre><p>The application still controls whether errors become HTML, JSON, a redirect or something else.</p></section><section id="auth"><span class="eyebrow">MODULE 5</span><h2>Authentication</h2><p>Authentication answers <b>who is signed in?</b> Prefab Auth can consume the user capability exposed by Prefab Users when both are present.</p><pre><code>composer require tihloh/prefab-auth</code></pre><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
 
 $auth = new AuthManager();
-$result = $auth->attempt($email, $password);</code></pre><h3>What does Prefab handle?</h3><pre><code>Auth needs user lookup
+$result = $auth-&gt;attempt($email, $password);
+
+if (!$result-&gt;success) {
+    echo 'Invalid login';
+}</code></pre><p>You do not need to call an internal configuration method just because Prefab can resolve compatible installed modules itself.</p></section><section id="permissions"><span class="eyebrow">MODULE 6</span><h2>Permissions</h2><p>Permissions answers <b>what may this user do?</b> This remains independent from user identity.</p><pre><code>composer require tihloh/prefab-permissions</code></pre><p>Permission definitions contain the complete metadata. User/group overrides stay lightweight: permission ID plus allow/deny value. A missing override means inherit.</p><pre><code>User override
+   ↓ none
+Group overrides
+   ↓ none
+Permission default
    ↓
-Prefab Users is available
-   ↓
-Auth uses its compatible user capability
-   ↓
-No manual provider wiring</code></pre><div class="nextbox"><b>Developer-facing rule:</b> if Prefab can safely discover and configure something itself, the normal tutorial does not ask you to do it.</div></section><section id="permissions"><span class="eyebrow">STEP 7</span><h2>Protect features</h2><p><b>Goal:</b> separate identity from authorization.</p><pre><code>composer require tihloh/prefab-permissions</code></pre><p>Auth answers who the actor is. Permissions answers what that actor may do. Compatible identity information is shared without making every controller rebuild it.</p></section><section id="logs"><span class="eyebrow">STEP 8 · BETTER TOGETHER</span><h2>Add audit logs</h2><p><b>Goal:</b> improve compatible modules with logging without adding audit INSERT statements around them.</p><pre><code>composer require tihloh/prefab-logs</code></pre><pre><code>Logs ── logger ──┬─→ Auth
-                  └─→ Users</code></pre><p>Once the logging capability is available, compatible modules can use it automatically for their infrastructure events.</p><div class="nextbox"><b>Growth without dependency:</b> Auth worked before Logs existed. Adding Logs gives compatible modules another capability.</div></section><section id="files"><span class="eyebrow">STEP 9</span><h2>Upload files</h2><p><b>Goal:</b> validate with Input, store with Files.</p><pre><code>composer require tihloh/prefab-files</code></pre><pre><code>Input → validates upload → UploadedFile → Files → stores it</code></pre><p>Each block keeps one responsibility.</p></section><section id="notifications"><span class="eyebrow">STEP 10</span><h2>Add notifications</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><p>Use Notifications for notices inside the application. A user update should not automatically notify merely because the module is installed—that is a business decision.</p></section><section id="messaging"><span class="eyebrow">STEP 11</span><h2>Add email</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><p>Messaging owns outbound communication. Compatible Fluent Extensions are intended to make explicit actions concise:</p><pre><code>$users->update($id,$data)
-      ->notify()
-      ->email();</code></pre><p>Installed capability becomes available; your application chooses to use it.</p></section><section id="inspect"><span class="eyebrow">STEP 12</span><h2>Inspect when you need to debug</h2><p>Normal application code should stay simple. Inspection belongs here because developers only need it when diagnosing integration.</p><pre><code>print_r($auth->explain());
-print_r($users->explain());</code></pre><p>Inspection can show which compatible resources were resolved without requiring those internals in normal application code.</p></section><section id="production"><span class="eyebrow">STEP 13</span><h2>Production</h2><pre><code>composer install --no-dev --optimize-autoloader</code></pre><p>Use OPcache, externalize secrets, disable public display-errors and log exceptions server-side.</p><div class="nextbox"><b>Tutorial complete:</b> you started with one block and progressively gained capabilities without adopting a full framework architecture.</div></section><section id="autowiring"><span class="eyebrow">GUIDE</span><h2>Auto-Wiring</h2><p>Internally, modules publish named capabilities and compatible consumers resolve what they are missing. This is implementation knowledge for developers who need to understand or override the defaults—not ceremony required in normal usage.</p><pre><code>Database → Users → user_provider → Auth
-Logs → logger ───────────────────→ Auth / Users
-Auth → actor_provider ───────────→ compatible consumers</code></pre></section><section id="extensions"><span class="eyebrow">GUIDE</span><h2>Fluent Extensions</h2><p>Auto-Wiring handles infrastructure. Extensions expose optional explicit business actions from installed compatible modules.</p><pre><code>$users->update($id,$data);           // Users
-$users->update($id,$data)->notify(); // + Notifications
-$users->update($id,$data)->email();  // + Messaging</code></pre></section><section id="existing"><span class="eyebrow">GUIDE</span><h2>Existing projects</h2><p>Keep your tables, PDO, controllers, views and structure. Provide what already exists; Prefab handles compatible missing plumbing where it safely can.</p></section><section id="errors"><span class="eyebrow">GUIDE</span><h2>Error handling</h2><p>Prefab should fail as a library, not take over the host application. Validation returns errors; unresolved resources and ambiguous integration produce clear catchable exceptions.</p><pre><code>try {
- $result=$auth->attempt($email,$password);
-} catch (RuntimeException $e) {
- // Your app chooses HTML, JSON, redirect or logging.
-}</code></pre></section><footer><b>Prefab PHP</b> · Tutorial = build it. Guides = understand it. Module READMEs = reference it.</footer></main></div><script src="assets/js/app.js"></script></body></html>
+Allow / Deny</code></pre><p>Prefab Users can supply the simple groups; Permissions upgrades those same groups with authorization behavior. Permissions can also work without Prefab Users for projects that already have their own user system.</p></section><section id="logs"><span class="eyebrow">MODULE 7</span><h2>Audit Logs</h2><pre><code>composer require tihloh/prefab-logs</code></pre><p>Logs is independent, but compatible modules can publish meaningful infrastructure events to it. This avoids scattering manual audit <code>INSERT</code> statements around Auth, Users and Permissions.</p><pre><code>Users ── user_provider ──┐
+                         ├──→ Auth
+Logs  ── logger ─────────┘
+
+Users + Permissions + Logs
+       ↓
+user/group changes and authorization events can share audit infrastructure</code></pre><div class="nextbox"><b>Important:</b> installing Logs should enhance compatible infrastructure behavior, not invent application business events you never requested.</div></section><section id="files"><span class="eyebrow">MODULE 8</span><h2>Files</h2><pre><code>composer require tihloh/prefab-files</code></pre><p>Use Input to validate incoming upload data and Files to store/manage the file. Keep validation and storage as separate responsibilities.</p></section><section id="notifications"><span class="eyebrow">MODULE 9</span><h2>Notifications</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><p>Notifications represents application notices. Installing it does not mean every user update should automatically generate a notice; that remains an explicit business decision.</p></section><section id="messaging"><span class="eyebrow">MODULE 10</span><h2>Messaging</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><p>Messaging owns outbound communication such as email. It can cooperate with other modules while remaining independently usable.</p></section><section id="config"><span class="eyebrow">REFERENCE</span><h2>Shared Prefab configuration</h2><p>Use shared configuration for values that genuinely belong to the whole application, such as the common database or application identity. Module-specific configuration should remain possible when a module needs an override.</p><pre><code>use Tihloh\Prefab\PrefabConfig;
+
+PrefabConfig::set([
+    'name' =&gt; 'my_app',
+    'database' =&gt; $pdo,
+]);</code></pre><p>The goal is fewer repeated settings, not hidden magic. Explicit module configuration should still win when supplied.</p></section><section id="sessions"><span class="eyebrow">REFERENCE</span><h2>Session isolation is mandatory</h2><p>PHP applications hosted under the same domain can otherwise collide through the same session cookie. For example, <code>localhost/web1</code> and <code>localhost/web2</code> must not accidentally become one application's session.</p><p>Prefab's session-aware modules should derive an isolated application namespace from the configured Prefab application name by default. A simpler explicit namespace can be supplied when the application name is unsuitable.</p><pre><code>PrefabConfig::set([
+    'name' =&gt; 'web1',
+]);</code></pre><p>If no session-specific configuration is provided, isolation should still be the safe default rather than silently sharing a generic PHP session across neighboring applications.</p></section><section id="autowiring"><span class="eyebrow">REFERENCE</span><h2>How Auto-Wiring works</h2><p>Prefab modules remain independently installable. When compatible modules exist in the same application, they publish and consume small capabilities.</p><pre><code>Database ───────────────→ shared database capability
+Users ── user_provider ─→ Auth
+Users ── group_provider ─→ Permissions
+Logs  ── logger ────────→ compatible modules
+Auth  ── actor_provider ─→ compatible modules</code></pre><p>Auto-wiring handles compatible infrastructure. It should not make business decisions for your application.</p></section><section id="errors"><span class="eyebrow">REFERENCE</span><h2>Troubleshooting</h2><h3>Package cannot be found / minimum-stability</h3><p>Check whether a stable package version has actually been published. During development only, explicitly request <code>:dev-main</code>.</p><h3>Class not found</h3><pre><code>composer dump-autoload
+composer show</code></pre><p>Confirm <code>vendor/autoload.php</code> is required and that the package appears in <code>composer show</code>.</p><h3>PDO driver missing</h3><pre><code>php -m</code></pre><p>Enable/install the PDO driver matching your database.</p><h3>Port 8000 already in use</h3><pre><code>php -S 127.0.0.1:8001 -t public</code></pre><h3>Need to inspect Prefab resolution</h3><pre><code>print_r($users-&gt;explain());
+print_r($auth-&gt;explain());</code></pre><p>Use inspection for debugging; normal application code should not need to manually reproduce Prefab's internal capability wiring.</p></section><section id="production"><span class="eyebrow">REFERENCE</span><h2>Production checklist</h2><pre><code>composer install --no-dev --optimize-autoloader</code></pre><p>Use a real web server, enable OPcache, keep credentials outside public source files, use HTTPS, disable public PHP error display, log exceptions server-side, use secure session cookie settings, restrict writable directories, back up the database, and pin/test dependency updates before deployment.</p><div class="nextbox"><b>You now have both paths:</b> beginners can follow the page from an empty folder; experienced developers can use each module and reference section independently.</div></section><footer><b>Prefab PHP</b> · Start simple. Add only the blocks your application needs.</footer></main></div><script src="assets/js/app.js"></script></body></html>
