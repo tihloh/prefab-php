@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Add reusable technical audit history without scattering manual <code>INSERT</code> statements around your application.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>Better together</h2><pre><code>Users ── user_provider ──┐
+                         ├──→ Auth
+Logs  ── logger ─────────┘
+
+Permissions ── authorization events ──→ Logs</code></pre><p>When Logs is available, compatible modules can publish infrastructure events such as login, logout, failed login, user changes and permission changes.</p><div class="callout"><b>Logs should not invent business events.</b> Installing it may enhance compatible infrastructure behavior, but your application still chooses business actions such as “document approved” or “invoice paid”.</div><h2>Typical direct use</h2><pre><code>$logs-&gt;record([
+    'action' =&gt; 'document.approved',
+    'subject_type' =&gt; 'document',
+    'subject_id' =&gt; $documentId,
+    'message' =&gt; 'Document was approved.',
+]);</code></pre><div class="nextbox"><b>Checkpoint:</b> perform a login or user change and confirm the event reaches the configured log store.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
