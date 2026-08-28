@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Shared Configuration</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="config.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Reference</span><h1>Shared Prefab configuration</h1><p class="lead">Use shared configuration for resources and values that genuinely belong to the whole application.</p><pre><code>use Tihloh\Prefab\PrefabConfig;
+
+PrefabConfig::set([
+    'name' =&gt; 'my_app',
+    'database' =&gt; $pdo,
+]);</code></pre><h2>Resolution principle</h2><pre><code>Module-local configuration
+        ↓
+Module PrefabConfig override
+        ↓
+Shared PrefabConfig
+        ↓
+Compatible discovered capability
+        ↓
+Internal default</code></pre><p>Explicit module configuration should win over automatic behavior. Shared config prevents repeated settings, but does not remove the ability to override one module.</p><div class="callout"><b>Keep display names and machine identifiers conceptually separate.</b> A long application display name does not need to become a session namespace or filesystem identifier.</div></article></main></div><script src="assets/js/app.js"></script></body></html>

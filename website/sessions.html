@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Session Isolation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="sessions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Reference</span><h1>Session isolation</h1><p class="lead">Every Prefab application should receive an isolated session identity by default, even when only one app currently exists on the server.</p><h2>Why this matters</h2><pre><code>localhost/web1
+localhost/web2</code></pre><p>Plain PHP can otherwise use the same generic session cookie on the same host. Prefab's session-aware modules should separate these applications automatically.</p><h2>Default behavior</h2><pre><code>localhost/web1
+→ namespace: web1
+→ cookie: PREFAB_WEB1_SESSION
+→ cookie path: /web1
+
+localhost/web2
+→ namespace: web2
+→ cookie: PREFAB_WEB2_SESSION
+→ cookie path: /web2</code></pre><p>If no session configuration exists, Prefab derives a stable application scope. Isolation is mandatory; configuration is optional.</p><h2>Intentional sharing</h2><pre><code>PrefabConfig::set([
+    'session' =&gt; [
+        'namespace' =&gt; 'company_sso',
+    ],
+]);</code></pre><p>Using the same explicit namespace in multiple apps indicates intentional sharing. Cookie path/domain rules still need to permit browser sharing.</p><div class="warning"><b>No separate <code>shared=true</code> flag is required.</b> An explicit common namespace already expresses that intention.</div></article></main></div><script src="assets/js/app.js"></script></body></html>

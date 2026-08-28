@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers who the user is. Permissions answers what that user may do.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><h2>Permission definitions</h2><p>The definitions file is the source of truth for permission metadata. Subject overrides stay small: permission ID plus boolean value.</p><pre><code>{
+  "documents.approve": {
+    "name": "Approve Documents",
+    "description": "Can approve routed documents",
+    "category": "Documents",
+    "default": false
+  }
+}</code></pre><h2>Resolution</h2><pre><code>User override
+   ↓ none
+Group overrides
+   ↓ none
+Permission default
+   ↓
+Allow / Deny</code></pre><p>Prefab Users can provide the same simple groups you created earlier. Permissions then adds group permission overrides rather than creating a duplicate group system.</p><h2>Typical check</h2><pre><code>if ($permissions-&gt;can($user, 'documents.approve')) {
+    // allow the action
+}</code></pre><div class="nextbox"><b>Checkpoint:</b> define one permission, assign it to a group, and verify a member receives the expected result.</div></article></main></div><script src="assets/js/app.js"></script></body></html>

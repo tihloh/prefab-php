@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">Create a reusable database connection before adding database-backed modules.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-database</code></pre><h2>Create a tutorial database</h2><p>Create a database named <code>prefab_tutorial</code> in MariaDB/MySQL using phpMyAdmin, Adminer, MySQL CLI, or another database tool.</p><h2>Connect with PDO</h2><pre><code>$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root',
+    '',
+    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);
+
+$pdo-&gt;query('SELECT 1');</code></pre><div class="callout"><b>Windows and Linux use the same PHP/PDO code.</b> Database service installation and credentials may differ.</div><div class="nextbox"><b>Checkpoint:</b> the test query runs without an exception.</div></article></main></div><script src="assets/js/app.js"></script></body></html>

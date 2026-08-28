@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Auto-Wiring</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="autowiring.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Reference</span><h1>Auto-Wiring</h1><p class="lead">Auto-wiring is Prefab's interoperability layer: modules publish capabilities and compatible modules consume what they need.</p><h2>Common capabilities</h2><pre><code>Database → database
+Users    → user_provider + group_provider
+Auth     → actor_provider
+Logs     → logger
+
+Users.user_provider ─────→ Auth
+Users.group_provider ────→ Permissions
+Logs.logger ─────────────→ Auth / Users / Permissions
+Auth.actor_provider ─────→ Logs / authorization context</code></pre><h2>What developers should normally see</h2><pre><code>$auth = new AuthManager();
+$result = $auth-&gt;attempt($email, $password);</code></pre><p>They should not need to call internal configuration methods when compatible resources can be discovered safely.</p><h2>Inspection</h2><p>When debugging, a module may expose diagnostics such as:</p><pre><code>print_r($auth-&gt;explain());
+print_r($users-&gt;explain());</code></pre><p>Inspection belongs in debugging/reference documentation, not in normal getting-started examples.</p></article></main></div><script src="assets/js/app.js"></script></body></html>

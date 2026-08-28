@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Routing</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="routes.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 1</span><h1>Routing</h1><p class="lead">A route maps an HTTP method and URL path to PHP code. Start here so later pages can build actual application endpoints.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-routes</code></pre><h2>First routes</h2><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
+
+use Tihloh\Prefab\Routes\RouteManager;
+
+$routes = new RouteManager();
+$routes->get('/', fn () =&gt; 'Home');
+$routes->get('/hello', fn () =&gt; 'Hello Prefab!');
+
+$result = $routes->dispatch();
+if (is_string($result)) {
+    echo $result;
+}</code></pre><h2>Try it</h2><p>With <code>php -S 127.0.0.1:8000 -t public</code> running, open <code>/</code> and <code>/hello</code>. Routes works independently; Users, Auth and Permissions are not required.</p><div class="nextbox"><b>Checkpoint:</b> both URLs respond through the router.</div></article></main></div><script src="assets/js/app.js"></script></body></html>

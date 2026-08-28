@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — With vs Without</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="comparison.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Introduction</span><h1>With Prefab vs without Prefab</h1><p class="lead">A normal login already crosses at least three concerns: <b>Users</b>, <b>Authentication</b> and <b>Logging</b>.</p><div class="compare"><section><h2>Without Prefab</h2><pre><code>$stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+$stmt->execute([$email]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$user || !password_verify($password, $user['password'])) {
+    $log = $pdo->prepare('INSERT INTO logs (event, message, created_at) VALUES (?, ?, NOW())');
+    $log->execute(['auth.login_failed', $email]);
+    throw new RuntimeException('Invalid credentials');
+}
+
+session_regenerate_id(true);
+$_SESSION['user_id'] = $user['id'];
+
+$log = $pdo->prepare('INSERT INTO logs (event, user_id, created_at) VALUES (?, ?, NOW())');
+$log->execute(['auth.login', $user['id']]);</code></pre><p>Your application manually coordinates user lookup, password verification, session state and audit logging.</p></section><section class="prefab"><h2>With Prefab</h2><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+
+$auth = new AuthManager();
+$result = $auth->attempt($email, $password);
+
+if (!$result->success) {
+    // Your application decides the response.
+}</code></pre><p>When Prefab Users and Prefab Logs are available, Auth can use their compatible capabilities automatically.</p><pre><code>Users ── user_provider ──┐
+                         ├──→ Auth
+Logs  ── logger ─────────┘</code></pre></section></div><blockquote><b>Install it. Use it.</b> Compatible modules remove repetitive integration code while your application keeps control of its architecture.</blockquote></article></main></div><script src="assets/js/app.js"></script></body></html>

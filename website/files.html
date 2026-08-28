@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Files</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="files.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 8</span><h1>Files</h1><p class="lead">Keep upload validation separate from file storage and file-management concerns.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-files</code></pre><h2>Recommended flow</h2><pre><code>Browser upload
+     ↓
+Prefab Input validates metadata/rules
+     ↓
+Accepted upload
+     ↓
+Prefab Files stores/manages it
+     ↓
+Your application saves any business reference</code></pre><p>Do not rely on the original filename alone. Validate file size/type before storing, and keep public/private storage decisions explicit.</p><div class="nextbox"><b>Checkpoint:</b> accept one valid upload, reject an invalid one, and verify the stored file path returned by your storage configuration.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
