@@ -1,7 +1,103 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Messaging</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="messaging.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 10</span><h1>Messaging</h1><p class="lead">Messaging owns outbound communication such as email while remaining independent from Users and Notifications.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><h2>Concept</h2><pre><code>Your business action
-      ↓
-Prefab Messaging
-      ↓
-Configured transport/provider
-      ↓
-Email or other outbound channel</code></pre><p>Credentials, sender identity and transport configuration belong in configuration, not directly in controllers.</p><h2>Better together</h2><p>Users may provide recipient details, Notifications may represent an in-app notice, and Messaging may deliver an email. They remain separate capabilities so you can install only what you need.</p><div class="nextbox"><b>Checkpoint:</b> configure a test transport and send one message before connecting it to a larger workflow.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Messaging</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="messaging.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 10</span><h1>Messaging</h1><p class="lead">Start with a zero-cost local test channel so you can verify the complete send flow in a browser before configuring real SMTP.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><h2>Create <code>public/messaging.php</code></h2><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
+
+use Tihloh\Prefab\Messaging\Channels\CallableChannel;
+use Tihloh\Prefab\Messaging\MessagingManager;
+use Tihloh\Prefab\Messaging\Message;
+use Tihloh\Prefab\Messaging\Recipient;
+
+$messages = [];
+
+$testChannel = new CallableChannel('test', function (Recipient $recipient, Message $message) use (&amp;$messages) {
+    $messages[] = [
+        'recipient' =&gt; $recipient,
+        'subject' =&gt; $message-&gt;subject,
+        'text' =&gt; $message-&gt;text,
+    ];
+    return 'TEST-' . time();
+});
+
+$messaging = new MessagingManager([$testChannel]);
+$result = null;
+
+$messaging-&gt;on('sending', function () { /* before delivery */ });
+$messaging-&gt;on('sent', function () { /* after success */ });
+$messaging-&gt;on('failed', function () { /* after failure */ });
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $recipient = new Recipient([
+        'test' =&gt; $_POST['to'] ?? 'demo@example.com',
+    ]);
+
+    $result = $messaging-&gt;send(
+        'test',
+        $recipient,
+        new Message(
+            $_POST['subject'] ?? 'Prefab test',
+            $_POST['body'] ?? 'Hello from Prefab Messaging',
+        ),
+    );
+}
+?&gt;
+&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;
+&lt;h1&gt;Prefab Messaging Test&lt;/h1&gt;
+&lt;form method="post"&gt;
+    &lt;p&gt;&lt;input name="to" value="demo@example.com"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="subject" value="Prefab test"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;textarea name="body"&gt;Hello from Prefab Messaging&lt;/textarea&gt;&lt;/p&gt;
+    &lt;button&gt;Send test message&lt;/button&gt;
+&lt;/form&gt;
+&lt;?php if ($result): ?&gt;
+    &lt;h2&gt;Delivery result&lt;/h2&gt;
+    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($result, true)) ?&gt;&lt;/pre&gt;
+    &lt;h2&gt;Captured message&lt;/h2&gt;
+    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($messages, true)) ?&gt;&lt;/pre&gt;
+&lt;?php endif; ?&gt;
+&lt;/body&gt;&lt;/html&gt;</code></pre><p>This verifies channel registration, recipient routing, <code>Message</code>, <code>send()</code>, delivery results and lifecycle hooks without requiring an email account.</p><h2>Direct mail API</h2><pre><code>$result = $messaging-&gt;mail(
+    'user@example.com',
+    'Annual Report',
+    'Your report is ready.',
+);</code></pre><p>The <code>mail()</code> convenience requires a registered <code>mail</code> channel.</p><h2>Real SMTP</h2><pre><code>use Tihloh\Prefab\Messaging\Channels\MailChannel;
+use Tihloh\Prefab\Messaging\Mail\SmtpTransport;
+
+$smtp = new SmtpTransport([
+    'host' =&gt; 'smtp.example.com',
+    'port' =&gt; 587,
+    'username' =&gt; 'user@example.com',
+    'password' =&gt; 'secret',
+    'encryption' =&gt; 'tls',
+    'from' =&gt; [
+        'address' =&gt; 'noreply@example.com',
+        'name' =&gt; 'My System',
+    ],
+]);
+
+$messaging = new MessagingManager([
+    new MailChannel($smtp),
+]);
+
+$result = $messaging-&gt;mail(
+    'recipient@example.com',
+    'SMTP Test',
+    'This message was sent through SMTP.',
+);</code></pre><h2>Generic channels</h2><pre><code>$result = $messaging-&gt;send(
+    'sms',
+    $recipient,
+    new Message('OTP', 'Your code is 123456'),
+);</code></pre><h2>Templates</h2><pre><code>$template = new Template(
+    subject: 'Hello {{name}}',
+    text: 'Your report {{report}} is ready.'
+);
+
+$message = $template-&gt;render([
+    'name' =&gt; 'Demo User',
+    'report' =&gt; 'AR-2026',
+]);</code></pre><h2>Attachments</h2><pre><code>$message = new Message(
+    subject: 'Report',
+    text: 'Your report is attached.',
+    attachments: [
+        Attachment::fromPath('/tmp/report.pdf'),
+    ],
+);</code></pre><p>You can also use <code>Attachment::fromData()</code> for in-memory content.</p><h2>Delivery hooks</h2><pre><code>$messaging-&gt;on('sending', function ($channel, $recipient, $message) {});
+$messaging-&gt;on('sent', function ($channel, $recipient, $message, $result) {});
+$messaging-&gt;on('failed', function ($channel, $recipient, $message, $result) {});</code></pre><div class="nextbox"><b>Checkpoint:</b> first verify sending through the local callable test channel. Only after that works, replace it with SMTP and confirm an external email arrives.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
