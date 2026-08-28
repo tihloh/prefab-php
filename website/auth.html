@@ -1,12 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Authentication</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="auth.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 5</span><h1>Authentication</h1><p class="lead">Use the real user created in the Users tutorial, then test failed login, successful login, session persistence, current-user lookup and logout through an actual browser screen.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-auth</code></pre><h2>Prerequisite</h2><p>Complete the Users tutorial first and create a user with a known email/password. The <code>users</code> table must contain <code>id</code>, <code>email</code>, <code>password_hash</code> and <code>active</code>.</p><h2>Create <code>public/auth.php</code></h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Authentication</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="auth.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 5</span><h1>Authentication</h1><p class="lead">First make one login work. Then add a login screen, session display, logout and inactive-account handling. Provider details and social authentication come later.</p><div class="callout"><b>Before starting:</b> complete the basic Users tutorial through creating users. You do not need to finish its advanced sections.</div><h2>1. Install</h2><pre><code>composer require tihloh/prefab-auth</code></pre><h2>2. Give Alice a password</h2><p>Auth needs a password hash. Add the column if you have not already:</p><pre><code>ALTER TABLE users ADD password_hash VARCHAR(255) NULL;</code></pre><p>Create a hash once from the terminal:</p><pre><code>php -r "echo password_hash('secret123', PASSWORD_DEFAULT), PHP_EOL;"</code></pre><p>Copy the generated hash and save it for Alice:</p><pre><code>UPDATE users
+SET password_hash = 'PASTE_HASH_HERE'
+WHERE email = 'alice@example.com';</code></pre><div class="nextbox"><b>Checkpoint:</b> Alice has an email, password hash and <code>active = 1</code>.</div><h2>3. Create the smallest Auth user</h2><p>Create <code>public/login.php</code>. Start with only the contract Auth needs:</p><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Auth\Contracts\AuthenticatableUserInterface;
-use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
-use Tihloh\Prefab\Auth\Services\AuthManager;
-use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 
-final class TutorialAuthUser implements AuthenticatableUserInterface
+final class LoginUser implements AuthenticatableUserInterface
 {
     public function __construct(
         public int $id,
@@ -18,38 +17,45 @@ final class TutorialAuthUser implements AuthenticatableUserInterface
     public function authId(): int|string { return $this-&gt;id; }
     public function authPasswordHash(): ?string { return $this-&gt;passwordHash; }
     public function authIsActive(): bool { return $this-&gt;active; }
-}
+}</code></pre><p>Nothing is displayed yet. This slice only defines what Auth considers an authenticatable user.</p><h2>4. Add a tiny database provider</h2><p>Under <code>LoginUser</code>, add:</p><pre><code>use Tihloh\Prefab\Auth\Contracts\AuthUserProviderInterface;
 
-final class TutorialAuthProvider implements AuthUserProviderInterface
+final class LoginProvider implements AuthUserProviderInterface
 {
     public function __construct(private PDO $pdo) {}
 
-    public function findByIdentifier(string $identifier): ?AuthenticatableUserInterface
+    public function findByIdentifier(string $email): ?AuthenticatableUserInterface
     {
-        $stmt = $this-&gt;pdo-&gt;prepare('SELECT id,email,password_hash,active FROM users WHERE email = ? LIMIT 1');
-        $stmt-&gt;execute([$identifier]);
+        $stmt = $this-&gt;pdo-&gt;prepare(
+            'SELECT id,email,password_hash,active FROM users WHERE email = ? LIMIT 1'
+        );
+        $stmt-&gt;execute([$email]);
         $row = $stmt-&gt;fetch(PDO::FETCH_ASSOC);
+
         return $row ? $this-&gt;make($row) : null;
     }
 
     public function findById(int|string $id): ?AuthenticatableUserInterface
     {
-        $stmt = $this-&gt;pdo-&gt;prepare('SELECT id,email,password_hash,active FROM users WHERE id = ? LIMIT 1');
+        $stmt = $this-&gt;pdo-&gt;prepare(
+            'SELECT id,email,password_hash,active FROM users WHERE id = ? LIMIT 1'
+        );
         $stmt-&gt;execute([$id]);
         $row = $stmt-&gt;fetch(PDO::FETCH_ASSOC);
+
         return $row ? $this-&gt;make($row) : null;
     }
 
-    private function make(array $row): TutorialAuthUser
+    private function make(array $row): LoginUser
     {
-        return new TutorialAuthUser(
+        return new LoginUser(
             (int) $row['id'],
             $row['email'],
             $row['password_hash'],
             (bool) $row['active'],
         );
     }
-}
+}</code></pre><h2>5. Create AuthManager</h2><p>Below the classes, connect the database and Auth:</p><pre><code>use Tihloh\Prefab\Auth\Services\AuthManager;
+use Tihloh\Prefab\Auth\Session\NativeSessionStore;
 
 $pdo = new PDO(
     'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
@@ -59,58 +65,50 @@ $pdo = new PDO(
 );
 
 $auth = new AuthManager(
-    new TutorialAuthProvider($pdo),
+    new LoginProvider($pdo),
     new NativeSessionStore(),
-);
+);</code></pre><h2>6. Test one login before building a form</h2><p>Temporarily add this at the bottom:</p><pre><code>$result = $auth-&gt;attempt('alice@example.com', 'secret123');
 
-$message = '';
+echo $result-&gt;success ? 'Login works' : 'Login failed';</code></pre><p>Run:</p><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/login.php</code>.</p><div class="nextbox"><b>Checkpoint:</b> the browser says <b>Login works</b>. Change the password in the code and confirm it says <b>Login failed</b>.</div><h2>7. Replace the hard-coded login with a form</h2><p>Remove the temporary <code>$auth-&gt;attempt(...)</code> test. Replace it with:</p><pre><code>$message = '';
 
-if (isset($_POST['logout'])) {
-    $auth-&gt;logout();
-    $message = 'Logged out.';
-}
-
-if (isset($_POST['login'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $auth-&gt;attempt(
         $_POST['email'] ?? '',
         $_POST['password'] ?? '',
-        [
-            'ip_address' =&gt; $_SERVER['REMOTE_ADDR'] ?? null,
-            'user_agent' =&gt; $_SERVER['HTTP_USER_AGENT'] ?? null,
-        ],
     );
-    $message = $result-&gt;success ? 'Login successful.' : 'Invalid login.';
-}
-?&gt;
-&lt;!doctype html&gt;
-&lt;html&gt;&lt;body&gt;
-&lt;h1&gt;Prefab Auth Test&lt;/h1&gt;
+
+    $message = $result-&gt;success
+        ? 'Login successful.'
+        : 'Invalid login.';
+}</code></pre><p>Then add this after the closing <code>?&gt;</code>:</p><pre><code>&lt;h1&gt;Login&lt;/h1&gt;
 &lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;
 
-&lt;?php if ($auth-&gt;check()): ?&gt;
-    &lt;h2&gt;Logged in&lt;/h2&gt;
-    &lt;p&gt;User ID: &lt;?= htmlspecialchars((string) $auth-&gt;id()) ?&gt;&lt;/p&gt;
-    &lt;p&gt;Email: &lt;?= htmlspecialchars($auth-&gt;user()-&gt;email) ?&gt;&lt;/p&gt;
-    &lt;form method="post"&gt;
-        &lt;button name="logout" value="1"&gt;Logout&lt;/button&gt;
-    &lt;/form&gt;
-&lt;?php else: ?&gt;
-    &lt;h2&gt;Login&lt;/h2&gt;
-    &lt;form method="post"&gt;
-        &lt;p&gt;&lt;input name="email" type="email" placeholder="Email" required&gt;&lt;/p&gt;
-        &lt;p&gt;&lt;input name="password" type="password" placeholder="Password" required&gt;&lt;/p&gt;
-        &lt;button name="login" value="1"&gt;Login&lt;/button&gt;
-    &lt;/form&gt;
-&lt;?php endif; ?&gt;
-&lt;/body&gt;&lt;/html&gt;</code></pre><h2>Run and test</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/auth.php</code>.</p><h3>Test 1 — wrong password</h3><p>Use the correct email but an incorrect password. You should see <b>Invalid login</b>.</p><h3>Test 2 — correct login</h3><p>Use the password you entered in the Users tutorial. The screen should show the authenticated user ID and email.</p><h3>Test 3 — session persistence</h3><p>Refresh the page. <code>$auth-&gt;check()</code>, <code>$auth-&gt;id()</code> and <code>$auth-&gt;user()</code> should still identify the user.</p><h3>Test 4 — inactive user</h3><p>Deactivate the same account in <code>users.php</code>, log out, then attempt to sign in again.</p><h3>Test 5 — logout</h3><p>Click Logout and confirm the login form returns.</p><h2>Core API</h2><pre><code>$auth-&gt;check();
+&lt;form method="post"&gt;
+    &lt;p&gt;&lt;input name="email" type="email" placeholder="Email" required&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;input name="password" type="password" placeholder="Password" required&gt;&lt;/p&gt;
+    &lt;button&gt;Login&lt;/button&gt;
+&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> try a wrong password, then log in with <code>alice@example.com</code> / <code>secret123</code>.</div><h2>8. Show the current session</h2><p>Now that login works, add this above the form:</p><pre><code>&lt;?php if ($auth-&gt;check()): ?&gt;
+    &lt;p&gt;Logged in as user #&lt;?= htmlspecialchars((string) $auth-&gt;id()) ?&gt;&lt;/p&gt;
+&lt;?php endif; ?&gt;</code></pre><p>Refresh after logging in. The session should still exist.</p><p>The three most useful read methods are:</p><pre><code>$auth-&gt;check();
 $auth-&gt;id();
-$auth-&gt;user();
-$auth-&gt;logout();</code></pre><h2>Authentication result and logging</h2><pre><code>$result = $auth-&gt;attempt($email, $password);
+$auth-&gt;user();</code></pre><div class="nextbox"><b>Checkpoint:</b> refresh the page and confirm you remain logged in.</div><h2>9. Add logout</h2><p>Add this before the login POST handler:</p><pre><code>if (isset($_POST['logout'])) {
+    $auth-&gt;logout();
+    $message = 'Logged out.';
+}</code></pre><p>Inside the logged-in section, add:</p><pre><code>&lt;form method="post"&gt;
+    &lt;button name="logout" value="1"&gt;Logout&lt;/button&gt;
+&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> log in, refresh, then log out.</div><h2>10. Build on it — inactive accounts</h2><p>Deactivate Alice using the Users tutorial or SQL:</p><pre><code>UPDATE users SET active = 0
+WHERE email = 'alice@example.com';</code></pre><p>Log out and try to sign in again. Then restore her:</p><pre><code>UPDATE users SET active = 1
+WHERE email = 'alice@example.com';</code></pre><h2>11. Build on it — request context</h2><p>Once the basic login is clear, attach useful request information:</p><pre><code>$result = $auth-&gt;attempt(
+    $_POST['email'] ?? '',
+    $_POST['password'] ?? '',
+    [
+        'ip_address' =&gt; $_SERVER['REMOTE_ADDR'] ?? null,
+        'user_agent' =&gt; $_SERVER['HTTP_USER_AGENT'] ?? null,
+    ],
+);</code></pre><h2>12. Build on it — authentication result and logs</h2><pre><code>$result = $auth-&gt;attempt($email, $password);
+
 if ($result-&gt;success) {
     $logs?-&gt;record($result-&gt;log);
-}</code></pre><h2>Social authentication</h2><p>Social login requires a real OAuth provider configuration, callback URL and a <code>SocialUserResolverInterface</code>. The package supports provider registration, authorization URLs, callback handling, account lookup and unlinking; those examples should only be tested after provider credentials exist.</p><pre><code>$url = $social-&gt;authorizationUrl('google');
-header('Location: ' . $url);
-
-$result = $social-&gt;callback('google', $_GET);
-$accounts = $social-&gt;accountsForUser($userId);
-$social-&gt;unlink($userId, 'google');</code></pre><div class="callout"><b>Why this tutorial uses an explicit provider:</b> Auth intentionally does not own the users table. The tutorial therefore shows the complete contract boundary instead of pretending that a user database appears automatically.</div><div class="nextbox"><b>Checkpoint:</b> you can visibly test failed login, successful login, current session/user, inactive-account rejection and logout from a browser.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+}</code></pre><h2>13. Advanced — provider boundary</h2><p>Why did we create <code>LoginProvider</code>? Auth intentionally does not own your users table. It asks a provider for an object implementing <code>AuthenticatableUserInterface</code>. That lets Auth work with Prefab Users, an existing application, LDAP-style adapters, or another user source.</p><div class="callout"><b>Important:</b> learn this architecture after the login screen works. You do not need to understand the provider abstraction before testing your first login.</div><h2>14. Advanced — social authentication</h2><p>Social login needs OAuth provider credentials, a callback URL and a social-user resolver. Treat it as a separate advanced exercise rather than part of your first login.</p><pre><code>$url = $social-&gt;authorizationUrl('google');
+header('Location: ' . $url);</code></pre><p>After the provider redirects back:</p><pre><code>$result = $social-&gt;callback('google', $_GET);</code></pre><p>Account management:</p><pre><code>$accounts = $social-&gt;accountsForUser($userId);
+$social-&gt;unlink($userId, 'google');</code></pre><div class="nextbox"><b>Finished:</b> you progressed from one hard-coded authentication attempt to a real login form, persistent session, logout, inactive-user handling and finally the advanced extension points.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
