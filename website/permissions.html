@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Create real definitions, persist overrides, then use browser controls to test defaults, user allow/deny, clear/inherit, group inheritance and resolution source.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><h2>Create <code>config/permissions.php</code></h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers “who is the user?” Permissions answers “what is that user allowed to do?” This tutorial defines two permissions, stores user and group overrides, and shows how Prefab decides the final result.</p><h2>1. Install Permissions</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><p>The module separates <b>permission definitions</b> from <b>permission overrides</b>. A definition describes an action and its default state. An override changes that state for a specific user or group.</p><h2>2. Define the available permissions</h2><p>Create <code>config/permissions.php</code>:</p><pre><code>&lt;?php
 return [
     'documents.view' =&gt; [
         'name' =&gt; 'View Documents',
@@ -12,7 +12,7 @@ return [
         'category' =&gt; 'Documents',
         'default' =&gt; false,
     ],
-];</code></pre><h2>Create <code>public/permissions.php</code></h2><pre><code>&lt;?php
+];</code></pre><p>The array key such as <code>documents.approve</code> is the machine-readable permission ID used by code. The name and description are human-friendly labels for an admin screen. The default is used only when no user or group override applies.</p><p>This means a new user can view documents by default, but cannot approve them until a rule grants that permission.</p><h2>3. Represent the subject being checked</h2><p>Create <code>public/permissions.php</code> and begin with:</p><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
@@ -24,9 +24,7 @@ final class TutorialSubject implements PermissionSubjectInterface
     public function __construct(public int $id, public array $groups = []) {}
     public function permissionSubjectId(): int|string { return $this-&gt;id; }
     public function permissionGroupIds(): array { return $this-&gt;groups; }
-}
-
-$pdo = new PDO(
+}</code></pre><p>Permissions does not require a specific User class. Instead, it asks for a small contract: the subject's ID and the IDs of groups it belongs to. This keeps the module usable with Prefab Users or another application's user model.</p><h2>4. Connect storage and definitions</h2><pre><code>$pdo = new PDO(
     'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
     'root',
     '',
@@ -36,13 +34,9 @@ $pdo = new PDO(
 $permissions = new PermissionManager(
     __DIR__ . '/../config/permissions.php',
     new PdoPermissionStore($pdo),
-);
-
-$userId = (int) ($_GET['user'] ?? $_POST['user'] ?? 1);
-$groups = [10]; // tutorial user belongs to group 10
-$user = new TutorialSubject($userId, $groups);
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+);</code></pre><p><code>PermissionManager</code> performs resolution. <code>PdoPermissionStore</code> persists overrides. The store automatically creates <code>prefab_subject_permissions</code>, so the application does not have to design a table just to test the module.</p><h2>5. Create a test user and group</h2><pre><code>$userId = (int) ($_GET['user'] ?? $_POST['user'] ?? 1);
+$groups = [10];
+$user = new TutorialSubject($userId, $groups);</code></pre><p>This tutorial treats user #1 as a member of group #10. The actual group does not need a separate table for this demonstration because Permissions only needs the group ID during resolution.</p><h2>6. Allow, deny or clear an override</h2><p>Add the POST handler:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $permission = $_POST['permission'] ?? 'documents.approve';
     $scope = $_POST['scope'] ?? 'user';
     $id = $scope === 'group' ? 10 : $userId;
@@ -53,10 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'clear') $permissions-&gt;clear($scope, $id, $permission);
 }
 
-$results = $permissions-&gt;resolvedFor($user);
-?&gt;
-&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;
-&lt;h1&gt;Prefab Permissions Test&lt;/h1&gt;
+$results = $permissions-&gt;resolvedFor($user);</code></pre><p><code>set(..., true)</code> creates an explicit allow. <code>set(..., false)</code> creates an explicit deny. <code>clear()</code> removes the override completely, which is different from denying. Once cleared, the decision falls back to another source such as a group or the definition default.</p><h2>7. Add browser controls</h2><pre><code>&lt;h1&gt;Prefab Permissions Test&lt;/h1&gt;
 &lt;p&gt;User #&lt;?= $userId ?&gt; — tutorial group #10&lt;/p&gt;
 
 &lt;form method="post"&gt;
@@ -72,25 +63,19 @@ $results = $permissions-&gt;resolvedFor($user);
     &lt;button name="action" value="allow"&gt;Allow&lt;/button&gt;
     &lt;button name="action" value="deny"&gt;Deny&lt;/button&gt;
     &lt;button name="action" value="clear"&gt;Clear / Inherit&lt;/button&gt;
-&lt;/form&gt;
-
-&lt;h2&gt;Effective permissions&lt;/h2&gt;
+&lt;/form&gt;</code></pre><p>The form lets you change both the permission and the scope. The hidden user field preserves the selected user ID across POST requests.</p><h2>8. Display the effective result</h2><pre><code>&lt;h2&gt;Effective permissions&lt;/h2&gt;
 &lt;pre&gt;&lt;?php
 foreach ($results as $id =&gt; $result) {
     echo $id . ' = ' . ($result-&gt;allowed ? 'ALLOW' : 'DENY') . ' via ' . $result-&gt;source . PHP_EOL;
 }
-?&gt;&lt;/pre&gt;
-
-&lt;h2&gt;Raw overrides&lt;/h2&gt;
-&lt;pre&gt;&lt;?= htmlspecialchars(print_r([
-    'user' =&gt; $permissions-&gt;overridesFor('user', $userId),
-    'group10' =&gt; $permissions-&gt;overridesFor('group', 10),
-], true)) ?&gt;&lt;/pre&gt;
-&lt;/body&gt;&lt;/html&gt;</code></pre><p><code>PdoPermissionStore</code> creates its own <code>prefab_subject_permissions</code> table when needed, so you do not need to manually invent a schema for this tutorial.</p><h2>Test the resolution order</h2><pre><code>User override
+?&gt;&lt;/pre&gt;</code></pre><p>The important part is <code>$result-&gt;source</code>. It explains <em>why</em> the result is allow or deny, not only the final boolean.</p><h2>9. Understand resolution order</h2><pre><code>User override
     ↓ if absent
 Group overrides
     ↓ if absent
-Definition default</code></pre><p>Try these tests: clear everything and observe defaults; allow <code>documents.approve</code> for group 10; deny it for the user and observe that user override wins; clear the user override and observe the group allow again.</p><h2>Direct API</h2><pre><code>$permissions-&gt;set('user', 1, 'documents.approve', true);
+Definition default</code></pre><p>A user-specific rule is the most precise, so it wins. If there is no user rule, Prefab considers the user's groups. If no group supplies a decision, the permission definition's default is used.</p><p>Test the sequence: clear everything and observe defaults; allow <code>documents.approve</code> for group #10; deny it for user #1; then clear the user deny. The group allow should become effective again.</p><h2>10. Inspect raw overrides</h2><pre><code>print_r([
+    'user' =&gt; $permissions-&gt;overridesFor('user', $userId),
+    'group10' =&gt; $permissions-&gt;overridesFor('group', 10),
+]);</code></pre><p>Raw overrides show only explicitly stored rules. They are useful when building an admin screen that must distinguish “deny” from “inherit.”</p><h2>11. Direct API</h2><pre><code>$permissions-&gt;set('user', 1, 'documents.approve', true);
 $permissions-&gt;set('user', 1, 'documents.approve', false);
 $permissions-&gt;clear('user', 1, 'documents.approve');
 $permissions-&gt;clearAll('user', 1);
@@ -100,4 +85,4 @@ $permissions-&gt;resolve($user, 'documents.approve');
 $permissions-&gt;resolvedFor($user);
 $permissions-&gt;definitions();
 $permissions-&gt;definition('documents.approve');
-$permissions-&gt;defined('documents.approve');</code></pre><h2>Diagnostics</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><div class="nextbox"><b>Checkpoint:</b> you can change permission state from the browser and visibly observe whether the final decision came from the user, group, or definition default.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+$permissions-&gt;defined('documents.approve');</code></pre><p><code>can()</code> is the convenient yes/no check used by application code. <code>resolve()</code> returns the richer result when the caller also needs the decision source. <code>resolvedFor()</code> resolves all definitions for one subject.</p><h2>12. Diagnostics</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><p><code>explain()</code> helps diagnose which storage and integrations the module resolved at runtime.</p><div class="nextbox"><b>Next:</b> Continue to Audit Logs to record who performed important actions and what changed.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
