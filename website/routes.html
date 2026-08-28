@@ -1,13 +1,87 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Routing</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="routes.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 1</span><h1>Routing</h1><p class="lead">A route maps an HTTP method and URL path to PHP code. Start here so later pages can build actual application endpoints.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-routes</code></pre><h2>First routes</h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Routing</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="routes.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 1</span><h1>Routing</h1><p class="lead">Start with a working front controller, then test every major Routes feature: HTTP methods, parameters, constraints, names, URL generation, groups, middleware, resource routes, redirects, fallback, metadata, tags, route files and diagnostics.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-routes</code></pre><h2>Create <code>public/index.php</code></h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Routes\RouteManager;
 
 $routes = new RouteManager();
-$routes->get('/', fn () =&gt; 'Home');
-$routes->get('/hello', fn () =&gt; 'Hello Prefab!');
 
-$result = $routes->dispatch();
-if (is_string($result)) {
-    echo $result;
-}</code></pre><h2>Try it</h2><p>With <code>php -S 127.0.0.1:8000 -t public</code> running, open <code>/</code> and <code>/hello</code>. Routes works independently; Users, Auth and Permissions are not required.</p><div class="nextbox"><b>Checkpoint:</b> both URLs respond through the router.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+$routes-&gt;get('/', fn () =&gt; '&lt;h1&gt;Prefab Routes&lt;/h1&gt;&lt;p&gt;Router is working.&lt;/p&gt;');
+$routes-&gt;get('/hello/{name}', fn (string $name) =&gt; "Hello {$name}");
+
+$result = $routes-&gt;dispatch();
+if (is_string($result)) echo $result;</code></pre><h2>Run it</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/</code> and <code>http://127.0.0.1:8000/hello/Christian</code>.</p><h2>HTTP methods</h2><pre><code>$routes-&gt;get('/method/get', fn () =&gt; 'GET');
+$routes-&gt;post('/method/post', fn () =&gt; 'POST');
+$routes-&gt;put('/method/put', fn () =&gt; 'PUT');
+$routes-&gt;patch('/method/patch', fn () =&gt; 'PATCH');
+$routes-&gt;delete('/method/delete', fn () =&gt; 'DELETE');
+$routes-&gt;any('/method/any', fn () =&gt; 'ANY');
+$routes-&gt;matchMethods(['GET','POST'], '/method/both', fn () =&gt; 'GET or POST');</code></pre><p>Use a browser for GET and tools such as curl/Postman for POST, PUT, PATCH and DELETE.</p><h2>Parameters, optional values and defaults</h2><pre><code>$routes-&gt;get('/users/{id}', fn ($id) =&gt; "User {$id}");
+$routes-&gt;get('/reports/{year?}', fn ($year) =&gt; "Report {$year}")
+    -&gt;defaults(['year' =&gt; date('Y')]);</code></pre><h2>Constraints</h2><pre><code>$routes-&gt;get('/numbers/{id}', fn ($id) =&gt; "Number {$id}")
+    -&gt;where('id', '\d+');</code></pre><p><code>/numbers/25</code> matches; <code>/numbers/test</code> does not.</p><h2>Named routes and URL generation</h2><pre><code>$routes-&gt;get('/profiles/{id}', fn ($id) =&gt; "Profile {$id}")
+    -&gt;name('profiles.show');
+
+echo $routes-&gt;url('profiles.show', ['id' =&gt; 25]);
+echo $routes-&gt;url('profiles.show', ['id' =&gt; 25, 'tab' =&gt; 'activity']);</code></pre><h2>Route groups</h2><pre><code>$routes-&gt;group('/admin', function (RouteManager $routes) {
+    $routes-&gt;get('/users', fn () =&gt; 'Admin users');
+    $routes-&gt;get('/logs', fn () =&gt; 'Admin logs');
+});</code></pre><h3>Advanced group</h3><pre><code>$routes-&gt;group([
+    'prefix' =&gt; '/api',
+    'name' =&gt; 'api.',
+    'meta' =&gt; ['area' =&gt; 'api'],
+], function (RouteManager $routes) {
+    $routes-&gt;get('/status', fn () =&gt; 'OK')-&gt;name('status');
+});</code></pre><h2>Middleware</h2><pre><code>$routes-&gt;middleware('demo-auth', function (callable $next, $match) {
+    if (($_GET['key'] ?? '') !== 'secret') {
+        http_response_code(401);
+        return 'Unauthorized. Add ?key=secret';
+    }
+    return $next();
+});
+
+$routes-&gt;get('/protected', fn () =&gt; 'Protected page')
+    -&gt;middleware('demo-auth');</code></pre><p>Try <code>/protected</code>, then <code>/protected?key=secret</code>.</p><h2>Fallback and redirects</h2><pre><code>$routes-&gt;redirect('/old-page', '/');
+$routes-&gt;redirect('/old-permanent', '/', 301);
+
+$routes-&gt;fallback(function () {
+    http_response_code(404);
+    return 'Custom 404';
+});</code></pre><h2>Metadata, tags and integration hooks</h2><pre><code>$routes-&gt;get('/documents/{id}', fn ($id) =&gt; "Document {$id}")
+    -&gt;name('documents.show')
+    -&gt;tag('documents', 'demo')
+    -&gt;meta(['title' =&gt; 'Document Details'])
+    -&gt;auth()
+    -&gt;permission('documents.view')
+    -&gt;log('documents.view');</code></pre><p>Routes stores the auth/permission/log requirements as neutral metadata. Enforcement belongs to middleware or integration code.</p><h2>Resource routes</h2><pre><code>use App\Controllers\UserController;
+$routes-&gt;resource('/users', UserController::class);</code></pre><p>This generates conventional index, show, store, update and delete routes. Use this when you have a real controller class; closures are easier while learning.</p><h2>Controller handlers</h2><pre><code>$routes = new RouteManager([
+    'controller_namespace' =&gt; 'App\\Controllers',
+]);
+
+$routes-&gt;get('/users/{id}', 'UserController@show');
+// or
+$routes-&gt;get('/users/{id}', [App\Controllers\UserController::class, 'show']);</code></pre><h2>Route arrays</h2><pre><code>$routes = new RouteManager([
+    'routes' =&gt; [
+        ['GET', '/', fn () =&gt; 'Home', 'home'],
+        [
+            'method' =&gt; 'GET',
+            'path' =&gt; '/items/{id}',
+            'handler' =&gt; fn ($id) =&gt; "Item {$id}",
+            'name' =&gt; 'items.show',
+            'constraints' =&gt; ['id' =&gt; '\d+'],
+            'tags' =&gt; ['items'],
+        ],
+    ],
+]);</code></pre><h2>Separate route files</h2><p>Create <code>routes/web.php</code>:</p><pre><code>&lt;?php
+return [
+    ['GET', '/from-file', fn () =&gt; 'Loaded from routes/web.php', 'from-file'],
+];</code></pre><p>Then load it before dispatch:</p><pre><code>$routes-&gt;load(__DIR__ . '/../routes/web.php');</code></pre><h2>Matching without dispatch</h2><pre><code>$match = $routes-&gt;match('GET', '/users/25');
+if ($match) {
+    print_r($match-&gt;parameters());
+}</code></pre><h2>Inspection and diagnostics</h2><pre><code>print_r($routes-&gt;all());
+print_r($routes-&gt;find('profiles.show'));
+print_r($routes-&gt;byTag('documents'));
+print_r($routes-&gt;toArray());
+print_r($routes-&gt;table());
+print_r($routes-&gt;explain());</code></pre><h3>Test conflict detection</h3><pre><code>$routes-&gt;get('/duplicate', fn () =&gt; 'A');
+$routes-&gt;get('/duplicate', fn () =&gt; 'B');
+print_r($routes-&gt;explain());</code></pre><p>The diagnostics should report the duplicate <code>GET /duplicate</code>.</p><h2>Static files</h2><p>CSS, JavaScript, images and fonts belong directly under <code>public/</code>; do not register routes for them.</p><div class="nextbox"><b>Checkpoint:</b> you can test simple routes, parameters, optional/default values, constraints, named URLs, groups, middleware, fallback, redirects, metadata/tags, route files and route diagnostics from this one tutorial project.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
