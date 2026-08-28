@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users & Groups</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users and simple Groups</h1><p class="lead">Prefab Users manages user records and simple group organization. Permissions remain optional.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>Create the manager</h2><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
+
+$users = new UserManager([
+    'database' =&gt; $pdo,
+    'table' =&gt; 'users',
+]);</code></pre><h2>Common user operations</h2><pre><code>$user = $users-&gt;find(1);
+$all  = $users-&gt;all();
+
+$result = $users-&gt;create([
+    'name' =&gt; 'Demo User',
+    'email' =&gt; 'demo@example.com',
+    'password' =&gt; password_hash('secret123', PASSWORD_DEFAULT),
+]);</code></pre><h2>Simple groups</h2><pre><code>$groups = $users-&gt;groups();
+$staff = $groups-&gt;create('Staff', 'Application staff');
+$groups-&gt;addUser($userId, $staff-&gt;id);
+$groups-&gt;syncUserGroups($userId, [1, 2]);</code></pre><p>A simple group contains an ID, name, optional description and membership. When Permissions is installed later, it can add authorization to these same logical groups.</p><div class="nextbox"><b>Checkpoint:</b> create a user and one group, then attach the user to the group.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
