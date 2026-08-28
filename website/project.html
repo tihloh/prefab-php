@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Create a Project</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="project.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Getting Started</span><h1>Create the tutorial project</h1><div class="os-grid"><section><span class="os-label">Windows</span><h2>PowerShell</h2><pre><code>mkdir prefab-tutorial
+cd prefab-tutorial
+composer init
+mkdir public
+mkdir storage</code></pre></section><section><span class="os-label">Linux</span><h2>Bash</h2><pre><code>mkdir prefab-tutorial
+cd prefab-tutorial
+composer init
+mkdir -p public storage</code></pre></section></div><h2>Install the first module</h2><pre><code>composer require tihloh/prefab-routes</code></pre><p>If no stable package is available yet, use the development form described on the previous page.</p><h2>Create <code>public/index.php</code></h2><pre><code>&lt;?php
+
+declare(strict_types=1);
+require __DIR__ . '/../vendor/autoload.php';
+
+echo 'Prefab is loaded';</code></pre><h2>Run the local server</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000</code>.</p><div class="nextbox"><b>Checkpoint:</b> if you see “Prefab is loaded”, PHP, Composer, <code>vendor/</code> and Composer autoloading are working.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
