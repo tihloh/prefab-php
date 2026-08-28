@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Record real events from a browser form and immediately inspect recent, actor-specific and subject-specific audit records.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>Create <code>public/logs.php</code></h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Audit logs answer questions such as “who changed this record?”, “what changed?”, and “when did it happen?” This tutorial records real events, stores them in the database and then queries them by actor and subject.</p><h2>1. Install Logs</h2><pre><code>composer require tihloh/prefab-logs</code></pre><p>Prefab Logs separates the logging API from storage. <code>LogManager</code> is what application code calls. <code>PdoLogRepository</code> is the database-backed repository used in this tutorial.</p><h2>2. Connect the log repository</h2><p>Create <code>public/logs.php</code>:</p><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Logs\Repositories\PdoLogRepository;
@@ -9,9 +9,13 @@ $pdo = new PDO(
     'root', '', [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
 );
 
-$logs = new LogManager(new PdoLogRepository($pdo));
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$logs = new LogManager(new PdoLogRepository($pdo));</code></pre><p>The PDO repository creates its own <code>prefab_logs</code> table when needed. This is intentional: the Logs module owns the technical schema required to store audit events.</p><h2>3. Record one event</h2><p>Add this temporary event first:</p><pre><code>$logs-&gt;record([
+    'action' =&gt; 'document.approved',
+    'subject_type' =&gt; 'document',
+    'subject_id' =&gt; 1001,
+    'actor_id' =&gt; 1,
+    'message' =&gt; 'Document was approved.',
+]);</code></pre><p><code>action</code> is a stable machine-readable event name. <code>subject_type</code> and <code>subject_id</code> identify the thing that changed. <code>actor_id</code> identifies who caused the event. <code>message</code> is the human-readable summary.</p><div class="nextbox"><b>Checkpoint:</b> After loading the page once, <code>prefab_logs</code> should contain a <code>document.approved</code> event.</div><h2>4. Record events from a form</h2><p>Replace the temporary event with:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $logs-&gt;record([
         'action' =&gt; $_POST['action'] ?? 'document.updated',
         'subject_type' =&gt; 'document',
@@ -27,24 +31,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 }
 
-$recent = $logs-&gt;recent(20);
-?&gt;
-&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;
-&lt;h1&gt;Prefab Logs Test&lt;/h1&gt;
+$recent = $logs-&gt;recent(20);</code></pre><p><code>changes</code> stores structured before/after values. <code>metadata</code> holds extra context that does not belong in fixed columns. IP address and user agent can help explain where a browser action originated.</p><h2>5. Add the browser form</h2><pre><code>&lt;h1&gt;Prefab Logs Test&lt;/h1&gt;
 &lt;form method="post"&gt;
     &lt;p&gt;&lt;input name="action" value="document.approved"&gt;&lt;/p&gt;
     &lt;p&gt;&lt;input name="actor_id" value="1" placeholder="Actor ID"&gt;&lt;/p&gt;
     &lt;p&gt;&lt;input name="subject_id" value="1001" placeholder="Subject ID"&gt;&lt;/p&gt;
     &lt;p&gt;&lt;input name="message" value="Document was approved." size="50"&gt;&lt;/p&gt;
     &lt;button&gt;Record event&lt;/button&gt;
-&lt;/form&gt;
-&lt;h2&gt;Recent logs&lt;/h2&gt;
-&lt;pre&gt;&lt;?= htmlspecialchars(print_r($recent, true)) ?&gt;&lt;/pre&gt;
-&lt;/body&gt;&lt;/html&gt;</code></pre><p><code>PdoLogRepository</code> automatically creates the <code>prefab_logs</code> storage table for supported databases.</p><h2>Query examples</h2><pre><code>$logs-&gt;recent();
+&lt;/form&gt;</code></pre><p>Submitting the form creates a new immutable historical event. Audit logs are normally appended rather than edited because their purpose is to preserve history.</p><h2>6. Display recent events</h2><pre><code>&lt;h2&gt;Recent logs&lt;/h2&gt;
+&lt;pre&gt;&lt;?= htmlspecialchars(print_r($recent, true)) ?&gt;&lt;/pre&gt;</code></pre><p><code>recent(20)</code> returns the newest 20 records. This is useful for dashboards and general activity feeds.</p><h2>7. Query by actor or subject</h2><pre><code>$logs-&gt;recent();
 $logs-&gt;recent(50);
 $logs-&gt;find(1);
 $logs-&gt;forSubject('document', 1001);
-$logs-&gt;forActor(1);</code></pre><h2>Structured changes and metadata</h2><pre><code>$logs-&gt;record([
+$logs-&gt;forActor(1);</code></pre><p><code>forSubject()</code> answers “what happened to this record?” while <code>forActor()</code> answers “what did this user do?” Those are different audit questions, which is why actor and subject are stored separately.</p><h2>8. Store structured changes</h2><pre><code>$logs-&gt;record([
     'action' =&gt; 'user.updated',
     'subject_type' =&gt; 'user',
     'subject_id' =&gt; 25,
@@ -56,8 +55,8 @@ $logs-&gt;forActor(1);</code></pre><h2>Structured changes and metadata</h2><pre>
         'source' =&gt; 'admin-ui',
         'request_id' =&gt; 'abc123',
     ],
-]);</code></pre><h2>Human-friendly view</h2><pre><code>$human = $logs-&gt;humanRecent(
+]);</code></pre><p>Structured changes are better than hiding everything in one message string because code can later inspect exactly which field changed and what the old/new values were.</p><h2>9. Human-friendly output</h2><pre><code>$human = $logs-&gt;humanRecent(
     50,
     actorResolver: fn ($id) =&gt; "User #{$id}",
     subjectResolver: fn ($type, $id) =&gt; "{$type} #{$id}",
-);</code></pre><h2>Diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><div class="nextbox"><b>Checkpoint:</b> submit several events, refresh, and verify they remain persisted and can be filtered by actor and subject.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+);</code></pre><p>The database stores IDs because IDs are stable. A human-facing screen can resolve those IDs into names or labels only when displaying the log.</p><h2>10. Diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><p>Use diagnostics when the module's storage or automatic integration is not being resolved as expected.</p><div class="nextbox"><b>Next:</b> Continue to Files to manage stored documents and uploads.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
