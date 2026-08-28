@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Validate browser input before passing it to Users, database code, or business logic.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-input</code></pre><h2>Validate a registration form</h2><pre><code>use Tihloh\Prefab\Input\Input;
+
+$result = Input::from($_POST)-&gt;process([
+    'name' =&gt; 'trim|required|string|max:100',
+    'email' =&gt; 'trim|lowercase|required|email',
+    'password' =&gt; 'required|string|min:8',
+]);
+
+if ($result-&gt;fails()) {
+    print_r($result-&gt;errors());
+    return;
+}
+
+$users-&gt;create($result-&gt;validated());</code></pre><h2>Why use validated data?</h2><p><code>validated()</code> returns only fields accepted by your rules. The application still decides whether errors become HTML, JSON, redirects, or API responses.</p><div class="nextbox"><b>Checkpoint:</b> submit an invalid email, then a valid one. Only the valid request should reach user creation.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
