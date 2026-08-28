@@ -1,9 +1,120 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Files</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="files.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 8</span><h1>Files</h1><p class="lead">Keep upload validation separate from file storage and file-management concerns.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-files</code></pre><h2>Recommended flow</h2><pre><code>Browser upload
-     ↓
-Prefab Input validates metadata/rules
-     ↓
-Accepted upload
-     ↓
-Prefab Files stores/manages it
-     ↓
-Your application saves any business reference</code></pre><p>Do not rely on the original filename alone. Validate file size/type before storing, and keep public/private storage decisions explicit.</p><div class="nextbox"><b>Checkpoint:</b> accept one valid upload, reject an invalid one, and verify the stored file path returned by your storage configuration.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Files</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="files.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 8</span><h1>Files</h1><p class="lead">Use a real browser page to create, read, list, copy, move and delete stored files, then add a real upload flow with Prefab Input.</p><h2>Install</h2><pre><code>composer require tihloh/prefab-files</code></pre><h2>Create storage folders</h2><pre><code>mkdir storage
+mkdir storage/private
+mkdir public/uploads</code></pre><h2>Create <code>public/files.php</code></h2><pre><code>&lt;?php
+require __DIR__ . '/../vendor/autoload.php';
+
+use Tihloh\Prefab\Files\FileManager;
+
+$files = new FileManager([
+    'default' =&gt; 'private',
+    'disks' =&gt; [
+        'private' =&gt; [
+            'driver' =&gt; 'local',
+            'root' =&gt; __DIR__ . '/../storage/private',
+        ],
+        'public' =&gt; [
+            'driver' =&gt; 'local',
+            'root' =&gt; __DIR__ . '/uploads',
+            'url' =&gt; '/uploads',
+        ],
+    ],
+]);
+
+$message = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? 'put';
+    $path = trim($_POST['path'] ?? 'documents/demo.txt');
+
+    if ($action === 'put') {
+        $info = $files-&gt;put($path, $_POST['contents'] ?? 'Hello Prefab');
+        $message = 'Stored: ' . $info-&gt;path();
+    }
+    if ($action === 'copy') {
+        $files-&gt;copy($path, 'copies/' . basename($path));
+        $message = 'Copied.';
+    }
+    if ($action === 'move') {
+        $files-&gt;move($path, 'moved/' . basename($path));
+        $message = 'Moved.';
+    }
+    if ($action === 'delete') {
+        $files-&gt;delete($path);
+        $message = 'Deleted.';
+    }
+}
+$list = $files-&gt;files('', recursive: true);
+?&gt;
+&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;
+&lt;h1&gt;Prefab Files Test&lt;/h1&gt;
+&lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;
+&lt;form method="post"&gt;
+    &lt;p&gt;&lt;input name="path" value="documents/demo.txt" size="40"&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;textarea name="contents" rows="5" cols="50"&gt;Hello Prefab&lt;/textarea&gt;&lt;/p&gt;
+    &lt;button name="action" value="put"&gt;Store / overwrite&lt;/button&gt;
+    &lt;button name="action" value="copy"&gt;Copy&lt;/button&gt;
+    &lt;button name="action" value="move"&gt;Move&lt;/button&gt;
+    &lt;button name="action" value="delete"&gt;Delete&lt;/button&gt;
+&lt;/form&gt;
+&lt;h2&gt;Stored files&lt;/h2&gt;
+&lt;pre&gt;&lt;?php foreach ($list as $file) echo $file-&gt;path() . ' (' . $file-&gt;size() . " bytes)\n"; ?&gt;&lt;/pre&gt;
+&lt;/body&gt;&lt;/html&gt;</code></pre><h2>Read and inspect</h2><pre><code>echo $files-&gt;read('documents/demo.txt');
+$info = $files-&gt;info('documents/demo.txt');
+print_r($info-&gt;toArray());
+
+echo $info-&gt;name();
+echo $info-&gt;extension();
+echo $info-&gt;size();
+echo $info-&gt;mime();
+echo $info-&gt;checksum();</code></pre><h2>Collision policies</h2><pre><code>$files-&gt;put('reports/report.txt', 'A', ['collision' =&gt; 'overwrite']);
+$files-&gt;put('reports/report.txt', 'B', ['collision' =&gt; 'skip']);
+$files-&gt;put('reports/report.txt', 'C', ['collision' =&gt; 'rename']);
+$files-&gt;put('reports/report.txt', 'D', ['collision' =&gt; 'error']);</code></pre><h2>Directories and listing</h2><pre><code>$files-&gt;makeDirectory('documents/2026');
+$files-&gt;directoryExists('documents/2026');
+$files-&gt;directories('documents');
+$files-&gt;directories('documents', recursive: true);
+$files-&gt;files('documents');
+$files-&gt;files('documents', recursive: true);
+$files-&gt;deleteDirectory('documents/old');
+$files-&gt;deleteDirectory('temporary/import-1', recursive: true);</code></pre><h2>Streams and existing files</h2><pre><code>$stream = fopen($sourcePath, 'rb');
+try { $files-&gt;putStream('archives/backup.zip', $stream); }
+finally { fclose($stream); }
+
+$files-&gt;putFile('/tmp/report.pdf', 'reports/report.pdf');
+$stream = $files-&gt;readStream('archives/backup.zip');</code></pre><h2>Checksums and usage</h2><pre><code>$files-&gt;checksum('documents/demo.txt');
+$files-&gt;checksum('documents/demo.txt', 'sha512');
+$files-&gt;size('documents/demo.txt');
+$files-&gt;directorySize('documents');
+$files-&gt;usage();</code></pre><h2>Public URLs and disks</h2><pre><code>$files-&gt;put('demo.txt', 'Public file', 'public');
+echo $files-&gt;url('demo.txt', 'public');
+print_r($files-&gt;names());
+echo $files-&gt;defaultName();
+var_dump($files-&gt;hasDisk('public'));
+$files-&gt;useDefault('public');</code></pre><h2>Real upload test with Prefab Input</h2><p>Install Input too, then create a multipart form and pass only a validated upload to Files:</p><pre><code>&lt;form method="post" enctype="multipart/form-data"&gt;
+    &lt;input type="file" name="document" required&gt;
+    &lt;button&gt;Upload&lt;/button&gt;
+&lt;/form&gt;</code></pre><pre><code>$result = Input::fromRequest()-&gt;process([
+    'document' =&gt; 'required|file|mimes:pdf|max_size:20mb',
+]);
+
+if ($result-&gt;passes()) {
+    $stored = $files-&gt;storeUploaded(
+        $result-&gt;validated('document'),
+        'documents',
+    );
+    print_r($stored-&gt;toArray());
+}</code></pre><h2>Capabilities and hooks</h2><pre><code>var_dump($files-&gt;supports('checksum'));
+var_dump($files-&gt;supports('atomic_write'));
+var_dump($files-&gt;supports('public_url', 'public'));
+
+$files-&gt;on('stored', function ($file, $disk, $context) {
+    echo 'Stored: ' . $file-&gt;path();
+});</code></pre><h2>Temporary URLs and downloads</h2><pre><code>$url = $files-&gt;temporaryUrl('documents/private.pdf', 600);
+$valid = $files-&gt;verifyTemporaryUrl(
+    $_GET['path'] ?? '',
+    (int) ($_GET['expires'] ?? 0),
+    $_GET['signature'] ?? '',
+    $_GET['disk'] ?? null,
+);
+
+$download = $files-&gt;download('documents/report.pdf', 'Annual Report.pdf');
+print_r($download-&gt;headers());</code></pre><div class="nextbox"><b>Checkpoint:</b> you can visibly create, list, read, copy, move and delete files, then test validated browser uploads and public/private storage behavior.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
