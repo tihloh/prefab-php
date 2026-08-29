@@ -21,6 +21,7 @@
     "autoload": {
         "psr-4": {
             "Tihloh\\Prefab\\Input\\": "src/"
-        }
+        },
+        "files": ["src/prefab.php"]
     }
 }

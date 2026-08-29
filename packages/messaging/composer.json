@@ -17,5 +17,8 @@
         "tihloh/prefab-logs": "Optional delivery activity logging.",
         "tihloh/prefab-notifications": "Optional internal in-application notices for the same business events."
     },
-    "autoload": {"psr-4": {"Tihloh\\Prefab\\Messaging\\": "src/"}}
+    "autoload": {
+        "psr-4": {"Tihloh\\Prefab\\Messaging\\": "src/"},
+        "files": ["src/prefab.php"]
+    }
 }

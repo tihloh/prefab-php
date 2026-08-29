@@ -17,6 +17,7 @@
         "tihloh/prefab-logs": "Optional route activity/audit integration."
     },
     "autoload": {
-        "psr-4": {"Tihloh\\Prefab\\Routes\\": "src/"}
+        "psr-4": {"Tihloh\\Prefab\\Routes\\": "src/"},
+        "files": ["src/prefab.php"]
     }
 }
