@@ -1,65 +1,26 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page one piece at a time. Use plain HTML so the lesson stays focused on Prefab instead of a CSS framework.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><p>Create <code>public/users.php</code>. If the database exists but the default <code>users</code> table does not, Prefab creates it automatically.</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page with plain HTML, then use Prefab tracing as an optional developer diagnostic.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
-
 use Tihloh\Prefab\Users\Services\UserManager;
-
-$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
-    'root', '',
-    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
-);
-
+$pdo = new PDO('mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4','root','',[PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]);
 $users = new UserManager(['database' =&gt; $pdo]);
-$list = $users-&gt;all();
-?&gt;</code></pre><h2>3. Display the users</h2><p>A users list naturally belongs in a table. Add this below the PHP code:</p><pre><code>&lt;h1&gt;Users&lt;/h1&gt;
-
-&lt;table border="1" cellpadding="8"&gt;
-    &lt;tr&gt;
-        &lt;th&gt;ID&lt;/th&gt;&lt;th&gt;Name&lt;/th&gt;&lt;th&gt;Email&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;
-    &lt;/tr&gt;
-    &lt;?php foreach ($list as $user): ?&gt;
-    &lt;tr&gt;
-        &lt;td&gt;&lt;?= $user-&gt;id ?&gt;&lt;/td&gt;
-        &lt;td&gt;&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;&lt;/td&gt;
-        &lt;td&gt;&lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/td&gt;
-        &lt;td&gt;&lt;?= $user-&gt;active ? 'Active' : 'Inactive' ?&gt;&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;?php endforeach; ?&gt;
-&lt;/table&gt;</code></pre><p>Start the server with <code>php -S 127.0.0.1:8000 -t public</code> and open <code>users.php</code>.</p><div class="nextbox"><b>Checkpoint:</b> You should see a real users table with ID, name, email and status columns.</div><h2>4. Add a user</h2><p>Add a small form above the table:</p><pre><code>&lt;form method="post"&gt;
-    &lt;input name="name" placeholder="Name" required&gt;
-    &lt;input name="email" type="email" placeholder="Email" required&gt;
-    &lt;button&gt;Add user&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>Then handle the form before loading <code>$list</code>:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $users-&gt;create([
-        'name' =&gt; trim($_POST['name'] ?? ''),
-        'email' =&gt; trim($_POST['email'] ?? ''),
-        'active' =&gt; true,
-    ]);
-}
-
-$list = $users-&gt;all();</code></pre><div class="nextbox"><b>Checkpoint:</b> Add Alice or Bob. The new row should immediately appear in the table.</div><h2>5. Find and update</h2><p>Normal everyday operations stay short:</p><pre><code>$user = $users-&gt;find(1);
+$list = $users-&gt;all();</code></pre><h2>3. Display users</h2><pre><code>&lt;table border="1" cellpadding="8"&gt;
+&lt;tr&gt;&lt;th&gt;ID&lt;/th&gt;&lt;th&gt;Name&lt;/th&gt;&lt;th&gt;Email&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;?php foreach ($list as $user): ?&gt;
+&lt;tr&gt;&lt;td&gt;&lt;?= $user-&gt;id ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= $user-&gt;active ? 'Active' : 'Inactive' ?&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><h2>4. Add a user</h2><pre><code>$result = $users-&gt;create([
+    'name' =&gt; trim($_POST['name'] ?? ''),
+    'email' =&gt; trim($_POST['email'] ?? ''),
+    'active' =&gt; true,
+]);</code></pre><pre><code>&lt;form method="post"&gt;
+&lt;input name="name" placeholder="Name" required&gt;
+&lt;input name="email" type="email" placeholder="Email" required&gt;
+&lt;button&gt;Add user&lt;/button&gt;
+&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Add a user and confirm the new row appears in the table.</div><h2>5. Find, update and delete</h2><pre><code>$user = $users-&gt;find(1);
 $byEmail = $users-&gt;findByEmail('alice@example.com');
-
 $users-&gt;update(1, ['name' =&gt; 'Alice Smith']);
-$users-&gt;update(1, ['active' =&gt; false]);</code></pre><p>Refresh the page after an update and the table shows the changed values.</p><h2>6. Optional: map an existing table</h2><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
+// $users-&gt;delete(1); // only when deletion is enabled by the map</code></pre><h2>6. Map an existing table</h2><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
+$map = new UserMap(table:'employees', id:'employee_id', name:'full_name', email:'email_address', active:'is_active');
+$users = new UserManager(['database' =&gt; $pdo, 'map' =&gt; $map]);</code></pre><h2>7. Developer tip: trace the operation</h2><p>Keep normal application output as the main result. When debugging, call the trace helper after the Prefab operation:</p><pre><code>$result = $users-&gt;create($data);
 
-$map = new UserMap(
-    table: 'employees',
-    id: 'employee_id',
-    name: 'full_name',
-    email: 'email_address',
-    active: 'is_active',
-);
-
-$users = new UserManager([
-    'database' =&gt; $pdo,
-    'map' =&gt; $map,
-]);</code></pre><h2>7. Optional: custom fields</h2><pre><code>$map = new UserMap(
-    table: 'employees',
-    attributes: ['office' =&gt; 'office_name'],
-);</code></pre><p>Add the mapped value as another table column when the application needs it:</p><pre><code>&lt;td&gt;&lt;?= htmlspecialchars($user-&gt;get('office') ?? '') ?&gt;&lt;/td&gt;</code></pre><h2>8. Optional: restrict writes or allow delete</h2><pre><code>$map = new UserMap(
-    table: 'employees',
-    allowCreate: false,
-    allowUpdate: false,
-    allowDelete: false,
-);</code></pre><p>If deletion is intentionally allowed, set <code>allowDelete: true</code> and call <code>$users-&gt;delete($userId)</code>.</p><h2>9. Developer tip: diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><p>Use this only while debugging automatic integration. It is not the user interface.</p><p>Password credentials are not stored in the Users profile table. Authentication owns credentials while Users owns identity and profile data.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Users provides identity/profile data and publishes its user provider so other modules can reuse the same users instead of creating another account system.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td><code>database capability</code></td><td>Users can discover the shared database and create its default PDO user provider automatically.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic</strong></td><td><code>user_provider capability</code></td><td>Auth detects Prefab Users and uses the same user identity/profile data.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td><code>logger capability</code></td><td>Create, update and delete activity can be recorded automatically when Prefab Logs is available.</td></tr><tr><td><code>Permissions</code></td><td><strong>Compatible</strong></td><td><code>user ID / groups</code></td><td>The same user ID can be used directly by PermissionManager.</td></tr></tbody></table></div><div class="callout"><b>Keep it simple:</b> Users owns profile/identity data. Auth owns credentials. Permissions owns authorization. Logs owns history.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+prefab_trace();</code></pre><p>For detailed internal steps:</p><pre><code>prefab_trace(true);</code></pre><p>Tracing is a developer diagnostic and should not replace the user-facing users table.</p><h2>8. Configuration diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><p>Users owns identity/profile data. Auth owns credentials, Permissions owns authorization, and Logs owns persistent activity history.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Database</code></td><td>Users can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Logs</code></td><td>User write activity can be recorded when logging is available.</td></tr><tr><td><code>Permissions</code></td><td>The same user IDs can be authorized by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
