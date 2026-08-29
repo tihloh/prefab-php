@@ -17,7 +17,7 @@ final class AuthResult
         PrefabRuntime::traceStart('auth', $operation);
         PrefabRuntime::traceEnd([
             'success' => $success,
-            'user_id' => $user?->authIdentifier(),
+            'user_id' => $user?->authId(),
             'reason' => $reason,
         ]);
     }
