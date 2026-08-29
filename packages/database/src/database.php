@@ -58,35 +58,41 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
 
         public function select(string $sql, array $bindings = []): array
         {
-            $statement = $this->connection->prepare($sql);
-            $statement->execute($bindings);
-
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
+            return PrefabRuntime::traceCall('database', 'select', [
+                'bindings' => count($bindings),
+            ], function () use ($sql, $bindings): array {
+                $statement = $this->connection->prepare($sql);
+                $statement->execute($bindings);
+                return $statement->fetchAll(PDO::FETCH_ASSOC);
+            });
         }
 
         public function statement(string $sql, array $bindings = []): bool
         {
-            $statement = $this->connection->prepare($sql);
-
-            return $statement->execute($bindings);
+            return PrefabRuntime::traceCall('database', 'statement', [
+                'bindings' => count($bindings),
+            ], function () use ($sql, $bindings): bool {
+                $statement = $this->connection->prepare($sql);
+                return $statement->execute($bindings);
+            });
         }
 
         public function transaction(callable $callback): mixed
         {
-            $this->connection->beginTransaction();
+            return PrefabRuntime::traceCall('database', 'transaction', [], function () use ($callback): mixed {
+                $this->connection->beginTransaction();
 
-            try {
-                $result = $callback($this);
-                $this->connection->commit();
-
-                return $result;
-            } catch (Throwable $exception) {
-                if ($this->connection->inTransaction()) {
-                    $this->connection->rollBack();
+                try {
+                    $result = $callback($this);
+                    $this->connection->commit();
+                    return $result;
+                } catch (Throwable $exception) {
+                    if ($this->connection->inTransaction()) {
+                        $this->connection->rollBack();
+                    }
+                    throw $exception;
                 }
-
-                throw $exception;
-            }
+            });
         }
 
         public function driver(): string
