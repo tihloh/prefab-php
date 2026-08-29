@@ -1,95 +1,25 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Authentication</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="auth.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 5</span><h1>Authentication</h1><p class="lead">Start with the shortest useful Auth setup: one PDO connection, Prefab Users, a password and a login form. PIN, tokens, social login and custom identifier rules are optional features introduced later.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-auth</code></pre><h2>2. Create Users and Auth</h2><p>Create <code>public/login.php</code> and reuse the same PDO connection from the Users tutorial.</p><pre><code>&lt;?php
-require __DIR__ . '/../vendor/autoload.php';
-
-use Tihloh\Prefab\Users\Services\UserManager;
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Authentication</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="auth.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 5</span><h1>Authentication</h1><p class="lead">Start with password login using Prefab Users and Auth. Add PIN, tokens and other methods only when the application needs them.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-auth</code></pre><h2>2. Create Users and Auth</h2><pre><code>use Tihloh\Prefab\Users\Services\UserManager;
 use Tihloh\Prefab\Auth\Services\AuthManager;
-
-$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
-    'root',
-    '',
-    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
-);
-
-$users = new UserManager([
-    'database' =&gt; $pdo,
-]);
-
-$auth = new AuthManager([
-    'database' =&gt; $pdo,
-]);</code></pre><p>Users owns identity/profile data. Auth owns credentials and sessions. Because Users is registered first, Auth can reuse its user provider automatically.</p><h2>3. Give a user a password</h2><p>Load Alice from the previous tutorial and set a password once:</p><pre><code>$alice = $users-&gt;findByEmail('alice@example.com');
-
+$users = new UserManager(['database' =&gt; $pdo]);
+$auth = new AuthManager(['database' =&gt; $pdo]);</code></pre><p>Users owns identity/profile data. Auth owns credentials and sessions.</p><h2>3. Set a password</h2><pre><code>$alice = $users-&gt;findByEmail('alice@example.com');
 if ($alice &amp;&amp; !$auth-&gt;hasPassword($alice-&gt;id)) {
     $auth-&gt;setPassword($alice-&gt;id, 'secret123');
-}</code></pre><p>Prefab stores a password hash, not the plain password.</p><div class="nextbox"><b>Checkpoint:</b> The page loads without creating password columns in the <code>users</code> table.</div><h2>4. Login</h2><p>Add the handler:</p><pre><code>$message = '';
-
-if (isset($_POST['login'])) {
-    $result = $auth-&gt;attempt(
-        $_POST['identifier'] ?? '',
-        $_POST['password'] ?? '',
-    );
-
-    $message = $result-&gt;success
-        ? 'Login successful.'
-        : 'Invalid login.';
-}</code></pre><p>Add the form:</p><pre><code>?&gt;
-&lt;h1&gt;Login&lt;/h1&gt;
-&lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;
-
-&lt;form method="post"&gt;
-    &lt;input name="identifier" placeholder="Email" required&gt;
-    &lt;input name="password" type="password" placeholder="Password" required&gt;
-    &lt;button name="login" value="1"&gt;Login&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>For this first example, enter <code>alice@example.com</code> and <code>secret123</code>. The first argument is called an <em>identifier</em> because advanced projects may later use usernames or other login names.</p><div class="nextbox"><b>Checkpoint:</b> The form should display <b>Login successful.</b></div><h2>5. Current user and logout</h2><pre><code>if ($auth-&gt;check()) {
-    echo 'User #' . htmlspecialchars((string) $auth-&gt;id());
-}
-
-// $auth-&gt;user();   // current user object
-// $auth-&gt;logout(); // end the session</code></pre><p>All supported login methods create the same Auth session, so the rest of the application can use <code>check()</code>, <code>id()</code>, <code>user()</code> and <code>logout()</code> without caring how the user authenticated.</p><h2>6. Optional: email-only or username login</h2><p>The default identifier mode is flexible. A project that wants email only can be explicit:</p><pre><code>$auth = new AuthManager([
-    'database' =&gt; $pdo,
-    'identifier_mode' =&gt; 'email',
-]);</code></pre><p>For an existing table with a username column, map it through Users:</p><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
-
-$map = new UserMap(
-    table: 'employees',
-    id: 'employee_id',
-    name: 'full_name',
-    email: 'email_address',
-    active: 'is_active',
-    attributes: [
-        'username' =&gt; 'username',
-    ],
-);
-
-$users = new UserManager([
-    'database' =&gt; $pdo,
-    'map' =&gt; $map,
-]);</code></pre><p>No manual provider construction is needed.</p><h2>7. Optional: PIN</h2><pre><code>$auth-&gt;setPin($alice-&gt;id, '1234');
-$result = $auth-&gt;attemptPin('alice@example.com', '1234');</code></pre><p>PINs are hashed separately from passwords. They are useful only when the application intentionally wants a shorter credential and has appropriate rate limiting.</p><h2>8. Optional: one-time login token</h2><pre><code>$token = $auth-&gt;createLoginToken($alice-&gt;id);
-$result = $auth-&gt;attemptToken($token);</code></pre><p>Normal login tokens are short-lived and single-use, which makes them suitable for magic links or temporary access.</p><h2>9. Optional: remember login</h2><p>For persistent browser login, issue a remember token instead of storing the password:</p><pre><code>$token = $auth-&gt;createRememberToken($alice-&gt;id);</code></pre><p>Store the token in a Secure, HttpOnly cookie. When the normal session is missing:</p><pre><code>$auth-&gt;attemptToken($token, 'remember');</code></pre><p>To invalidate remembered sessions:</p><pre><code>$auth-&gt;revokeLoginTokens($alice-&gt;id, 'remember');</code></pre><h2>10. Optional: password-only-next-login behavior</h2><p>Do not save the user's plain password. Use the built-in one-time next-login token:</p><pre><code>$token = $auth-&gt;createNextLoginToken($alice-&gt;id);
-$auth-&gt;attemptToken($token, 'next_login');</code></pre><h2>11. Optional: URL token login</h2><p>URL login is disabled by default. Prefer one-time tokens over reusable passwords in URLs.</p><pre><code>$auth = new AuthManager([
-    'database' =&gt; $pdo,
-    'url_login' =&gt; [
-        'allow_token' =&gt; true,
-        'allow_password' =&gt; false,
-    ],
-]);
-
-$result = $auth-&gt;attemptFromQuery($_GET);</code></pre><p>Then a link may contain <code>?token=...</code> or its configured alias. Raw password URLs should remain disabled unless a controlled legacy integration specifically requires them.</p><h2>12. Optional: password management</h2><pre><code>$auth-&gt;hasPassword($alice-&gt;id);
-$auth-&gt;verifyPassword($alice-&gt;id, 'secret123');
-$auth-&gt;changePassword($alice-&gt;id, 'secret123', 'new-secret-456');
-$auth-&gt;removePassword($alice-&gt;id);</code></pre><h2>13. Optional: social login</h2><p><code>SocialAuthManager</code> can connect providers such as Google or GitHub. A successful social login creates the same normal Auth session as password, PIN and token login.</p><pre><code>$url = $social-&gt;authorizationUrl('google');
-$result = $social-&gt;callback('google', $_GET);</code></pre><h2>14. Optional: custom identifier rules</h2><p>Employee numbers, phone numbers or other formats can use a custom validator:</p><pre><code>$auth = new AuthManager([
-    'database' =&gt; $pdo,
-    'identifier_validator' =&gt; fn (string $value): bool =&gt;
-        preg_match('/^EMP-\d{5}$/', $value) === 1,
-]);</code></pre><h2>15. Optional: custom storage</h2><p>Most applications should keep the simple manager configuration. Lower-level integrations can replace the built-in stores through:</p><pre><code>AuthCredentialStoreInterface
-PinCredentialStoreInterface
-LoginTokenStoreInterface</code></pre><h2>16. Diagnostics and audit context</h2><pre><code>print_r($auth-&gt;explain());</code></pre><p>Authentication attempts can also include request context for Prefab Logs:</p><pre><code>$result = $auth-&gt;attempt(
+}</code></pre><h2>4. Login</h2><pre><code>$result = $auth-&gt;attempt(
     $_POST['identifier'] ?? '',
     $_POST['password'] ?? '',
-    [
-        'ip_address' =&gt; $_SERVER['REMOTE_ADDR'] ?? null,
-        'user_agent' =&gt; $_SERVER['HTTP_USER_AGENT'] ?? null,
-    ],
-);</code></pre><div class="nextbox"><b>Next:</b> Continue to Permissions to decide what an authenticated user is allowed to do.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Auth can discover the project user provider, reuse shared storage, publish the current actor and send authentication activity to Logs.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Users</code></td><td><strong>Automatic</strong></td><td><code>user_provider capability</code></td><td>Auth reuses the same user identity/profile records.</td></tr><tr><td><code>Database</code></td><td><strong>Automatic when storage is needed</strong></td><td><code>database capability</code></td><td>Auth can reuse shared storage for credentials, PINs and login tokens.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td><code>logger capability</code></td><td>Authentication activity can be recorded without manually logging every Auth operation.</td></tr><tr><td><code>Users / Permissions / other modules</code></td><td><strong>Automatic shared actor</strong></td><td><code>actor_provider capability</code></td><td>Compatible modules can use the authenticated user ID as the audit actor.</td></tr><tr><td><code>Permissions</code></td><td><strong>Direct composition</strong></td><td><code>auth.id() → permissions.can()</code></td><td>Auth answers who is logged in; Permissions answers what that user may do.</td></tr><tr><td><code>Routes</code></td><td><strong>Compatible hook</strong></td><td><code>route.auth() + middleware</code></td><td>Route middleware can query Auth before running a protected handler.</td></tr></tbody></table></div><div class="callout"><b>Keep it simple:</b> Start with password login. Add PIN, tokens, social providers or custom stores only when the project actually needs them.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+);
+$message = $result-&gt;success ? 'Login successful.' : 'Invalid login.';</code></pre><pre><code>&lt;form method="post"&gt;
+&lt;input name="identifier" placeholder="Email" required&gt;
+&lt;input name="password" type="password" placeholder="Password" required&gt;
+&lt;button&gt;Login&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> A valid account displays “Login successful.”</div><h2>5. Current user and logout</h2><pre><code>if ($auth-&gt;check()) {
+    echo 'User #' . htmlspecialchars((string) $auth-&gt;id());
+}
+// $auth-&gt;user();
+// $auth-&gt;logout();</code></pre><h2>6. Optional login methods</h2><pre><code>$auth-&gt;setPin($alice-&gt;id, '1234');
+$auth-&gt;attemptPin('alice@example.com', '1234');
+$token = $auth-&gt;createLoginToken($alice-&gt;id);
+$auth-&gt;attemptToken($token);</code></pre><h2>7. Developer tip: trace authentication</h2><p>Trace after the normal Auth call. Passwords/tokens should never be deliberately printed as diagnostic output.</p><pre><code>$result = $auth-&gt;attempt($identifier, $password);
+
+prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>Keep the normal login success/error message as the user-facing result.</p><h2>8. Configuration diagnostics</h2><pre><code>print_r($auth-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Permissions.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Database</code></td><td>Auth can reuse shared storage for Auth-owned credentials/tokens.</td></tr><tr><td><code>Logs</code></td><td>Authentication activity can be audited.</td></tr><tr><td><code>Permissions</code></td><td>Auth identifies the user; Permissions decides access.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
