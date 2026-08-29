@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Input validation is the boundary between raw request data and data the application is willing to trust. This tutorial builds a real form so you can see how Prefab transforms values, rejects invalid input and returns only approved fields.</p><h2>1. Install Input</h2><pre><code>composer require tihloh/prefab-input</code></pre><p>Prefab Input is standalone. It can validate arrays, form submissions and uploaded files without requiring Database, Users, Routes or Auth.</p><h2>2. Create a form page</h2><p>Create <code>public/input.php</code>. Start with the processing code:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Build a small form that behaves like a real application: invalid fields show useful messages and valid input shows a success message. We will use short snippets and improve the page one step at a time.</p><h2>1. Install Input</h2><pre><code>composer require tihloh/prefab-input</code></pre><p>Prefab Input is standalone. It can validate arrays, form submissions and uploaded files without requiring Database, Users, Routes or Auth.</p><h2>2. Process the form</h2><p>Create <code>public/input.php</code> and start with the PHP logic:</p><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Input\Input;
@@ -13,54 +13,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'age' =&gt; 'required|integer|min:18',
     ]);
 
-    if ($result-&gt;fails()) {
-        $errors = $result-&gt;errors();
-    } else {
-        $valid = $result-&gt;validated();
-    }
+    $errors = $result-&gt;errors();
+    $valid = $result-&gt;fails() ? null : $result-&gt;validated();
 }
-?&gt;</code></pre><p><code>$_POST</code> contains raw values sent by an HTML form. They are strings supplied by the browser, so the application should not assume that an email is valid or that an age is really an integer.</p><p><code>Input::from($_POST)</code> creates an input object from that raw data. <code>process()</code> then applies a rule string to each declared field.</p><h2>3. Understand the rules</h2><pre><code>'name'  =&gt; 'trim|required|string|max:100'
+?&gt;</code></pre><p><code>process()</code> validates and transforms the fields declared in the rules. Keep this processing block above the page content.</p><h2>3. Add a simple form</h2><p>Add only the form markup you need:</p><pre><code>&lt;form method="post" class="card card-body"&gt;
+    &lt;input name="name" class="form-control mb-2" placeholder="Name"&gt;
+    &lt;input name="email" class="form-control mb-2" placeholder="Email"&gt;
+    &lt;input name="age" class="form-control mb-2" placeholder="Age"&gt;
+    &lt;button class="btn btn-primary"&gt;Submit&lt;/button&gt;
+&lt;/form&gt;</code></pre><p>The <code>name</code> attributes become the keys in <code>$_POST</code>. The Bootstrap classes are only presentation; Prefab handles the validation.</p><h2>4. Show errors like a real form</h2><p>Instead of dumping the errors array, show a clear message to the user:</p><pre><code>&lt;?php if ($errors): ?&gt;
+    &lt;div class="alert alert-danger mt-3"&gt;
+        Please check the form and try again.
+    &lt;/div&gt;
+&lt;?php endif; ?&gt;</code></pre><p>Later you can place individual field messages beside each input. For now the student gets an immediate, visible validation result without reading a PHP array dump.</p><h2>5. Show success</h2><p>When validation passes, give the user a normal application response:</p><pre><code>&lt;?php if ($valid): ?&gt;
+    &lt;div class="alert alert-success mt-3"&gt;
+        Welcome, &lt;?= htmlspecialchars($valid['name']) ?&gt;!
+    &lt;/div&gt;
+&lt;?php endif; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Submit an invalid email or age below 18 and see the error alert. Submit valid values and see the welcome message.</div><h2>6. Understand the rules</h2><pre><code>'name'  =&gt; 'trim|required|string|max:100'
 'email' =&gt; 'trim|lowercase|required|email'
-'age'   =&gt; 'required|integer|min:18'</code></pre><p>Rules are processed from left to right. <code>trim</code> removes surrounding whitespace. <code>required</code> rejects a missing or empty value. <code>string</code> checks the expected type. <code>max:100</code> limits the name length. <code>lowercase</code> transforms email text before it is returned. <code>email</code> checks email syntax. <code>integer</code> validates and converts the age to an integer, and <code>min:18</code> requires an adult age.</p><p>This combination demonstrates an important difference: some rules <b>validate</b> values while others <b>transform</b> them.</p><h2>4. Add the HTML form</h2><pre><code>&lt;!doctype html&gt;
-&lt;html&gt;
-&lt;body&gt;
-    &lt;h1&gt;Prefab Input Test&lt;/h1&gt;
-
-    &lt;form method="post"&gt;
-        &lt;p&gt;
-            &lt;label&gt;Name&lt;br&gt;
-                &lt;input name="name" value="&lt;?= htmlspecialchars($_POST['name'] ?? '') ?&gt;"&gt;
-            &lt;/label&gt;
-        &lt;/p&gt;
-        &lt;p&gt;
-            &lt;label&gt;Email&lt;br&gt;
-                &lt;input name="email" value="&lt;?= htmlspecialchars($_POST['email'] ?? '') ?&gt;"&gt;
-            &lt;/label&gt;
-        &lt;/p&gt;
-        &lt;p&gt;
-            &lt;label&gt;Age&lt;br&gt;
-                &lt;input name="age" value="&lt;?= htmlspecialchars($_POST['age'] ?? '') ?&gt;"&gt;
-            &lt;/label&gt;
-        &lt;/p&gt;
-        &lt;button type="submit"&gt;Validate&lt;/button&gt;
-    &lt;/form&gt;
-&lt;/body&gt;
-&lt;/html&gt;</code></pre><p>The HTML <code>name</code> attributes are important because they become the keys in <code>$_POST</code>. For example, <code>name="email"</code> becomes <code>$_POST['email']</code>.</p><p><code>htmlspecialchars()</code> escapes HTML characters before previously submitted text is placed back into the page. This prevents user input such as <code>&lt;script&gt;</code> from being interpreted as page markup.</p><h2>5. Display validation errors</h2><p>Add this below the form:</p><pre><code>&lt;?php if ($errors): ?&gt;
-    &lt;h2&gt;Validation errors&lt;/h2&gt;
-    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($errors, true)) ?&gt;&lt;/pre&gt;
-&lt;?php endif; ?&gt;</code></pre><p><code>fails()</code> means at least one declared field did not pass processing. <code>errors()</code> returns the field-specific error information so a real application can show messages beside the corresponding controls.</p><h2>6. Display validated data</h2><p>Add this after the error block:</p><pre><code>&lt;?php if ($valid !== null): ?&gt;
-    &lt;h2&gt;Validated data&lt;/h2&gt;
-    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($valid, true)) ?&gt;&lt;/pre&gt;
-&lt;?php endif; ?&gt;</code></pre><p><code>validated()</code> is the important output boundary. It returns only fields that were declared in the schema and successfully processed. Extra submitted fields are not automatically trusted just because they arrived in the request.</p><h2>7. Run the page</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/input.php</code>.</p><h2>8. Test invalid input</h2><pre><code>Name:   Demo User
-Email:  not-an-email
-Age:    15</code></pre><p>The email fails because it is not valid email syntax. The age becomes an integer but still fails <code>min:18</code>. Seeing both errors confirms that the request reached Prefab and the rules were actually evaluated.</p><h2>9. Test valid input and transformations</h2><pre><code>Name:   Demo User
-Email:  DEMO@EXAMPLE.COM
-Age:    25</code></pre><p>The validated result should contain <code>demo@example.com</code> because <code>lowercase</code> transformed the email. The age should be an integer rather than the raw form string <code>"25"</code>.</p><div class="nextbox"><b>Checkpoint:</b> Invalid input should produce errors. Valid input should produce only <code>name</code>, <code>email</code> and <code>age</code> in cleaned form.</div><h2>10. Why validate before database code?</h2><p>Validation answers “is this request acceptable?” Database code answers “how should accepted data be stored?” Keeping those responsibilities separate makes application logic easier to understand and prevents invalid request data from reaching lower layers.</p><p>A common flow is:</p><pre><code>Browser form
-    ↓
-Raw request data
-    ↓
-Prefab Input
-    ↓
-Validated data
-    ↓
-Users / Database / service logic</code></pre><h2>11. Advanced: request and upload helpers</h2><p>For forms that include files, <code>Input::fromRequest()</code> can collect normal request values and uploaded-file data together. File rules can then validate type, MIME and size before a Files module stores the upload.</p><div class="nextbox"><b>Next:</b> Continue to Authentication to validate credentials and manage logged-in sessions.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Input is intentionally request-focused. It does not auto-save anything, but its validated values and UploadedFile objects are designed to pass cleanly into other modules.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Files</code></td><td><strong>Direct compatible handoff</strong></td><td><code>UploadedFile → FileManager::storeUploaded()</code></td><td>Validate an upload with Input, then pass the validated UploadedFile directly to Files for permanent storage.</td></tr><tr><td><code>Users</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated() → UserManager::create/update()</code></td><td>Only validated/whitelisted form fields need to be passed to Users. Raw request fields stay out of persistence.</td></tr><tr><td><code>Auth</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated identifier/password/PIN</code></td><td>A login form can validate/normalize its fields first, then pass them to attempt() or attemptPin().</td></tr><tr><td><code>Any module</code></td><td><strong>Direct compatible handoff</strong></td><td><code>InputResult::validated()</code></td><td>Validated input is plain PHP data, so it can safely become service-method arguments throughout the application.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Input does not automatically call another module because validation should never silently cause a database write, login or file save.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+'age'   =&gt; 'required|integer|min:18'</code></pre><p><code>trim</code> and <code>lowercase</code> transform values. <code>required</code>, <code>email</code>, <code>integer</code>, <code>min</code> and <code>max</code> decide whether the values are acceptable.</p><h2>7. Use validated data</h2><p><code>validated()</code> returns only the fields declared in your rules. That makes it a clean handoff to another module:</p><pre><code>if ($valid) {
+    $users-&gt;create($valid);
+}</code></pre><p>This is the normal application flow: validate first, then pass accepted data to Users, Database or your own service.</p><h2>8. Developer tip: inspect the result</h2><p>While debugging, you can temporarily inspect the raw result:</p><pre><code>print_r($result-&gt;errors());
+print_r($result-&gt;validated());</code></pre><p>Use this for development only. The tutorial's visible result should be the form feedback, not the debug output.</p><h2>9. Advanced: request and upload helpers</h2><p>For forms that include files, <code>Input::fromRequest()</code> can collect normal request values and uploaded-file data together. File rules can validate type, MIME and size before Files stores the upload.</p><div class="nextbox"><b>Next:</b> Continue to Authentication to build a login screen with useful success and error feedback.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Input is intentionally request-focused. It does not auto-save anything, but its validated values and UploadedFile objects are designed to pass cleanly into other modules.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Files</code></td><td><strong>Direct compatible handoff</strong></td><td><code>UploadedFile → FileManager::storeUploaded()</code></td><td>Validate an upload with Input, then pass the validated UploadedFile directly to Files for permanent storage.</td></tr><tr><td><code>Users</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated() → UserManager::create/update()</code></td><td>Only validated/whitelisted form fields need to be passed to Users. Raw request fields stay out of persistence.</td></tr><tr><td><code>Auth</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated identifier/password/PIN</code></td><td>A login form can validate/normalize its fields first, then pass them to attempt() or attemptPin().</td></tr><tr><td><code>Any module</code></td><td><strong>Direct compatible handoff</strong></td><td><code>InputResult::validated()</code></td><td>Validated input is plain PHP data, so it can safely become service-method arguments throughout the application.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Input does not automatically call another module because validation should never silently cause a database write, login or file save.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
