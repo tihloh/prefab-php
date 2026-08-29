@@ -9,13 +9,26 @@ namespace Tihloh\Prefab {
         {
             public static function trace(bool $detailed = false): void
             {
-                self::render(PrefabRuntime::traceHistory(), $detailed, $detailed ? 'PREFAB TRACE · DETAILED' : 'PREFAB TRACE', 'trace');
+                $traces = PrefabRuntime::traceHistory();
+                if (!$detailed) {
+                    $traces = array_values(array_filter($traces, fn(array $trace): bool => !self::isIncidentalRoot($trace)));
+                }
+                self::render($traces, $detailed, $detailed ? 'PREFAB TRACE · DETAILED' : 'PREFAB TRACE', 'trace');
             }
 
             public static function explain(string $module): void
             {
-                $traces = array_values(array_filter(PrefabRuntime::traceHistory(), fn(array $trace): bool => ($trace['module'] ?? '') === $module || self::contains($trace, $module)));
+                $traces = array_values(array_filter(
+                    PrefabRuntime::traceHistory(),
+                    fn(array $trace): bool => ($trace['module'] ?? '') === $module || self::contains($trace, $module),
+                ));
                 self::render($traces, true, 'PREFAB EXPLAIN · ' . strtoupper($module), 'explain');
+            }
+
+            private static function isIncidentalRoot(array $trace): bool
+            {
+                return ($trace['module'] ?? '') === 'database'
+                    && ($trace['operation'] ?? '') === 'statement';
             }
 
             private static function contains(array $trace, string $module): bool
@@ -56,21 +69,58 @@ namespace Tihloh\Prefab {
                 $lines[] = $prefix . $branch . $module . '::' . $operation . ' [' . $status . ']  ' . number_format((float)($trace['duration_ms'] ?? 0), 3) . ' ms';
                 $next = $root ? '' : $prefix . ($last ? '   ' : '│  ');
                 $items = [];
-                foreach (($trace['context'] ?? []) as $k => $v) if (self::visible((string)$k, $detailed)) $items[] = ['fact', self::label((string)$k) . ': ' . self::value($v)];
-                foreach (($trace['children'] ?? []) as $child) $items[] = ['child', $child];
-                if ($detailed) foreach (($trace['steps'] ?? []) as $step) {
-                    if (str_starts_with((string)($step['event'] ?? ''), 'module.')) continue;
-                    $detail = [];
-                    foreach (($step['details'] ?? []) as $k => $v) if (self::visible((string)$k, true)) $detail[] = self::label((string)$k) . '=' . self::value($v);
-                    $items[] = ['fact', self::label(str_replace('.', ' ', (string)($step['event'] ?? 'step'))) . ($detail ? ': ' . implode(', ', $detail) : '') . ' (' . number_format((float)($step['at_ms'] ?? 0), 3) . ' ms)'];
+
+                foreach (($trace['context'] ?? []) as $k => $v) {
+                    if (self::visible((string)$k, $detailed)) {
+                        $items[] = ['fact', self::label((string)$k) . ': ' . self::value($v)];
+                    }
                 }
-                foreach (($trace['details'] ?? []) as $k => $v) if ($k !== 'result' && self::visible((string)$k, $detailed)) $items[] = ['fact', self::label((string)$k) . ': ' . self::value($v)];
-                if (array_key_exists('result', $trace['details'] ?? [])) $items[] = ['fact', 'Result: ' . self::value($trace['details']['result'])];
+                foreach (($trace['children'] ?? []) as $child) $items[] = ['child', $child];
+
+                if ($detailed) {
+                    foreach (($trace['steps'] ?? []) as $step) {
+                        if (str_starts_with((string)($step['event'] ?? ''), 'module.')) continue;
+                        $items[] = ['fact', self::step($step)];
+                    }
+                }
+
+                foreach (($trace['details'] ?? []) as $k => $v) {
+                    if ($k !== 'result' && self::visible((string)$k, $detailed)) {
+                        $items[] = ['fact', self::label((string)$k) . ': ' . self::value($v)];
+                    }
+                }
+                if (array_key_exists('result', $trace['details'] ?? [])) {
+                    $items[] = ['fact', 'Result: ' . self::value($trace['details']['result'])];
+                }
+
                 foreach ($items as $i => $item) {
                     $isLast = $i === count($items) - 1;
                     if ($item[0] === 'child') self::node($lines, $item[1], $next, false, $detailed, $isLast);
                     else $lines[] = $next . ($isLast ? '└─ ' : '├─ ') . $item[1];
                 }
+            }
+
+            private static function step(array $step): string
+            {
+                $event = (string)($step['event'] ?? 'step');
+                $details = $step['details'] ?? [];
+                $time = ' (' . number_format((float)($step['at_ms'] ?? 0), 3) . ' ms)';
+
+                if ($event === 'database.sql') {
+                    return 'SQL: ' . self::value($details['sql'] ?? '') . $time;
+                }
+                if ($event === 'database.rows') {
+                    return 'Rows returned: ' . self::value($details['rows'] ?? 0) . $time;
+                }
+                if ($event === 'database.affected') {
+                    return 'Rows affected: ' . self::value($details['rows'] ?? 0) . $time;
+                }
+
+                $pairs = [];
+                foreach ($details as $k => $v) {
+                    if (self::visible((string)$k, true)) $pairs[] = self::label((string)$k) . '=' . self::value($v);
+                }
+                return self::label(str_replace('.', ' ', $event)) . ($pairs ? ': ' . implode(', ', $pairs) : '') . $time;
             }
 
             private static function visible(string $key, bool $detailed): bool
