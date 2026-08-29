@@ -1,8 +1,11 @@
 <?php
 
 /**
- * Synchronize Prefab's canonical shared interoperability and diagnostics files
- * into all standalone packages.
+ * Synchronize Prefab's canonical shared interoperability and diagnostics files.
+ *
+ * Core is the long-term owner of these files. During migration we also keep
+ * the legacy copies in feature packages synchronized so current releases keep
+ * working until every package requires tihloh/prefab-core.
  *
  * Usage from the repository root:
  *
@@ -10,31 +13,34 @@
  */
 
 $root = dirname(__DIR__);
-$packages = ['database', 'users', 'auth', 'permissions', 'logs', 'routes', 'input', 'files', 'messaging', 'notifications'];
+$legacyPackages = ['database', 'users', 'auth', 'permissions', 'logs', 'routes', 'input', 'files', 'messaging', 'notifications'];
 
-$targets = static function (string $file) use ($root, $packages): array {
+$legacyTargets = static function (string $file) use ($root, $legacyPackages): array {
     return array_map(
         static fn (string $package): string => $root . '/packages/' . $package . '/src/' . $file,
-        $packages,
+        $legacyPackages,
     );
 };
+
+$core = static fn (string $file): string => $root . '/packages/core/src/' . $file;
 
 $groups = [
     [
         'source' => $root . '/tools/prefab-bootstrap.php',
-        'targets' => $targets('prefab.php'),
+        'targets' => [$core('prefab.php'), ...$legacyTargets('prefab.php')],
     ],
     [
         'source' => $root . '/tools/prefab-diagnostics.php',
-        'targets' => $targets('prefab-diagnostics.php'),
+        'targets' => [$core('prefab-diagnostics.php'), ...$legacyTargets('prefab-diagnostics.php')],
     ],
     [
         'source' => $root . '/tools/prefab-debug-ui.php',
-        'targets' => $targets('prefab-debug-ui.php'),
+        'targets' => [$core('prefab-debug-ui.php'), ...$legacyTargets('prefab-debug-ui.php')],
     ],
     [
         'source' => $root . '/tools/database-contracts.php',
         'targets' => [
+            $core('database.php'),
             $root . '/packages/database/src/database.php',
             $root . '/packages/users/src/database.php',
             $root . '/packages/permissions/src/database.php',
@@ -50,6 +56,10 @@ foreach ($groups as $group) {
     }
 
     foreach ($group['targets'] as $target) {
+        $directory = dirname($target);
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new RuntimeException("Unable to create interoperability directory: {$directory}");
+        }
         if (file_put_contents($target, $content) === false) {
             throw new RuntimeException("Unable to synchronize interoperability file: {$target}");
         }
