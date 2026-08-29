@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page with plain HTML, then use Prefab tracing and explanation output as optional developer diagnostics.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page with plain HTML, then look behind the curtain with Prefab's request call tree.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Users\Services\UserManager;
@@ -37,7 +37,7 @@ $list = $users-&gt;all();</code></pre><pre><code>&lt;form method="post"&gt;
 $byEmail = $users-&gt;findByEmail('alice@example.com');
 
 $users-&gt;update(1, ['name' =&gt; 'Alice Smith']);
-// $users-&gt;delete(1); // only when deletion is enabled by the map</code></pre><h2>6. Map an existing table</h2><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
+// $users-&gt;delete(1);</code></pre><h2>6. Map an existing table</h2><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
 
 $map = new UserMap(
     table: 'employees',
@@ -50,42 +50,35 @@ $map = new UserMap(
 $users = new UserManager([
     'database' =&gt; $pdo,
     'map' =&gt; $map,
-]);</code></pre><h2>7. Developer diagnostic: trace this request</h2><p><code>prefab_trace()</code> prints the Prefab operations that completed during the current PHP request. It is not a log table and it does not store history between requests.</p><p>Place it after the page has finished doing the Prefab work you want to inspect:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+]);</code></pre><h2>7. Developer diagnostic: see what happened behind the curtain</h2><p><code>prefab_trace()</code> prints a high-level call tree of Prefab work completed during the current PHP request. Think of it as a Prefab-aware call stack: it groups nested module work under the operation that caused it instead of exposing vendor paths or raw PHP internals.</p><p>Put it near the bottom of the page, after the operations you want to inspect:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $users-&gt;create($data);
 }
 
 $list = $users-&gt;all();
 $recent = $logs-&gt;recent(20);
 
-prefab_trace();</code></pre><p>If the form created a user and the page then loaded users and activity, the trace can contain several operations instead of showing only the last database query:</p><pre><code>Prefab Trace
+prefab_trace();</code></pre><p>After adding a user, output can look like this:</p><pre><code>Prefab Trace
 
-1. users::user.created [OK]
-   actor_id: null
-   subject_id: 9
-   result: Tihloh\Prefab\Users\User\PrefabUser
-   duration: 0.120 ms
+Users::create [OK]  5.842 ms
+├─ Fields: name, email, active
+├─ Database::insert [OK]  1.604 ms
+│  ├─ Table: users
+│  └─ Result: yes
+├─ Database::select [OK]  0.721 ms
+│  └─ Table: users
+├─ Logs::entry [OK]  0.093 ms
+│  └─ Action: user.created
+└─ Result: OperationResult
 
-2. database::select [OK]
-   bindings: 0
-   result: array(3)
-   duration: 0.850 ms
+Users::all [OK]  0.914 ms
+├─ Limit: 100
+├─ Offset: 0
+├─ Database::select [OK]  0.701 ms
+│  └─ Table: users
+└─ Result: 3 items</code></pre><p>The exact branches depend on the modules installed and the work actually performed. Database operations are nested beneath Users when Users caused them. Sensitive values, raw SQL, vendor paths, class namespaces, passwords and tokens are intentionally kept out of the normal trace.</p><h3>Detailed mode</h3><pre><code>prefab_trace(true);</code></pre><p>Detailed mode keeps the same call tree but adds timed internal diagnostic steps such as capability and resource resolution. Use it when the normal tree identifies the area but you need to see more of the sequence.</p><div class="callout"><b>Development only:</b> The trace is printed into the response. Remove or disable it on normal production pages.</div><h2>8. Focus on Users only</h2><p>If a request contains many modules and you only want the execution story involving Users, call:</p><pre><code>$users-&gt;explain();</code></pre><p>This is not a configuration-array dump. It prints the traced execution trees involving Users and its nested work. The method itself returns no diagnostic array.</p><pre><code>Prefab Users Execution
 
-3. database::select [OK]
-   bindings: 0
-   result: array(2)
-   duration: 1.799 ms</code></pre><p>The exact operations depend on which modules are installed and which calls are instrumented. A database operation may appear because Users or Logs used the shared database internally.</p><h3>Detailed trace</h3><pre><code>prefab_trace(true);</code></pre><p>Detailed mode includes timed internal trace steps such as capability resolution and nested operations. Use it when the normal summary is not enough.</p><div class="callout"><b>Important:</b> Call <code>prefab_trace()</code> only for development diagnostics. It prints into the response, so remove or disable it on normal production pages.</div><h2>8. Explain how Users was configured</h2><p><code>explain()</code> answers a different question from tracing. Trace shows <em>what operations ran during this request</em>. Explain shows <em>where this module got its dependencies and configuration</em>.</p><pre><code>$users-&gt;explain();</code></pre><p>It now prints a human-readable explanation instead of requiring <code>print_r()</code> on a raw array. Example:</p><pre><code>Prefab Users Explain
-
-Database:
-  Source: module-local
-  Meaning: Configured directly on this module instance.
-  Driver: mysql
-
-User Provider:
-  Source: database-provider
-  Meaning: Automatically created from the resolved database.
-  Provider: Tihloh\Prefab\Users\Repositories\PdoUserProvider
-
-Table:
-  Source: internal-default
-  Meaning: Using the package default because nothing more explicit was configured.
-  Table: users</code></pre><p>The method still returns the structured resolution array for backward compatibility. Code that specifically needs only structured data can use <code>PrefabRuntime::explainData('users')</code>.</p><h2>9. Trace vs explain</h2><div class="api-table-wrap"><table class="api-table"><thead><tr><th>Diagnostic</th><th>Question it answers</th><th>Typical use</th></tr></thead><tbody><tr><td><code>prefab_trace()</code></td><td>What Prefab operations happened in this request?</td><td>Follow create/read/log/database activity and timings.</td></tr><tr><td><code>prefab_trace(true)</code></td><td>What internal trace steps happened inside those operations?</td><td>Deeper debugging of resolution and nested calls.</td></tr><tr><td><code>$users-&gt;explain()</code></td><td>How did Users resolve its provider, database, table and integrations?</td><td>Debug configuration and auto-wiring.</td></tr></tbody></table></div><p>Users owns identity/profile data. Auth owns credentials, Permissions owns authorization, and Logs owns persistent activity history.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Database</code></td><td>Users can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Logs</code></td><td>User write activity can be recorded when logging is available.</td></tr><tr><td><code>Permissions</code></td><td>The same user IDs can be authorized by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+Users::create [OK]  5.842 ms
+├─ Fields: name, email, active
+├─ Database::insert [OK]  1.604 ms
+│  └─ Table: users
+└─ Result: OperationResult</code></pre><h3>Structured configuration data</h3><p>Configuration-resolution data is still available when tooling or tests genuinely need it, but it is deliberately separate from the human debugging view:</p><pre><code>$data = $users-&gt;explainData();</code></pre><h2>9. Trace vs explain</h2><div class="api-table-wrap"><table class="api-table"><thead><tr><th>Diagnostic</th><th>What it shows</th><th>Use it for</th></tr></thead><tbody><tr><td><code>prefab_trace()</code></td><td>High-level call trees for the whole current request.</td><td>Follow application flow across Prefab modules.</td></tr><tr><td><code>prefab_trace(true)</code></td><td>The same tree plus timed internal diagnostic steps.</td><td>Deeper debugging without raw vendor internals.</td></tr><tr><td><code>$users-&gt;explain()</code></td><td>Only execution trees involving Users.</td><td>Focus a busy request on one module.</td></tr><tr><td><code>$users-&gt;explainData()</code></td><td>Structured resolution metadata.</td><td>Tests, tooling and advanced configuration inspection.</td></tr></tbody></table></div><p>Users owns identity/profile data. Auth owns credentials, Permissions owns authorization, and Logs owns persistent activity history.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Database</code></td><td>Users can reuse the shared database capability, and database work appears nested in the Users trace.</td></tr><tr><td><code>Auth</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Logs</code></td><td>User write activity can be recorded and appears as nested diagnostic work when logging is available.</td></tr><tr><td><code>Permissions</code></td><td>The same user IDs can be authorized by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
