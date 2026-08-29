@@ -20,7 +20,10 @@ if (!interface_exists(DatabaseInterface::class, false)) {
 if (!class_exists(PdoDatabaseAdapter::class, false)) {
     final class PdoDatabaseAdapter implements DatabaseInterface
     {
-        public function __construct(private PDO $connection) {}
+        public function __construct(
+            private PDO $connection,
+            private string $ownerModule = 'database',
+        ) {}
 
         public function select(string $sql, array $bindings = []): array
         {
@@ -49,7 +52,7 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
 
         public function transaction(callable $callback): mixed
         {
-            return PrefabRuntime::traceCall('database', 'transaction', [], function () use ($callback): mixed {
+            return PrefabRuntime::traceCall('database', 'transaction', ['owner_module' => $this->ownerModule], function () use ($callback): mixed {
                 $this->connection->beginTransaction();
                 try {
                     $result = $callback($this);
@@ -82,6 +85,7 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
         {
             $operation ??= $this->operation($sql);
             $context = [
+                'owner_module' => $this->ownerModule,
                 'operation' => $operation,
                 'bindings' => count($bindings),
             ];
