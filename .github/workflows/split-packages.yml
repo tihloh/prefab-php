@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [database, users, auth, permissions, logs, routes, input, files, messaging, notifications]
+        package: [core, database, users, auth, permissions, logs, routes, input, files, messaging, notifications]
 
     steps:
       - name: Checkout complete history
@@ -66,14 +66,19 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Push package version tag
+      - name: Push immutable package version tag
         if: steps.release.outputs.tag != ''
         env:
           TOKEN: ${{ secrets.PREFAB_SPLIT_TOKEN }}
           PACKAGE: ${{ matrix.package }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
-          git tag -f "$TAG" "split-${PACKAGE}"
-          git push --force \
-            "https://x-access-token:${TOKEN}@github.com/tihloh/prefab-${PACKAGE}.git" \
-            "refs/tags/${TAG}"
+          REMOTE="https://x-access-token:${TOKEN}@github.com/tihloh/prefab-${PACKAGE}.git"
+
+          if git ls-remote --exit-code --tags "$REMOTE" "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Release tag ${TAG} already exists in prefab-${PACKAGE}; refusing to move an immutable release tag."
+            exit 1
+          fi
+
+          git tag "$TAG" "split-${PACKAGE}"
+          git push "$REMOTE" "refs/tags/${TAG}"
