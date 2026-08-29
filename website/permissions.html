@@ -1,56 +1,24 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers “who is the user?” Permissions answers “what is that user allowed to do?” Build a small permission-management screen with plain HTML.</p><h2>1. Install Permissions</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><h2>2. Define permissions</h2><p>Create <code>config/permissions.php</code>:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers who the user is. Permissions answers what that user is allowed to do.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><h2>2. Define permissions</h2><pre><code>&lt;?php
 return [
-    'documents.view' =&gt; [
-        'name' =&gt; 'View Documents',
-        'default' =&gt; true,
-    ],
-    'documents.approve' =&gt; [
-        'name' =&gt; 'Approve Documents',
-        'default' =&gt; false,
-    ],
-];</code></pre><p>A new user can view documents by default but cannot approve them until permission is granted.</p><h2>3. Create a subject</h2><pre><code>use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
-
-final class TutorialSubject implements PermissionSubjectInterface
-{
-    public function __construct(public int $id, public array $groups = []) {}
-    public function permissionSubjectId(): int|string { return $this-&gt;id; }
-    public function permissionGroupIds(): array { return $this-&gt;groups; }
-}</code></pre><h2>4. Connect Permissions</h2><pre><code>$permissions = new PermissionManager(
+'documents.view' =&gt; ['name' =&gt; 'View Documents', 'default' =&gt; true],
+'documents.approve' =&gt; ['name' =&gt; 'Approve Documents', 'default' =&gt; false],
+];</code></pre><h2>3. Connect Permissions</h2><pre><code>$permissions = new PermissionManager(
     __DIR__ . '/../config/permissions.php',
     new PdoPermissionStore($pdo),
-);
-
-$user = new TutorialSubject(1, [10]);</code></pre><h2>5. Change a permission</h2><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $permission = $_POST['permission'];
-    $action = $_POST['action'];
-
-    if ($action === 'allow') $permissions-&gt;set('user', 1, $permission, true);
-    if ($action === 'deny')  $permissions-&gt;set('user', 1, $permission, false);
-    if ($action === 'clear') $permissions-&gt;clear('user', 1, $permission);
-}
-
-$results = $permissions-&gt;resolvedFor($user);</code></pre><h2>6. Add permission controls</h2><pre><code>&lt;form method="post"&gt;
-    &lt;select name="permission"&gt;
-        &lt;option&gt;documents.view&lt;/option&gt;
-        &lt;option&gt;documents.approve&lt;/option&gt;
-    &lt;/select&gt;
-    &lt;button name="action" value="allow"&gt;Allow&lt;/button&gt;
-    &lt;button name="action" value="deny"&gt;Deny&lt;/button&gt;
-    &lt;button name="action" value="clear"&gt;Inherit&lt;/button&gt;
-&lt;/form&gt;</code></pre><h2>7. Display effective permissions</h2><p>A table makes the permission state much easier to understand than debug output:</p><pre><code>&lt;table border="1" cellpadding="8"&gt;
-    &lt;tr&gt;&lt;th&gt;Permission&lt;/th&gt;&lt;th&gt;Result&lt;/th&gt;&lt;th&gt;Source&lt;/th&gt;&lt;/tr&gt;
-    &lt;?php foreach ($results as $id =&gt; $result): ?&gt;
-    &lt;tr&gt;
-        &lt;td&gt;&lt;?= htmlspecialchars($id) ?&gt;&lt;/td&gt;
-        &lt;td&gt;&lt;?= $result-&gt;allowed ? 'ALLOW' : 'DENY' ?&gt;&lt;/td&gt;
-        &lt;td&gt;&lt;?= htmlspecialchars($result-&gt;source) ?&gt;&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;?php endforeach; ?&gt;
-&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Change <code>documents.approve</code> between Allow, Deny and Inherit and watch the table update.</div><h2>8. Resolution order</h2><pre><code>User override
-    ↓ if absent
-Group overrides
-    ↓ if absent
-Definition default</code></pre><h2>9. Everyday API</h2><pre><code>$permissions-&gt;can($user, 'documents.approve');
-$permissions-&gt;resolve($user, 'documents.approve');
+);</code></pre><h2>4. Check and change access</h2><pre><code>$allowed = $permissions-&gt;can($user, 'documents.approve');
+$result = $permissions-&gt;resolve($user, 'documents.approve');
 $permissions-&gt;set('user', 1, 'documents.approve', true);
-$permissions-&gt;clear('user', 1, 'documents.approve');</code></pre><h2>10. Developer tip</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><p>Use diagnostics only when debugging configuration or integration.</p><div class="nextbox"><b>Next:</b> Continue to Audit Logs and show application activity in a table.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>What happens</th></tr></thead><tbody><tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td>Permissions can reuse the shared database.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic actor context</strong></td><td>Permission changes can identify the authenticated actor.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td>Permission changes can become audit records.</td></tr><tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td>User IDs and group IDs can be checked by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+$permissions-&gt;clear('user', 1, 'documents.approve');</code></pre><h2>5. Display effective permissions</h2><pre><code>$results = $permissions-&gt;resolvedFor($user);
+?&gt;
+&lt;table border="1" cellpadding="8"&gt;
+&lt;tr&gt;&lt;th&gt;Permission&lt;/th&gt;&lt;th&gt;Result&lt;/th&gt;&lt;th&gt;Source&lt;/th&gt;&lt;/tr&gt;
+&lt;?php foreach ($results as $id =&gt; $result): ?&gt;
+&lt;tr&gt;&lt;td&gt;&lt;?= htmlspecialchars($id) ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= $result-&gt;allowed ? 'ALLOW' : 'DENY' ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($result-&gt;source) ?&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Change a permission and confirm the effective result/source changes.</div><h2>6. Resolution order</h2><pre><code>User override
+    ↓
+Group overrides
+    ↓
+Definition default</code></pre><h2>7. Developer tip: trace a permission operation</h2><pre><code>$result = $permissions-&gt;resolve($user, 'documents.approve');
+
+prefab_trace();</code></pre><p>For detailed internal steps:</p><pre><code>prefab_trace(true);</code></pre><p>Tracing is optional developer output. Keep the effective-permissions table as the normal visible result.</p><h2>8. Configuration diagnostics</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Audit Logs.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Database</code></td><td>Permissions can reuse shared storage.</td></tr><tr><td><code>Auth</code></td><td>The authenticated user can become the permission subject/actor.</td></tr><tr><td><code>Logs</code></td><td>Permission changes can be recorded.</td></tr><tr><td><code>Users</code></td><td>User and group IDs can be checked directly.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
