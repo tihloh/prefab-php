@@ -310,6 +310,10 @@ final class LogManager
     private function repo(): LogRepositoryInterface
     {
         if (!$this->repository) {
+            $this->prefabConfigure();
+        }
+
+        if (!$this->repository) {
             throw new RuntimeException(
                 'Prefab Logs needs a repository or database capability/configuration.',
             );
