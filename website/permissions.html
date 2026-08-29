@@ -1,88 +1,56 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers “who is the user?” Permissions answers “what is that user allowed to do?” This tutorial defines two permissions, stores user and group overrides, and shows how Prefab decides the final result.</p><h2>1. Install Permissions</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><p>The module separates <b>permission definitions</b> from <b>permission overrides</b>. A definition describes an action and its default state. An override changes that state for a specific user or group.</p><h2>2. Define the available permissions</h2><p>Create <code>config/permissions.php</code>:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Permissions</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="permissions.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 6</span><h1>Permissions</h1><p class="lead">Authentication answers “who is the user?” Permissions answers “what is that user allowed to do?” Build a small permission-management screen with plain HTML.</p><h2>1. Install Permissions</h2><pre><code>composer require tihloh/prefab-permissions</code></pre><h2>2. Define permissions</h2><p>Create <code>config/permissions.php</code>:</p><pre><code>&lt;?php
 return [
     'documents.view' =&gt; [
         'name' =&gt; 'View Documents',
-        'description' =&gt; 'Can view documents',
-        'category' =&gt; 'Documents',
         'default' =&gt; true,
     ],
     'documents.approve' =&gt; [
         'name' =&gt; 'Approve Documents',
-        'description' =&gt; 'Can approve documents',
-        'category' =&gt; 'Documents',
         'default' =&gt; false,
     ],
-];</code></pre><p>The array key such as <code>documents.approve</code> is the machine-readable permission ID used by code. The name and description are human-friendly labels for an admin screen. The default is used only when no user or group override applies.</p><p>This means a new user can view documents by default, but cannot approve them until a rule grants that permission.</p><h2>3. Represent the subject being checked</h2><p>Create <code>public/permissions.php</code> and begin with:</p><pre><code>&lt;?php
-require __DIR__ . '/../vendor/autoload.php';
-
-use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
-use Tihloh\Prefab\Permissions\Repositories\PdoPermissionStore;
-use Tihloh\Prefab\Permissions\Services\PermissionManager;
+];</code></pre><p>A new user can view documents by default but cannot approve them until permission is granted.</p><h2>3. Create a subject</h2><pre><code>use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
 
 final class TutorialSubject implements PermissionSubjectInterface
 {
     public function __construct(public int $id, public array $groups = []) {}
     public function permissionSubjectId(): int|string { return $this-&gt;id; }
     public function permissionGroupIds(): array { return $this-&gt;groups; }
-}</code></pre><p>Permissions does not require a specific User class. Instead, it asks for a small contract: the subject's ID and the IDs of groups it belongs to. This keeps the module usable with Prefab Users or another application's user model.</p><h2>4. Connect storage and definitions</h2><pre><code>$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
-    'root',
-    '',
-    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
-);
-
-$permissions = new PermissionManager(
+}</code></pre><h2>4. Connect Permissions</h2><pre><code>$permissions = new PermissionManager(
     __DIR__ . '/../config/permissions.php',
     new PdoPermissionStore($pdo),
-);</code></pre><p><code>PermissionManager</code> performs resolution. <code>PdoPermissionStore</code> persists overrides. The store automatically creates <code>prefab_subject_permissions</code>, so the application does not have to design a table just to test the module.</p><h2>5. Create a test user and group</h2><pre><code>$userId = (int) ($_GET['user'] ?? $_POST['user'] ?? 1);
-$groups = [10];
-$user = new TutorialSubject($userId, $groups);</code></pre><p>This tutorial treats user #1 as a member of group #10. The actual group does not need a separate table for this demonstration because Permissions only needs the group ID during resolution.</p><h2>6. Allow, deny or clear an override</h2><p>Add the POST handler:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $permission = $_POST['permission'] ?? 'documents.approve';
-    $scope = $_POST['scope'] ?? 'user';
-    $id = $scope === 'group' ? 10 : $userId;
-    $action = $_POST['action'] ?? 'clear';
+);
 
-    if ($action === 'allow') $permissions-&gt;set($scope, $id, $permission, true);
-    if ($action === 'deny')  $permissions-&gt;set($scope, $id, $permission, false);
-    if ($action === 'clear') $permissions-&gt;clear($scope, $id, $permission);
+$user = new TutorialSubject(1, [10]);</code></pre><h2>5. Change a permission</h2><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $permission = $_POST['permission'];
+    $action = $_POST['action'];
+
+    if ($action === 'allow') $permissions-&gt;set('user', 1, $permission, true);
+    if ($action === 'deny')  $permissions-&gt;set('user', 1, $permission, false);
+    if ($action === 'clear') $permissions-&gt;clear('user', 1, $permission);
 }
 
-$results = $permissions-&gt;resolvedFor($user);</code></pre><p><code>set(..., true)</code> creates an explicit allow. <code>set(..., false)</code> creates an explicit deny. <code>clear()</code> removes the override completely, which is different from denying. Once cleared, the decision falls back to another source such as a group or the definition default.</p><h2>7. Add browser controls</h2><pre><code>&lt;h1&gt;Prefab Permissions Test&lt;/h1&gt;
-&lt;p&gt;User #&lt;?= $userId ?&gt; — tutorial group #10&lt;/p&gt;
-
-&lt;form method="post"&gt;
-    &lt;input type="hidden" name="user" value="&lt;?= $userId ?&gt;"&gt;
+$results = $permissions-&gt;resolvedFor($user);</code></pre><h2>6. Add permission controls</h2><pre><code>&lt;form method="post"&gt;
     &lt;select name="permission"&gt;
         &lt;option&gt;documents.view&lt;/option&gt;
         &lt;option&gt;documents.approve&lt;/option&gt;
     &lt;/select&gt;
-    &lt;select name="scope"&gt;
-        &lt;option value="user"&gt;User #&lt;?= $userId ?&gt;&lt;/option&gt;
-        &lt;option value="group"&gt;Group #10&lt;/option&gt;
-    &lt;/select&gt;
     &lt;button name="action" value="allow"&gt;Allow&lt;/button&gt;
     &lt;button name="action" value="deny"&gt;Deny&lt;/button&gt;
-    &lt;button name="action" value="clear"&gt;Clear / Inherit&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>The form lets you change both the permission and the scope. The hidden user field preserves the selected user ID across POST requests.</p><h2>8. Display the effective result</h2><pre><code>&lt;h2&gt;Effective permissions&lt;/h2&gt;
-&lt;pre&gt;&lt;?php
-foreach ($results as $id =&gt; $result) {
-    echo $id . ' = ' . ($result-&gt;allowed ? 'ALLOW' : 'DENY') . ' via ' . $result-&gt;source . PHP_EOL;
-}
-?&gt;&lt;/pre&gt;</code></pre><p>The important part is <code>$result-&gt;source</code>. It explains <em>why</em> the result is allow or deny, not only the final boolean.</p><h2>9. Understand resolution order</h2><pre><code>User override
+    &lt;button name="action" value="clear"&gt;Inherit&lt;/button&gt;
+&lt;/form&gt;</code></pre><h2>7. Display effective permissions</h2><p>A table makes the permission state much easier to understand than debug output:</p><pre><code>&lt;table border="1" cellpadding="8"&gt;
+    &lt;tr&gt;&lt;th&gt;Permission&lt;/th&gt;&lt;th&gt;Result&lt;/th&gt;&lt;th&gt;Source&lt;/th&gt;&lt;/tr&gt;
+    &lt;?php foreach ($results as $id =&gt; $result): ?&gt;
+    &lt;tr&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($id) ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= $result-&gt;allowed ? 'ALLOW' : 'DENY' ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($result-&gt;source) ?&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Change <code>documents.approve</code> between Allow, Deny and Inherit and watch the table update.</div><h2>8. Resolution order</h2><pre><code>User override
     ↓ if absent
 Group overrides
     ↓ if absent
-Definition default</code></pre><p>A user-specific rule is the most precise, so it wins. If there is no user rule, Prefab considers the user's groups. If no group supplies a decision, the permission definition's default is used.</p><p>Test the sequence: clear everything and observe defaults; allow <code>documents.approve</code> for group #10; deny it for user #1; then clear the user deny. The group allow should become effective again.</p><h2>10. Inspect raw overrides</h2><pre><code>print_r([
-    'user' =&gt; $permissions-&gt;overridesFor('user', $userId),
-    'group10' =&gt; $permissions-&gt;overridesFor('group', 10),
-]);</code></pre><p>Raw overrides show only explicitly stored rules. They are useful when building an admin screen that must distinguish “deny” from “inherit.”</p><h2>11. Direct API</h2><pre><code>$permissions-&gt;set('user', 1, 'documents.approve', true);
-$permissions-&gt;set('user', 1, 'documents.approve', false);
-$permissions-&gt;clear('user', 1, 'documents.approve');
-$permissions-&gt;clearAll('user', 1);
-
-$permissions-&gt;can($user, 'documents.approve');
+Definition default</code></pre><h2>9. Everyday API</h2><pre><code>$permissions-&gt;can($user, 'documents.approve');
 $permissions-&gt;resolve($user, 'documents.approve');
-$permissions-&gt;resolvedFor($user);
-$permissions-&gt;definitions();
-$permissions-&gt;definition('documents.approve');
-$permissions-&gt;defined('documents.approve');</code></pre><p><code>can()</code> is the convenient yes/no check used by application code. <code>resolve()</code> returns the richer result when the caller also needs the decision source. <code>resolvedFor()</code> resolves all definitions for one subject.</p><h2>12. Diagnostics</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><p><code>explain()</code> helps diagnose which storage and integrations the module resolved at runtime.</p><div class="nextbox"><b>Next:</b> Continue to Audit Logs to record who performed important actions and what changed.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Permissions can reuse shared infrastructure and automatically participate in audit history while remaining independent from Auth and Users.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td><code>database capability</code></td><td>Permissions can create/use its PDO permission store from the shared database when no explicit store is supplied.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic actor context</strong></td><td><code>actor_provider capability</code></td><td>Permission grant/deny/clear events can identify the currently authenticated user as the actor through the shared Auth capability.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td><code>PrefabRuntime log emission</code></td><td>set() and clear() generate structured permission-change events that Prefab Logs can record when the logger capability is present.</td></tr><tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td><code>user ID / PermissionSubjectInterface</code></td><td>A Prefab user ID can be checked directly, or an application subject can expose user and group IDs through PermissionSubjectInterface.</td></tr><tr><td><code>Routes</code></td><td><strong>Compatible hook</strong></td><td><code>route.permission()</code></td><td>Routes can attach a permission key as metadata and middleware can enforce it with PermissionManager::can().</td></tr><tr><td><code>Groups</code></td><td><strong>Built-in</strong></td><td><code>GroupManager</code></td><td>Group membership and group permission overrides are part of the Permissions package, allowing reusable authorization rules across users.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Permissions does not need Auth in order to work. Auth simply improves context by providing the current actor and current user for typical web applications.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+$permissions-&gt;set('user', 1, 'documents.approve', true);
+$permissions-&gt;clear('user', 1, 'documents.approve');</code></pre><h2>10. Developer tip</h2><pre><code>print_r($permissions-&gt;explain());</code></pre><p>Use diagnostics only when debugging configuration or integration.</p><div class="nextbox"><b>Next:</b> Continue to Audit Logs and show application activity in a table.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>What happens</th></tr></thead><tbody><tr><td><code>Database</code></td><td><strong>Automatic</strong></td><td>Permissions can reuse the shared database.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic actor context</strong></td><td>Permission changes can identify the authenticated actor.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td>Permission changes can become audit records.</td></tr><tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td>User IDs and group IDs can be checked by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
