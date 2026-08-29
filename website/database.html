@@ -1,92 +1,24 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">The Database module gives the application one consistent way to work with SQL databases. You will first connect to MariaDB/MySQL, then perform CRUD operations, use raw SQL, wrap work in a transaction and finally explore multiple connections and diagnostics.</p><h2>1. Install Database</h2><pre><code>composer require tihloh/prefab-database</code></pre><p>The main class used in this tutorial is <code>DatabaseManager</code>. It stores one or more database connections and provides the query builder, raw SQL helpers and transaction API.</p><h2>2. Create the tutorial database and table</h2><p>Create a MariaDB/MySQL database named <code>prefab_tutorial</code>. Then create a simple <code>users</code> table:</p><pre><code>CREATE TABLE users (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(190) NOT NULL UNIQUE,
-    active TINYINT(1) NOT NULL DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);</code></pre><p>The table gives the tutorial real data to work with. <code>id</code> uniquely identifies each row. <code>AUTO_INCREMENT</code> lets the database assign IDs automatically. <code>UNIQUE</code> prevents duplicate email addresses. <code>active</code> is stored as a small integer because MySQL commonly represents booleans as 0 and 1.</p><h2>3. Configure the first connection</h2><p>Create <code>database-test.php</code> in the project root:</p><pre><code>&lt;?php
-require __DIR__ . '/vendor/autoload.php';
-
-use Tihloh\Prefab\Database\Services\DatabaseManager;
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">Connect to MariaDB/MySQL, perform CRUD, use raw SQL and transactions, then inspect an operation with Prefab tracing.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-database</code></pre><h2>2. Create a table</h2><pre><code>CREATE TABLE users (
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(100) NOT NULL,
+email VARCHAR(190) NOT NULL UNIQUE,
+active TINYINT(1) NOT NULL DEFAULT 1
+);</code></pre><h2>3. Connect</h2><pre><code>use Tihloh\Prefab\Database\Services\DatabaseManager;
 $database = new DatabaseManager([
-    'connections' =&gt; [
-        'main' =&gt; [
-            'driver' =&gt; 'mysql',
-            'host' =&gt; '127.0.0.1',
-            'database' =&gt; 'prefab_tutorial',
-            'username' =&gt; 'root',
-            'password' =&gt; '',
-        ],
-    ],
+'connections' =&gt; ['main' =&gt; [
+'driver' =&gt; 'mysql', 'host' =&gt; '127.0.0.1',
+'database' =&gt; 'prefab_tutorial', 'username' =&gt; 'root', 'password' =&gt; '',
+]],
 ]);
-
-var_dump($database-&gt;ping('main'));</code></pre><p>The name <code>main</code> is an application-defined connection name. It lets the project refer to this database later without repeating its connection settings.</p><p><code>ping('main')</code> checks whether the connection can actually be opened. This is the first test because CRUD examples are meaningless until the database connection itself works.</p><pre><code>php database-test.php</code></pre><div class="nextbox"><b>Checkpoint:</b> The command should print <code>bool(true)</code>.</div><h2>4. Insert a row</h2><pre><code>$id = $database-&gt;table('users')-&gt;insertGetId([
-    'name' =&gt; 'Demo User',
-    'email' =&gt; 'demo@example.com',
-    'active' =&gt; true,
+var_dump($database-&gt;ping('main'));</code></pre><h2>4. Insert and read</h2><pre><code>$id = $database-&gt;table('users')-&gt;insertGetId([
+'name' =&gt; 'Demo User', 'email' =&gt; 'demo@example.com', 'active' =&gt; true,
 ]);
-echo "Inserted ID: {$id}";</code></pre><p><code>table('users')</code> starts a query against the <code>users</code> table. <code>insertGetId()</code> inserts the row and returns the automatically generated primary key. Keeping that ID lets the next examples work with the exact row that was just created.</p><h2>5. Read data</h2><pre><code>$user = $database-&gt;table('users')-&gt;where('id', $id)-&gt;first();
-print_r($user);</code></pre><p><code>where()</code> adds a filter. <code>first()</code> returns the first matching row instead of a list. This is appropriate when searching by a unique ID.</p><p>To return several rows:</p><pre><code>$active = $database-&gt;table('users')
-    -&gt;where('active', true)
-    -&gt;orderBy('name')
-    -&gt;limit(20)
-    -&gt;get();
-print_r($active);</code></pre><p><code>get()</code> returns a collection of rows. <code>orderBy()</code> controls sorting and <code>limit()</code> prevents an accidentally large result set.</p><h2>6. Update a row</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;update([
-    'name' =&gt; 'Updated Demo User',
-]);</code></pre><p>The <code>where()</code> clause is important. Without a filter, an update could affect every row in the table. Prefab's query builder keeps the SQL readable, but the same database safety rules still apply.</p><h2>7. Delete a row</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;delete();</code></pre><p>Delete operations are permanent unless the application implements its own soft-delete strategy. Always confirm that the filter targets the intended row before deleting.</p><h2>8. Use raw SQL when it is clearer</h2><p>The query builder is convenient, but some SQL is easier to write directly. Prefab does not force every query through the builder.</p><pre><code>$rows = $database-&gt;select(
-    'SELECT * FROM users WHERE active = ?',
-    [1],
-);
-print_r($rows);
+$user = $database-&gt;table('users')-&gt;where('id', $id)-&gt;first();</code></pre><h2>5. Update and delete</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;update(['name' =&gt; 'Updated User']);
+$database-&gt;table('users')-&gt;where('id', $id)-&gt;delete();</code></pre><h2>6. Raw SQL</h2><pre><code>$rows = $database-&gt;select('SELECT * FROM users WHERE active = ?', [1]);
+$database-&gt;statement('UPDATE users SET active = ? WHERE email = ?', [false, 'demo@example.com']);</code></pre><p>Keep values in bindings instead of concatenating untrusted input into SQL.</p><h2>7. Transactions</h2><pre><code>$database-&gt;transaction(function ($db) {
+    $db-&gt;table('users')-&gt;insert(['name' =&gt; 'Transactional User', 'email' =&gt; 'transaction@example.com']);
+});</code></pre><h2>8. Developer tip: trace a database operation</h2><pre><code>$rows = $database-&gt;table('users')-&gt;where('active', true)-&gt;get();
 
-$database-&gt;statement(
-    'UPDATE users SET active = ? WHERE email = ?',
-    [false, 'demo@example.com'],
-);</code></pre><p>The question marks are placeholders. Values are supplied separately so the database driver can bind them safely instead of concatenating untrusted text directly into SQL.</p><h2>9. Group related changes with a transaction</h2><pre><code>$database-&gt;transaction(function ($db) {
-    $db-&gt;table('users')-&gt;insert([
-        'name' =&gt; 'Transactional User',
-        'email' =&gt; 'transaction@example.com',
-    ]);
-});</code></pre><p>A transaction treats several database operations as one unit. If the callback finishes successfully, the transaction is committed. If an exception causes it to fail, the transaction can be rolled back. This matters when partial changes would leave the application in an inconsistent state.</p><h2>10. Reuse an existing PDO connection</h2><pre><code>$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
-    'root',
-    '',
-    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
-);
-
-$database = new DatabaseManager([
-    'connections' =&gt; ['main' =&gt; $pdo],
-]);</code></pre><p>This is useful in an existing application that already creates PDO itself. Prefab can wrap that connection instead of forcing the project to rebuild its database setup.</p><h2>11. Advanced: multiple connections</h2><pre><code>$database = new DatabaseManager([
-    'default' =&gt; 'main',
-    'connections' =&gt; [
-        'main' =&gt; $pdo,
-        'logs' =&gt; [
-            'driver' =&gt; 'sqlite',
-            'database' =&gt; __DIR__ . '/storage/logs.sqlite',
-        ],
-    ],
-]);
-
-$main = $database-&gt;connection('main');
-$logs = $database-&gt;connection('logs');</code></pre><p>The default connection is used when no connection name is supplied. Named connections are useful when application data, logs or reporting data live in different databases.</p><pre><code>$rows = $database
-    -&gt;table('prefab_logs', 'logs')
-    -&gt;orderBy('id', 'desc')
-    -&gt;limit(20)
-    -&gt;get();</code></pre><p>Passing <code>'logs'</code> tells the query builder which configured connection should execute the query.</p><h2>12. Advanced: access raw PDO</h2><pre><code>$pdo = $database-&gt;connection('main');
-$defaultPdo = $database-&gt;pdo();</code></pre><p>This escape hatch is useful when a PDO-specific API is needed that the higher-level Database API does not expose.</p><h2>13. Advanced: inspect and change connections at runtime</h2><pre><code>echo $database-&gt;defaultName();
-print_r($database-&gt;names());
-var_dump($database-&gt;has('main'));
-echo $database-&gt;driver('main');
-var_dump($database-&gt;ping('main'));
-
-$database-&gt;set('archive', $archivePdo);
-$database-&gt;useDefault('archive');</code></pre><p>These methods are useful in infrastructure code, tests and applications that choose a connection dynamically.</p><h2>14. How Database cooperates with other Prefab modules</h2><p>Other modules do not need to depend directly on the full Database package. They can consume a small shared database capability through <code>DatabaseInterface</code>. This keeps modules independently installable while still allowing them to cooperate when Database is present.</p><h2>15. Configuration precedence</h2><pre><code>Direct module instance
-    ↓
-Module-specific PrefabConfig
-    ↓
-Common PrefabConfig
-    ↓
-Auto-discovered database capability
-    ↓
-Default / clear error</code></pre><p>This order answers the question “which configuration wins?” More explicit configuration is preferred over automatically discovered configuration.</p><h2>16. Diagnostics</h2><pre><code>print_r($database-&gt;explain());</code></pre><p><code>explain()</code> shows how the module resolved its configuration. In a larger Prefab application, <code>PrefabRuntime::inspect()</code> can also show registered modules and shared capabilities.</p><div class="nextbox"><b>Next:</b> Continue to Users to place a domain-specific user API on top of database storage.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Database is a shared infrastructure module. Once configured, it publishes a database capability that other compatible Prefab modules can discover and reuse automatically.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Users</code></td><td><strong>Automatic</strong></td><td><code>database capability</code></td><td>Users can build its PDO-backed provider from the shared database without creating another PDO connection in the Users configuration.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic when needed</strong></td><td><code>database / PDO capability</code></td><td>Auth can use the available database for its own credentials, PINs and login-token tables while leaving the application users table untouched.</td></tr><tr><td><code>Permissions</code></td><td><strong>Automatic</strong></td><td><code>database capability</code></td><td>Permissions can create/use its permission store from the shared database.</td></tr><tr><td><code>Logs</code></td><td><strong>Automatic</strong></td><td><code>database capability</code></td><td>Logs can create/use its audit-log repository from the shared database.</td></tr><tr><td><code>Named connections</code></td><td><strong>Automatic capability</strong></td><td><code>database.connection.NAME</code></td><td>Modules that support a connection name can target a published named connection instead of the default one.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> This is why a larger Prefab application normally configures Database once. Individual modules can still receive an explicit PDO/store when isolation is preferred.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>The Database module traces safe summaries such as table/operation and binding counts rather than exposing bound secret values.</p><h2>9. Multiple connections and diagnostics</h2><pre><code>print_r($database-&gt;names());
+echo $database-&gt;defaultName();
+print_r($database-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>Can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Can use shared storage for Auth-owned credentials/tokens.</td></tr><tr><td><code>Permissions</code></td><td>Can reuse shared persistence.</td></tr><tr><td><code>Logs</code></td><td>Can reuse shared persistence.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
