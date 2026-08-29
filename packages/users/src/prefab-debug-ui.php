@@ -64,8 +64,7 @@ namespace Tihloh\Prefab {
             {
                 $branch = $root ? '' : ($last ? '└─ ' : '├─ ');
                 $status = ($trace['status'] ?? '') === 'success' ? 'OK' : 'FAILED';
-                $module = ucfirst((string)($trace['module'] ?? 'prefab'));
-                $operation = (string)($trace['operation'] ?? 'operation');
+                [$module, $operation] = self::traceIdentity($trace, $root);
                 $lines[] = $prefix . $branch . $module . '::' . $operation . ' [' . $status . ']  ' . number_format((float)($trace['duration_ms'] ?? 0), 3) . ' ms';
                 $next = $root ? '' : $prefix . ($last ? '   ' : '│  ');
                 $items = [];
@@ -100,21 +99,29 @@ namespace Tihloh\Prefab {
                 }
             }
 
+            /** Root database calls from an internal adapter belong to that module, not Prefab Database. */
+            private static function traceIdentity(array $trace, bool $root): array
+            {
+                $module = (string)($trace['module'] ?? 'prefab');
+                $operation = (string)($trace['operation'] ?? 'operation');
+                $owner = (string)($trace['context']['owner_module'] ?? '');
+
+                if ($root && $module === 'database' && $owner !== '' && $owner !== 'database') {
+                    return [ucfirst($owner), 'database.' . $operation];
+                }
+
+                return [ucfirst($module), $operation];
+            }
+
             private static function step(array $step): string
             {
                 $event = (string)($step['event'] ?? 'step');
                 $details = $step['details'] ?? [];
                 $time = ' (' . number_format((float)($step['at_ms'] ?? 0), 3) . ' ms)';
 
-                if ($event === 'database.sql') {
-                    return 'SQL: ' . self::value($details['sql'] ?? '') . $time;
-                }
-                if ($event === 'database.rows') {
-                    return 'Rows returned: ' . self::value($details['rows'] ?? 0) . $time;
-                }
-                if ($event === 'database.affected') {
-                    return 'Rows affected: ' . self::value($details['rows'] ?? 0) . $time;
-                }
+                if ($event === 'database.sql') return 'SQL: ' . self::value($details['sql'] ?? '') . $time;
+                if ($event === 'database.rows') return 'Rows returned: ' . self::value($details['rows'] ?? 0) . $time;
+                if ($event === 'database.affected') return 'Rows affected: ' . self::value($details['rows'] ?? 0) . $time;
 
                 $pairs = [];
                 foreach ($details as $k => $v) {
@@ -126,6 +133,7 @@ namespace Tihloh\Prefab {
             private static function visible(string $key, bool $detailed): bool
             {
                 $key = strtolower($key);
+                if ($key === 'owner_module') return false;
                 if (preg_match('/password|passwd|secret|token|authorization|cookie|path|class|adapter|namespace|file|line/', $key)) return false;
                 if (!$detailed && in_array($key, ['bindings','provider','actor_id','sql'], true)) return false;
                 return true;

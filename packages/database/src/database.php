@@ -20,7 +20,12 @@ if (!interface_exists(DatabaseInterface::class, false)) {
 if (!class_exists(PdoDatabaseAdapter::class, false)) {
     final class PdoDatabaseAdapter implements DatabaseInterface
     {
-        public function __construct(private PDO $connection) {}
+        private string $ownerModule;
+
+        public function __construct(private PDO $connection, ?string $ownerModule = null)
+        {
+            $this->ownerModule = $ownerModule ?? $this->detectOwnerModule();
+        }
 
         public function select(string $sql, array $bindings = []): array
         {
@@ -49,7 +54,7 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
 
         public function transaction(callable $callback): mixed
         {
-            return PrefabRuntime::traceCall('database', 'transaction', [], function () use ($callback): mixed {
+            return PrefabRuntime::traceCall('database', 'transaction', ['owner_module' => $this->ownerModule], function () use ($callback): mixed {
                 $this->connection->beginTransaction();
                 try {
                     $result = $callback($this);
@@ -82,6 +87,7 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
         {
             $operation ??= $this->operation($sql);
             $context = [
+                'owner_module' => $this->ownerModule,
                 'operation' => $operation,
                 'bindings' => count($bindings),
             ];
@@ -90,6 +96,18 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
             if ($table !== null) $context['table'] = $table;
 
             return $context;
+        }
+
+        /** Identify the Prefab module that created this internal adapter. */
+        private function detectOwnerModule(): string
+        {
+            foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 16) as $frame) {
+                $class = (string)($frame['class'] ?? '');
+                if (preg_match('/^Tihloh\\\\Prefab\\\\(Database|Users|Auth|Permissions|Logs|Routes|Input|Files|Messaging|Notifications)\\\\/i', $class, $match)) {
+                    return strtolower($match[1]);
+                }
+            }
+            return 'database';
         }
 
         private function operation(string $sql): string
