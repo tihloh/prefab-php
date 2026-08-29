@@ -6,6 +6,7 @@ namespace Tihloh\Prefab\Notifications;
 
 use Tihloh\Prefab\Notifications\Contracts\NotificationStoreInterface;
 use Tihloh\Prefab\Notifications\Stores\InMemoryNotificationStore;
+use Tihloh\Prefab\PrefabRuntime;
 
 final class NotificationManager
 {
@@ -21,7 +22,9 @@ final class NotificationManager
         array $metadata = [],
         ?string $actionUrl = null,
     ): Notification {
-        return $this->store->create(new Notification(
+        return PrefabRuntime::traceCall('notifications', 'send', [
+            'recipient_id' => $recipientId,
+        ], fn () => $this->store->create(new Notification(
             null,
             $recipientId,
             $title,
@@ -30,38 +33,52 @@ final class NotificationManager
             $actionUrl,
             time(),
             null,
-        ));
+        )));
     }
 
     /** @return list<Notification> */
     public function recent(string|int $recipientId, int $limit = 20): array
     {
-        return $this->store->recent($recipientId, $limit, false);
+        return PrefabRuntime::traceCall('notifications', 'recent', [
+            'recipient_id' => $recipientId,
+            'limit' => $limit,
+        ], fn () => $this->store->recent($recipientId, $limit, false));
     }
 
     /** @return list<Notification> */
     public function unread(string|int $recipientId, int $limit = 20): array
     {
-        return $this->store->recent($recipientId, $limit, true);
+        return PrefabRuntime::traceCall('notifications', 'unread', [
+            'recipient_id' => $recipientId,
+            'limit' => $limit,
+        ], fn () => $this->store->recent($recipientId, $limit, true));
     }
 
     public function unreadCount(string|int $recipientId): int
     {
-        return $this->store->unreadCount($recipientId);
+        return PrefabRuntime::traceCall('notifications', 'unreadCount', [
+            'recipient_id' => $recipientId,
+        ], fn () => $this->store->unreadCount($recipientId));
     }
 
     public function markRead(string|int $notificationId, ?int $readAt = null): bool
     {
-        return $this->store->markRead($notificationId, $readAt);
+        return PrefabRuntime::traceCall('notifications', 'markRead', [
+            'notification_id' => $notificationId,
+        ], fn () => $this->store->markRead($notificationId, $readAt));
     }
 
     public function markUnread(string|int $notificationId): bool
     {
-        return $this->store->markUnread($notificationId);
+        return PrefabRuntime::traceCall('notifications', 'markUnread', [
+            'notification_id' => $notificationId,
+        ], fn () => $this->store->markUnread($notificationId));
     }
 
     public function delete(string|int $notificationId): bool
     {
-        return $this->store->delete($notificationId);
+        return PrefabRuntime::traceCall('notifications', 'delete', [
+            'notification_id' => $notificationId,
+        ], fn () => $this->store->delete($notificationId));
     }
 }
