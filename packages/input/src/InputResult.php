@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tihloh\Prefab\Input;
 
+use Tihloh\Prefab\PrefabRuntime;
+
 /**
  * Snapshot returned after input processing.
  *
@@ -18,7 +20,16 @@ final class InputResult
         private array $processed,
         private array $validated,
         private array $errors,
-    ) {}
+    ) {
+        PrefabRuntime::traceStart('input', 'process', [
+            'fields' => count($raw),
+        ]);
+        PrefabRuntime::traceEnd([
+            'valid' => $errors === [],
+            'validated' => count($validated),
+            'errors' => count($errors),
+        ]);
+    }
 
     public function passes(): bool
     {
