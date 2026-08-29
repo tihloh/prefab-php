@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Notifications</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="notifications.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 9</span><h1>Notifications</h1><p class="lead">Notifications are persistent messages shown inside the application, such as “Your document was approved.” This tutorial stores notifications per recipient, shows unread counts, and lets the user mark items read, unread or deleted.</p><h2>1. Install Notifications</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><p><code>NotificationManager</code> provides the application-facing API. A notification store decides where messages are kept. This tutorial uses <code>PdoNotificationStore</code> so notifications survive browser refreshes.</p><h2>2. Create the notification table</h2><pre><code>CREATE TABLE notifications (
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Notifications</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="notifications.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 9</span><h1>Notifications</h1><p class="lead">Build a small in-application notification page. You will send notices, display them, count unread items, and change their read state.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-notifications</code></pre><h2>2. Create storage</h2><pre><code>CREATE TABLE notifications (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     recipient_id VARCHAR(191) NOT NULL,
     title VARCHAR(191) NOT NULL,
@@ -6,77 +6,72 @@
     metadata JSON NOT NULL,
     action_url VARCHAR(500) NULL,
     created_at DATETIME NOT NULL,
-    read_at DATETIME NULL,
-    INDEX idx_notifications_recipient (recipient_id),
-    INDEX idx_notifications_read (read_at)
-);</code></pre><p>Unlike some other Prefab modules, the PDO notification store does not automatically invent a schema because projects often already have a notification table. For this tutorial, create the expected table explicitly.</p><p><code>recipient_id</code> identifies who should see the notification. <code>read_at</code> is <code>NULL</code> while unread and contains a timestamp after the notification is read. <code>metadata</code> stores additional structured data, while <code>action_url</code> can point to the related page.</p><h2>3. Connect the notification store</h2><p>Create <code>public/notifications.php</code>:</p><pre><code>&lt;?php
+    read_at DATETIME NULL
+);</code></pre><h2>3. Connect Notifications</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Notifications\NotificationManager;
 use Tihloh\Prefab\Notifications\Stores\PdoNotificationStore;
 
-$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
-    'root', '', [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
-);
-
 $notifications = new NotificationManager(
     new PdoNotificationStore($pdo)
 );
 
-$recipient = (int) ($_GET['user'] ?? 1);</code></pre><p>The tutorial uses recipient #1 by default. Passing <code>?user=2</code> in the URL lets you see how separate recipients receive separate notification lists.</p><h2>4. Send one notification</h2><p>Add a temporary send call:</p><pre><code>$notifications-&gt;send(
-    $recipient,
+$userId = 1;</code></pre><p>The recipient ID can be the ID of the signed-in user. Notifications itself does not need to own the user account.</p><h2>4. Send a notification</h2><pre><code>$notification = $notifications-&gt;send(
+    $userId,
     'Document Approved',
     'OBR-2026-001 has been approved.',
     ['document_id' =&gt; 1001],
     '/documents/1001',
-);</code></pre><p>The arguments are recipient, title, message, metadata and optional action URL. The manager creates the notification and the PDO store persists it.</p><div class="nextbox"><b>Checkpoint:</b> The <code>notifications</code> table should contain one unread record for recipient #1.</div><h2>5. Send notifications from a form</h2><p>Remove the temporary send call and add:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? 'send';
-
-    if ($action === 'send') {
-        $notifications-&gt;send(
-            $recipient,
-            $_POST['title'] ?? 'Document Approved',
-            $_POST['message'] ?? 'OBR-2026-001 has been approved.',
-            ['document_id' =&gt; 1001],
-            '/documents/1001',
-        );
-    }
+);</code></pre><div class="nextbox"><b>Checkpoint:</b> One unread notification should now exist for user #1.</div><h2>5. Add a simple form</h2><pre><code>&lt;form method="post"&gt;
+    &lt;input name="title" placeholder="Title" required&gt;
+    &lt;input name="message" placeholder="Message" required&gt;
+    &lt;button&gt;Send notification&lt;/button&gt;
+&lt;/form&gt;</code></pre><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $notifications-&gt;send(
+        $userId,
+        $_POST['title'],
+        $_POST['message'],
+    );
 }
 
-$recent = $notifications-&gt;recent($recipient);
-$count = $notifications-&gt;unreadCount($recipient);</code></pre><p><code>recent()</code> retrieves the recipient's notifications. <code>unreadCount()</code> is useful for badges such as the number shown beside a bell icon.</p><p>Add the form:</p><pre><code>&lt;h1&gt;Prefab Notifications Test&lt;/h1&gt;
-&lt;p&gt;Recipient #&lt;?= $recipient ?&gt; — unread: &lt;?= $count ?&gt;&lt;/p&gt;
+$recent = $notifications-&gt;recent($userId);
+$count = $notifications-&gt;unreadCount($userId);</code></pre><h2>6. Show the result</h2><pre><code>&lt;h1&gt;Notifications&lt;/h1&gt;
+&lt;p&gt;Unread: &lt;strong&gt;&lt;?= $count ?&gt;&lt;/strong&gt;&lt;/p&gt;
 
-&lt;form method="post"&gt;
-    &lt;p&gt;&lt;input name="title" value="Document Approved"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;textarea name="message"&gt;OBR-2026-001 has been approved.&lt;/textarea&gt;&lt;/p&gt;
-    &lt;button name="action" value="send"&gt;Send notification&lt;/button&gt;
-&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Send several notifications and confirm the unread counter increases.</div><h2>6. Display the notification list</h2><pre><code>&lt;h2&gt;Notifications&lt;/h2&gt;
-&lt;?php foreach ($recent as $n): ?&gt;
-    &lt;form method="post" style="border:1px solid #ccc;padding:10px;margin:10px 0"&gt;
-        &lt;input type="hidden" name="id" value="&lt;?= htmlspecialchars((string) $n-&gt;id) ?&gt;"&gt;
-        &lt;b&gt;&lt;?= htmlspecialchars($n-&gt;title) ?&gt;&lt;/b&gt;
-        &lt;p&gt;&lt;?= htmlspecialchars($n-&gt;message) ?&gt;&lt;/p&gt;
-        &lt;p&gt;State: &lt;?= $n-&gt;readAt ? 'READ' : 'UNREAD' ?&gt;&lt;/p&gt;
-        &lt;button name="action" value="read"&gt;Mark read&lt;/button&gt;
-        &lt;button name="action" value="unread"&gt;Mark unread&lt;/button&gt;
-        &lt;button name="action" value="delete"&gt;Delete&lt;/button&gt;
-    &lt;/form&gt;
-&lt;?php endforeach; ?&gt;</code></pre><p>Each form carries the notification ID in a hidden input. That ID tells the next POST request which notification should be changed.</p><h2>7. Handle read, unread and delete actions</h2><p>Add these cases inside the existing POST handler:</p><pre><code>if ($action === 'read') {
-    $notifications-&gt;markRead($_POST['id']);
+&lt;table border="1" cellpadding="8"&gt;
+    &lt;tr&gt;
+        &lt;th&gt;Title&lt;/th&gt;
+        &lt;th&gt;Message&lt;/th&gt;
+        &lt;th&gt;State&lt;/th&gt;
+        &lt;th&gt;Action&lt;/th&gt;
+    &lt;/tr&gt;
+    &lt;?php foreach ($recent as $n): ?&gt;
+    &lt;tr&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($n-&gt;title) ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($n-&gt;message) ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= $n-&gt;readAt ? 'Read' : 'Unread' ?&gt;&lt;/td&gt;
+        &lt;td&gt;
+            &lt;form method="post"&gt;
+                &lt;input type="hidden" name="id" value="&lt;?= htmlspecialchars((string) $n-&gt;id) ?&gt;"&gt;
+                &lt;button name="action" value="read"&gt;Read&lt;/button&gt;
+                &lt;button name="action" value="unread"&gt;Unread&lt;/button&gt;
+                &lt;button name="action" value="delete"&gt;Delete&lt;/button&gt;
+            &lt;/form&gt;
+        &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><p>The page now has an actual notification interface instead of displaying internal PHP structures.</p><h2>7. Handle the buttons</h2><pre><code>$action = $_POST['action'] ?? null;
+$id = $_POST['id'] ?? null;
+
+if ($action === 'read') {
+    $notifications-&gt;markRead($id);
 }
-
 if ($action === 'unread') {
-    $notifications-&gt;markUnread($_POST['id']);
+    $notifications-&gt;markUnread($id);
 }
-
 if ($action === 'delete') {
-    $notifications-&gt;delete($_POST['id']);
-}</code></pre><p><code>markRead()</code> sets a read timestamp. <code>markUnread()</code> clears it. The unread counter is therefore derived from stored notification state rather than maintained as a separate number that could become inconsistent.</p><div class="nextbox"><b>Checkpoint:</b> Mark notifications read and unread and confirm the counter changes. Delete one and confirm it disappears after refresh.</div><h2>8. Core API</h2><pre><code>$notifications-&gt;send($userId, $title, $message, $metadata, $actionUrl);
-$notifications-&gt;recent($userId);
-$notifications-&gt;unread($userId);
-$notifications-&gt;unreadCount($userId);
-$notifications-&gt;markRead($notificationId);
-$notifications-&gt;markUnread($notificationId);
-$notifications-&gt;delete($notificationId);</code></pre><p><code>unread()</code> returns the actual unread records, while <code>unreadCount()</code> returns only the number. Use the cheaper result that the current screen needs.</p><h2>9. In-memory mode</h2><pre><code>$notifications = new NotificationManager();</code></pre><p>With no persistent store, the manager uses an in-memory store. This is useful for tests and same-process experiments. It is not suitable for normal browser notifications because PHP request memory disappears when the request ends.</p><h2>10. Advanced: existing notification tables</h2><p>If a project already has a table with different column names, configure the PDO store's column mapping rather than renaming the application's schema. This follows Prefab's general design: adapt the module to the host application instead of forcing the host application to look like Prefab.</p><div class="nextbox"><b>Next:</b> Continue to Messaging to deliver messages through channels such as email or custom transports.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Notifications represents in-application notifications. It remains separate from message delivery so a project can choose whether a notification also sends email, SMS or another channel.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Messaging</code></td><td><strong>Direct composition</strong></td><td><code>notification + message</code></td><td>Application code can create an in-app notification and also send a message through Messaging when the event should reach the user outside the application.</td></tr><tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td><code>recipientId = user ID</code></td><td>A Prefab user ID can be used as the notification recipient identifier. Notifications does not require the Users package.</td></tr><tr><td><code>Auth</code></td><td><strong>Direct composition</strong></td><td><code>auth.id()</code></td><td>The current authenticated user ID can be used to load unread notifications and counters.</td></tr><tr><td><code>Database</code></td><td><strong>Explicit store</strong></td><td><code>PdoNotificationStore</code></td><td>Persistent notifications use the PDO store. Unlike modules with PrefabRuntime auto-discovery, the current Notifications package receives its store explicitly.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Notifications intentionally does not auto-send email. An in-app notification and an external message are different delivery decisions.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+    $notifications-&gt;delete($id);
+}</code></pre><div class="nextbox"><b>Checkpoint:</b> Mark an item read and confirm the unread number decreases. Mark it unread and the number increases again.</div><h2>8. Developer tip: inspect the last Prefab operation</h2><p>When operation tracing is available for the module, place one line after the operation you want to inspect:</p><pre><code>$notifications-&gt;send($userId, $title, $message);
+
+prefab_trace();</code></pre><p>Use <code>prefab_trace(true)</code> when you need the detailed internal steps. Tracing is for development; your application interface should continue showing normal user-facing results.</p><h2>9. In-memory mode</h2><pre><code>$notifications = new NotificationManager();</code></pre><p>This is useful for tests and same-process experiments. Browser applications normally need persistent storage because PHP request memory ends after each request.</p><h2>10. What you built</h2><p>You now have a small internal notification center with persistent notices, an unread counter and read/unread/delete actions.</p><div class="nextbox"><b>Next:</b> Continue to Messaging to send information outside the application through email or another delivery channel.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Users</code></td><td>A user ID can be used as the notification recipient.</td></tr><tr><td><code>Auth</code></td><td>The signed-in user ID can select which notification list to display.</td></tr><tr><td><code>Messaging</code></td><td>The same application event can create an internal notification and, when desired, send an external message.</td></tr><tr><td><code>Database</code></td><td><code>PdoNotificationStore</code> provides persistent notification storage.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
