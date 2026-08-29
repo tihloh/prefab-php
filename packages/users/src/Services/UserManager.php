@@ -170,17 +170,7 @@ final class UserManager
         }
 
         if (!$this->autoLogger) {
-            $logger = PrefabRuntime::resolveEntry('logger');
-
-            if ($logger) {
-                $this->autoLogger = $logger['value'];
-                PrefabRuntime::recordResolution(
-                    'users',
-                    'logger',
-                    'prefab-capability',
-                    ['provider' => $logger['provider']],
-                );
-            }
+            $this->resolveAutoLogger();
         }
 
         if (!$this->actorProvider) {
@@ -438,15 +428,35 @@ final class UserManager
         return $this->provider;
     }
 
+    private function resolveAutoLogger(): ?object
+    {
+        $logger = PrefabRuntime::resolveEntry('logger');
+
+        if (!$logger) {
+            return null;
+        }
+
+        $this->autoLogger = $logger['value'];
+        PrefabRuntime::recordResolution(
+            'users',
+            'logger',
+            'prefab-capability',
+            ['provider' => $logger['provider']],
+        );
+
+        return $this->autoLogger;
+    }
+
     private function result(mixed $data, array $log): OperationResult
     {
         if ($this->events && method_exists($this->events, 'dispatch')) {
             $this->events->dispatch('prefab.log', $log);
-        } elseif (
-            $this->autoLogger
-            && method_exists($this->autoLogger, 'record')
-        ) {
-            $this->autoLogger->record($log);
+        } else {
+            $logger = $this->autoLogger ?? $this->resolveAutoLogger();
+
+            if ($logger && method_exists($logger, 'record')) {
+                $logger->record($log);
+            }
         }
 
         return new OperationResult(
