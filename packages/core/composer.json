@@ -1,7 +1,7 @@
 {
   "name": "tihloh/prefab-core",
-  "description": "Tiny shared runtime, diagnostics, contracts, and interoperability layer for Prefab PHP modules.",
-  "keywords": ["php", "prefab", "core", "runtime", "modular", "framework-independent"],
+  "description": "Shared infrastructure for Prefab PHP modules: runtime, config, database, session, cache, contracts and diagnostics.",
+  "keywords": ["php", "prefab", "core", "runtime", "database", "session", "cache", "modular", "framework-independent"],
   "homepage": "https://github.com/tihloh/prefab-php",
   "type": "library",
   "license": "MIT",
@@ -15,7 +15,13 @@
   "require": {
     "php": ">=8.1"
   },
+  "suggest": {
+    "ext-pdo": "Required when using Core database infrastructure."
+  },
   "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Core\\": "src/"
+    },
     "files": [
       "src/prefab-debug-ui.php",
       "src/prefab-diagnostics.php",
