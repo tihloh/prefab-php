@@ -2,21 +2,18 @@
 
 namespace Tihloh\Prefab\Users\DTOs;
 
-use Tihloh\Prefab\PrefabRuntime;
-
+/**
+ * Result returned by user write operations.
+ *
+ * Tracing belongs to UserManager so the full operation, including database and
+ * logging work, appears as one useful call tree instead of a DTO-construction
+ * event.
+ */
 final class OperationResult
 {
     public function __construct(
-        public mixed $data,
-        public array $log,
+        public readonly mixed $data,
+        public readonly array $log,
     ) {
-        $operation = (string) ($log['action'] ?? 'operation');
-        PrefabRuntime::traceStart('users', $operation, [
-            'actor_id' => $log['actor_id'] ?? null,
-            'subject_id' => $log['subject_id'] ?? null,
-        ]);
-        PrefabRuntime::traceEnd([
-            'result' => is_object($data) ? $data::class : get_debug_type($data),
-        ]);
     }
 }

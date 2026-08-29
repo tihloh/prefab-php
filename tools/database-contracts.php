@@ -10,13 +10,8 @@ use Throwable;
  | Prefab database interoperability contract
  |--------------------------------------------------------------------------
  |
- | This is the canonical development copy embedded as src/database.php in
- | standalone Prefab packages that provide or consume database resources.
- |
- | The contract intentionally stays small. It covers the operations Prefab
- | modules need to share database access without forcing prefab-database as a
- | dependency. The richer Laravel-like query builder remains an optional
- | feature of Prefab Database itself.
+ | Small shared contract used by Prefab modules without forcing
+ | prefab-database as a dependency.
  |
  */
 
@@ -25,63 +20,60 @@ if (!interface_exists(DatabaseInterface::class, false)) {
     {
         /** @return array<int, array<string, mixed>> */
         public function select(string $sql, array $bindings = []): array;
-
         public function statement(string $sql, array $bindings = []): bool;
-
         public function transaction(callable $callback): mixed;
-
         public function driver(): string;
-
         public function lastInsertId(?string $name = null): string|false;
-
-        /**
-         * Legacy/project escape hatch. Prefab modules should normally use the
-         * unified methods above rather than operating on PDO directly.
-         */
         public function pdo(): PDO;
     }
 }
 
 if (!class_exists(PdoDatabaseAdapter::class, false)) {
-    /**
-     * Adapts a normal PDO connection to Prefab's database contract.
-     *
-     * This keeps every consuming module standalone: passing PDO continues to
-     * work even when prefab-database is not installed.
-     */
     final class PdoDatabaseAdapter implements DatabaseInterface
     {
-        public function __construct(
-            private PDO $connection,
-        ) {
+        public function __construct(private PDO $connection)
+        {
         }
 
         public function select(string $sql, array $bindings = []): array
         {
-            return PrefabRuntime::traceCall('database', 'select', [
-                'bindings' => count($bindings),
-            ], function () use ($sql, $bindings): array {
-                $statement = $this->connection->prepare($sql);
-                $statement->execute($bindings);
-                return $statement->fetchAll(PDO::FETCH_ASSOC);
-            });
+            return PrefabRuntime::traceCall(
+                'database',
+                'select',
+                $this->sqlContext($sql, $bindings),
+                function () use ($sql, $bindings): array {
+                    $statement = $this->connection->prepare($sql);
+                    $statement->execute($bindings);
+                    $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+                    PrefabRuntime::traceStep('database.rows', ['rows' => count($rows)]);
+                    return $rows;
+                },
+            );
         }
 
         public function statement(string $sql, array $bindings = []): bool
         {
-            return PrefabRuntime::traceCall('database', 'statement', [
-                'bindings' => count($bindings),
-            ], function () use ($sql, $bindings): bool {
-                $statement = $this->connection->prepare($sql);
-                return $statement->execute($bindings);
-            });
+            $context = $this->sqlContext($sql, $bindings);
+            $operation = $context['operation'] ?? 'statement';
+            unset($context['operation']);
+
+            return PrefabRuntime::traceCall(
+                'database',
+                $operation,
+                $context,
+                function () use ($sql, $bindings): bool {
+                    $statement = $this->connection->prepare($sql);
+                    $ok = $statement->execute($bindings);
+                    PrefabRuntime::traceStep('database.affected', ['rows' => $statement->rowCount()]);
+                    return $ok;
+                },
+            );
         }
 
         public function transaction(callable $callback): mixed
         {
             return PrefabRuntime::traceCall('database', 'transaction', [], function () use ($callback): mixed {
                 $this->connection->beginTransaction();
-
                 try {
                     $result = $callback($this);
                     $this->connection->commit();
@@ -97,10 +89,7 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
 
         public function driver(): string
         {
-            $driver = strtolower(
-                (string) $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME),
-            );
-
+            $driver = strtolower((string) $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME));
             return $driver === 'dblib' ? 'sqlsrv' : $driver;
         }
 
@@ -112,6 +101,39 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
         public function pdo(): PDO
         {
             return $this->connection;
+        }
+
+        /**
+         * Extract only safe, debugging-useful SQL metadata. Raw SQL and values
+         * are deliberately not included in traces.
+         */
+        private function sqlContext(string $sql, array $bindings): array
+        {
+            $trimmed = ltrim($sql);
+            $operation = strtolower((string) strtok($trimmed, " \t\r\n"));
+            $operation = in_array($operation, ['select', 'insert', 'update', 'delete'], true)
+                ? $operation
+                : 'statement';
+
+            $table = null;
+            $patterns = [
+                '/\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)/i',
+                '/\bUPDATE\s+([A-Za-z_][A-Za-z0-9_]*)/i',
+                '/\bDELETE\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)/i',
+                '/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)/i',
+            ];
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $sql, $match)) {
+                    $table = $match[1];
+                    break;
+                }
+            }
+
+            return array_filter([
+                'operation' => $operation,
+                'table' => $table,
+                'bindings' => count($bindings),
+            ], static fn (mixed $value): bool => $value !== null);
         }
     }
 }
