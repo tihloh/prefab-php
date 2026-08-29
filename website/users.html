@@ -1,26 +1,91 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page with plain HTML, then use Prefab tracing as an optional developer diagnostic.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Users</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="users.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 3</span><h1>Users</h1><p class="lead">Build a simple user-management page with plain HTML, then use Prefab tracing and explanation output as optional developer diagnostics.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-users</code></pre><h2>2. Connect Users</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
+
 use Tihloh\Prefab\Users\Services\UserManager;
-$pdo = new PDO('mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4','root','',[PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]);
-$users = new UserManager(['database' =&gt; $pdo]);
-$list = $users-&gt;all();</code></pre><h2>3. Display users</h2><pre><code>&lt;table border="1" cellpadding="8"&gt;
-&lt;tr&gt;&lt;th&gt;ID&lt;/th&gt;&lt;th&gt;Name&lt;/th&gt;&lt;th&gt;Email&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
-&lt;?php foreach ($list as $user): ?&gt;
-&lt;tr&gt;&lt;td&gt;&lt;?= $user-&gt;id ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= $user-&gt;active ? 'Active' : 'Inactive' ?&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;?php endforeach; ?&gt;
-&lt;/table&gt;</code></pre><h2>4. Add a user</h2><pre><code>$result = $users-&gt;create([
-    'name' =&gt; trim($_POST['name'] ?? ''),
-    'email' =&gt; trim($_POST['email'] ?? ''),
-    'active' =&gt; true,
-]);</code></pre><pre><code>&lt;form method="post"&gt;
-&lt;input name="name" placeholder="Name" required&gt;
-&lt;input name="email" type="email" placeholder="Email" required&gt;
-&lt;button&gt;Add user&lt;/button&gt;
-&lt;/form&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Add a user and confirm the new row appears in the table.</div><h2>5. Find, update and delete</h2><pre><code>$user = $users-&gt;find(1);
+
+$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root',
+    '',
+    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);
+
+$users = new UserManager(['database' =&gt; $pdo]);</code></pre><h2>3. Add a user</h2><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $users-&gt;create([
+        'name' =&gt; trim($_POST['name'] ?? ''),
+        'email' =&gt; trim($_POST['email'] ?? ''),
+        'active' =&gt; true,
+    ]);
+}
+
+$list = $users-&gt;all();</code></pre><pre><code>&lt;form method="post"&gt;
+    &lt;input name="name" placeholder="Name" required&gt;
+    &lt;input name="email" type="email" placeholder="Email" required&gt;
+    &lt;button&gt;Add user&lt;/button&gt;
+&lt;/form&gt;</code></pre><h2>4. Display users</h2><pre><code>&lt;h1&gt;Users&lt;/h1&gt;
+&lt;table border="1" cellpadding="8"&gt;
+    &lt;tr&gt;&lt;th&gt;ID&lt;/th&gt;&lt;th&gt;Name&lt;/th&gt;&lt;th&gt;Email&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+    &lt;?php foreach ($list as $user): ?&gt;
+    &lt;tr&gt;
+        &lt;td&gt;&lt;?= $user-&gt;id ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($user-&gt;name ?? '') ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($user-&gt;email ?? '') ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= $user-&gt;active ? 'Active' : 'Inactive' ?&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Submit the form and confirm the new user appears in the table.</div><h2>5. Find, update and delete</h2><pre><code>$user = $users-&gt;find(1);
 $byEmail = $users-&gt;findByEmail('alice@example.com');
+
 $users-&gt;update(1, ['name' =&gt; 'Alice Smith']);
 // $users-&gt;delete(1); // only when deletion is enabled by the map</code></pre><h2>6. Map an existing table</h2><pre><code>use Tihloh\Prefab\Users\Mapping\UserMap;
-$map = new UserMap(table:'employees', id:'employee_id', name:'full_name', email:'email_address', active:'is_active');
-$users = new UserManager(['database' =&gt; $pdo, 'map' =&gt; $map]);</code></pre><h2>7. Developer tip: trace the operation</h2><p>Keep normal application output as the main result. When debugging, call the trace helper after the Prefab operation:</p><pre><code>$result = $users-&gt;create($data);
 
-prefab_trace();</code></pre><p>For detailed internal steps:</p><pre><code>prefab_trace(true);</code></pre><p>Tracing is a developer diagnostic and should not replace the user-facing users table.</p><h2>8. Configuration diagnostics</h2><pre><code>print_r($users-&gt;explain());</code></pre><p>Users owns identity/profile data. Auth owns credentials, Permissions owns authorization, and Logs owns persistent activity history.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Database</code></td><td>Users can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Logs</code></td><td>User write activity can be recorded when logging is available.</td></tr><tr><td><code>Permissions</code></td><td>The same user IDs can be authorized by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+$map = new UserMap(
+    table: 'employees',
+    id: 'employee_id',
+    name: 'full_name',
+    email: 'email_address',
+    active: 'is_active',
+);
+
+$users = new UserManager([
+    'database' =&gt; $pdo,
+    'map' =&gt; $map,
+]);</code></pre><h2>7. Developer diagnostic: trace this request</h2><p><code>prefab_trace()</code> prints the Prefab operations that completed during the current PHP request. It is not a log table and it does not store history between requests.</p><p>Place it after the page has finished doing the Prefab work you want to inspect:</p><pre><code>if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $users-&gt;create($data);
+}
+
+$list = $users-&gt;all();
+$recent = $logs-&gt;recent(20);
+
+prefab_trace();</code></pre><p>If the form created a user and the page then loaded users and activity, the trace can contain several operations instead of showing only the last database query:</p><pre><code>Prefab Trace
+
+1. users::user.created [OK]
+   actor_id: null
+   subject_id: 9
+   result: Tihloh\Prefab\Users\User\PrefabUser
+   duration: 0.120 ms
+
+2. database::select [OK]
+   bindings: 0
+   result: array(3)
+   duration: 0.850 ms
+
+3. database::select [OK]
+   bindings: 0
+   result: array(2)
+   duration: 1.799 ms</code></pre><p>The exact operations depend on which modules are installed and which calls are instrumented. A database operation may appear because Users or Logs used the shared database internally.</p><h3>Detailed trace</h3><pre><code>prefab_trace(true);</code></pre><p>Detailed mode includes timed internal trace steps such as capability resolution and nested operations. Use it when the normal summary is not enough.</p><div class="callout"><b>Important:</b> Call <code>prefab_trace()</code> only for development diagnostics. It prints into the response, so remove or disable it on normal production pages.</div><h2>8. Explain how Users was configured</h2><p><code>explain()</code> answers a different question from tracing. Trace shows <em>what operations ran during this request</em>. Explain shows <em>where this module got its dependencies and configuration</em>.</p><pre><code>$users-&gt;explain();</code></pre><p>It now prints a human-readable explanation instead of requiring <code>print_r()</code> on a raw array. Example:</p><pre><code>Prefab Users Explain
+
+Database:
+  Source: module-local
+  Meaning: Configured directly on this module instance.
+  Driver: mysql
+
+User Provider:
+  Source: database-provider
+  Meaning: Automatically created from the resolved database.
+  Provider: Tihloh\Prefab\Users\Repositories\PdoUserProvider
+
+Table:
+  Source: internal-default
+  Meaning: Using the package default because nothing more explicit was configured.
+  Table: users</code></pre><p>The method still returns the structured resolution array for backward compatibility. Code that specifically needs only structured data can use <code>PrefabRuntime::explainData('users')</code>.</p><h2>9. Trace vs explain</h2><div class="api-table-wrap"><table class="api-table"><thead><tr><th>Diagnostic</th><th>Question it answers</th><th>Typical use</th></tr></thead><tbody><tr><td><code>prefab_trace()</code></td><td>What Prefab operations happened in this request?</td><td>Follow create/read/log/database activity and timings.</td></tr><tr><td><code>prefab_trace(true)</code></td><td>What internal trace steps happened inside those operations?</td><td>Deeper debugging of resolution and nested calls.</td></tr><tr><td><code>$users-&gt;explain()</code></td><td>How did Users resolve its provider, database, table and integrations?</td><td>Debug configuration and auto-wiring.</td></tr></tbody></table></div><p>Users owns identity/profile data. Auth owns credentials, Permissions owns authorization, and Logs owns persistent activity history.</p><div class="nextbox"><b>Next:</b> Continue to Input and validate data before creating or updating users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Database</code></td><td>Users can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Auth can reuse the same user provider.</td></tr><tr><td><code>Logs</code></td><td>User write activity can be recorded when logging is available.</td></tr><tr><td><code>Permissions</code></td><td>The same user IDs can be authorized by PermissionManager.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
