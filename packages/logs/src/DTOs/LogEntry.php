@@ -2,6 +2,8 @@
 
 namespace Tihloh\Prefab\Logs\DTOs;
 
+use Tihloh\Prefab\PrefabRuntime;
+
 final class LogEntry
 {
     public function __construct(
@@ -15,7 +17,16 @@ final class LogEntry
         public ?string $ipAddress = null,
         public ?string $userAgent = null,
         public ?string $occurredAt = null,
-    ) {}
+    ) {
+        PrefabRuntime::traceStart('logs', 'entry', [
+            'action' => $action,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
+        ]);
+        PrefabRuntime::traceEnd([
+            'actor_id' => $actorId,
+        ]);
+    }
 
     public static function fromArray(array $data): self
     {
