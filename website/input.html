@@ -1,41 +1,30 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Build a small working form with plain HTML. Invalid input shows useful messages and valid input produces a normal success result.</p><h2>1. Install Input</h2><pre><code>composer require tihloh/prefab-input</code></pre><h2>2. Process the form</h2><p>Create <code>public/input.php</code> and start with the PHP logic:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Input & Validation</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="input.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 4</span><h1>Input and validation</h1><p class="lead">Build a working form with plain HTML. Invalid input shows useful messages and valid input produces data ready for the rest of the application.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-input</code></pre><h2>2. Process the form</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
-
 use Tihloh\Prefab\Input\Input;
-
 $errors = [];
 $valid = null;
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = Input::from($_POST)-&gt;process([
         'name' =&gt; 'trim|required|string|max:100',
         'email' =&gt; 'trim|lowercase|required|email',
         'age' =&gt; 'required|integer|min:18',
     ]);
-
     $errors = $result-&gt;errors();
     $valid = $result-&gt;fails() ? null : $result-&gt;validated();
-}
-?&gt;</code></pre><h2>3. Add the form</h2><p>No framework or full HTML document is needed for this lesson:</p><pre><code>&lt;h1&gt;Registration&lt;/h1&gt;
-
-&lt;form method="post"&gt;
-    &lt;p&gt;&lt;input name="name" placeholder="Name"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;input name="email" placeholder="Email"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;input name="age" placeholder="Age"&gt;&lt;/p&gt;
-    &lt;button&gt;Register&lt;/button&gt;
-&lt;/form&gt;</code></pre><h2>4. Show validation errors</h2><p>Show errors where a student expects them instead of printing the PHP array:</p><pre><code>&lt;?php if ($errors): ?&gt;
-    &lt;p&gt;&lt;b&gt;Please fix these errors:&lt;/b&gt;&lt;/p&gt;
-    &lt;ul&gt;
-        &lt;?php foreach ($errors as $field =&gt; $messages): ?&gt;
-            &lt;li&gt;&lt;?= htmlspecialchars($field) ?&gt;: &lt;?= htmlspecialchars($messages[0]) ?&gt;&lt;/li&gt;
-        &lt;?php endforeach; ?&gt;
-    &lt;/ul&gt;
-&lt;?php endif; ?&gt;</code></pre><h2>5. Show success</h2><pre><code>&lt;?php if ($valid): ?&gt;
-    &lt;p&gt;&lt;b&gt;Registration successful!&lt;/b&gt;&lt;/p&gt;
-    &lt;p&gt;Welcome, &lt;?= htmlspecialchars($valid['name']) ?&gt;.&lt;/p&gt;
-&lt;?php endif; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Enter an invalid email or age below 18 to see validation errors. Enter valid values to see the success message.</div><h2>6. Understand the rules</h2><pre><code>'name'  =&gt; 'trim|required|string|max:100'
-'email' =&gt; 'trim|lowercase|required|email'
-'age'   =&gt; 'required|integer|min:18'</code></pre><p><code>trim</code> and <code>lowercase</code> transform values. The other rules decide whether the submitted values are acceptable.</p><h2>7. Use validated data</h2><p>The useful result is not the debug output. It is data that can now be safely handed to another module:</p><pre><code>if ($valid) {
+}</code></pre><h2>3. Add the form</h2><pre><code>&lt;form method="post"&gt;
+&lt;p&gt;&lt;input name="name" placeholder="Name"&gt;&lt;/p&gt;
+&lt;p&gt;&lt;input name="email" placeholder="Email"&gt;&lt;/p&gt;
+&lt;p&gt;&lt;input name="age" placeholder="Age"&gt;&lt;/p&gt;
+&lt;button&gt;Register&lt;/button&gt;
+&lt;/form&gt;</code></pre><h2>4. Show errors and success</h2><pre><code>&lt;?php if ($errors): ?&gt;
+&lt;ul&gt;&lt;?php foreach ($errors as $field =&gt; $messages): ?&gt;
+&lt;li&gt;&lt;?= htmlspecialchars($field) ?&gt;: &lt;?= htmlspecialchars($messages[0]) ?&gt;&lt;/li&gt;
+&lt;?php endforeach; ?&gt;&lt;/ul&gt;
+&lt;?php endif; ?&gt;
+&lt;?php if ($valid): ?&gt;
+&lt;p&gt;&lt;b&gt;Registration successful!&lt;/b&gt; Welcome, &lt;?= htmlspecialchars($valid['name']) ?&gt;.&lt;/p&gt;
+&lt;?php endif; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Invalid values show validation messages; valid values show the success result.</div><h2>5. Use validated data</h2><pre><code>if ($valid) {
     $users-&gt;create($valid);
-}</code></pre><h2>8. Developer tip: inspect values</h2><pre><code>print_r($result-&gt;errors());
-print_r($result-&gt;validated());</code></pre><p>These are useful while debugging, but they should not be the application's visible result.</p><h2>9. Advanced: request and upload helpers</h2><p>For forms that include files, <code>Input::fromRequest()</code> can collect normal request values and uploaded-file data together. File rules can validate type, MIME and size before Files stores the upload.</p><div class="nextbox"><b>Next:</b> Continue to Authentication and build a simple login form.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Input is intentionally request-focused. It does not auto-save anything, but its validated values and UploadedFile objects are designed to pass cleanly into other modules.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Files</code></td><td><strong>Direct compatible handoff</strong></td><td><code>UploadedFile → FileManager::storeUploaded()</code></td><td>Validate an upload with Input, then pass the validated UploadedFile directly to Files for permanent storage.</td></tr><tr><td><code>Users</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated() → UserManager::create/update()</code></td><td>Only validated/whitelisted form fields need to be passed to Users.</td></tr><tr><td><code>Auth</code></td><td><strong>Direct compatible handoff</strong></td><td><code>validated identifier/password/PIN</code></td><td>A login form can validate its fields first, then pass them to Auth.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Input does not automatically call another module because validation should never silently cause a database write, login or file save.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+}</code></pre><h2>6. Developer tip: trace validation</h2><p>After processing the input, inspect the latest Prefab operation when debugging:</p><pre><code>$result = Input::from($_POST)-&gt;process($schema);
+
+prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>Keep validation messages and normal application results visible; tracing is optional developer output.</p><h2>7. Uploads</h2><p><code>Input::fromRequest()</code> can collect request values and uploaded files together. Validate uploads before handing them to Files.</p><div class="nextbox"><b>Next:</b> Continue to Authentication and build a login form.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Files</code></td><td>Validated UploadedFile objects can be passed to <code>storeUploaded()</code>.</td></tr><tr><td><code>Users</code></td><td><code>validated()</code> data can be passed to create/update operations.</td></tr><tr><td><code>Auth</code></td><td>Login fields can be validated before authentication.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
