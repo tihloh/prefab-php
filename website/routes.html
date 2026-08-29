@@ -1,87 +1,26 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Routing</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="routes.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 1</span><h1>Routing</h1><p class="lead">Routing connects an HTTP request such as <code>GET /users/25</code> to the PHP code that should handle it. This tutorial starts with two routes, then gradually adds parameters, HTTP methods, middleware, route groups, named URLs and diagnostics.</p><h2>1. Install Routes</h2><pre><code>composer require tihloh/prefab-routes</code></pre><p>The Routes package provides <code>RouteManager</code>. Think of the manager as a registry of URL rules. Each rule contains an HTTP method, a path and a handler.</p><h2>2. Create the first routes</h2><p>Replace <code>public/index.php</code> with:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Routing</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="routes.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 1</span><h1>Routing</h1><p class="lead">Connect HTTP requests to PHP handlers, then build up parameters, methods, groups, middleware and named URLs.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-routes</code></pre><h2>2. Create routes</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
-
 use Tihloh\Prefab\Routes\RouteManager;
-
 $routes = new RouteManager();
-
-$routes-&gt;get('/', fn () =&gt; '&lt;h1&gt;Prefab Routes&lt;/h1&gt;&lt;p&gt;Router is working.&lt;/p&gt;');
+$routes-&gt;get('/', fn () =&gt; '&lt;h1&gt;Prefab Routes&lt;/h1&gt;');
 $routes-&gt;get('/hello/{name}', fn (string $name) =&gt; "Hello {$name}");
-
 $result = $routes-&gt;dispatch();
-if (is_string($result)) echo $result;</code></pre><p><code>$routes-&gt;get()</code> registers a route that responds only to HTTP GET requests. The first argument is the URL pattern. The second argument is the handler that runs when the request matches.</p><p>The <code>{name}</code> part is a route parameter. For <code>/hello/Alice</code>, Routes extracts <code>Alice</code> and passes it to the handler as <code>$name</code>.</p><p><code>dispatch()</code> reads the current HTTP method and requested URL, finds the matching route, then executes its handler. Register routes before calling <code>dispatch()</code>, because the router cannot match rules that have not been registered yet.</p><h2>3. Run and test</h2><pre><code>php -S 127.0.0.1:8000 -t public</code></pre><p>Open <code>http://127.0.0.1:8000/</code>, then <code>http://127.0.0.1:8000/hello/Alice</code>.</p><div class="nextbox"><b>Checkpoint:</b> The home URL should show the Routes message and <code>/hello/Alice</code> should display <b>Hello Alice</b>.</div><h2>4. HTTP methods</h2><p>A URL alone does not identify an HTTP action. Web applications commonly use GET to read data, POST to create or submit data, PUT/PATCH to update, and DELETE to remove. Routes lets the same path behave differently depending on the method.</p><pre><code>$routes-&gt;get('/method/get', fn () =&gt; 'GET');
-$routes-&gt;post('/method/post', fn () =&gt; 'POST');
-$routes-&gt;put('/method/put', fn () =&gt; 'PUT');
-$routes-&gt;patch('/method/patch', fn () =&gt; 'PATCH');
-$routes-&gt;delete('/method/delete', fn () =&gt; 'DELETE');
-$routes-&gt;any('/method/any', fn () =&gt; 'ANY');
-$routes-&gt;matchMethods(['GET','POST'], '/method/both', fn () =&gt; 'GET or POST');</code></pre><p>A normal browser address bar sends GET requests. Use an HTML form, curl or Postman to test the other methods.</p><h2>5. Required and optional parameters</h2><pre><code>$routes-&gt;get('/users/{id}', fn ($id) =&gt; "User {$id}");
-$routes-&gt;get('/reports/{year?}', fn ($year) =&gt; "Report {$year}")
-    -&gt;defaults(['year' =&gt; date('Y')]);</code></pre><p><code>{id}</code> is required, so <code>/users/25</code> matches but <code>/users</code> does not. The question mark in <code>{year?}</code> makes the parameter optional. <code>defaults()</code> supplies a value when the optional part is absent.</p><h2>6. Constrain parameter values</h2><pre><code>$routes-&gt;get('/numbers/{id}', fn ($id) =&gt; "Number {$id}")
-    -&gt;where('id', '\d+');</code></pre><p>The regular expression <code>\d+</code> means one or more digits. This prevents a route intended for numeric IDs from also accepting arbitrary text. <code>/numbers/25</code> matches; <code>/numbers/test</code> does not.</p><h2>7. Name routes and generate URLs</h2><pre><code>$routes-&gt;get('/profiles/{id}', fn ($id) =&gt; "Profile {$id}")
-    -&gt;name('profiles.show');
-
-echo $routes-&gt;url('profiles.show', ['id' =&gt; 25]);
-echo $routes-&gt;url('profiles.show', ['id' =&gt; 25, 'tab' =&gt; 'activity']);</code></pre><p>A route name is a stable application-level identifier. Instead of hard-coding <code>/profiles/25</code> throughout the application, code can ask Routes to generate the URL by name. If the path changes later, callers do not need to change.</p><p>Parameters used by the route fill placeholders. Extra values become query-string parameters, so <code>tab=activity</code> is appended to the generated URL.</p><h2>8. Group related routes</h2><pre><code>$routes-&gt;group('/admin', function (RouteManager $routes) {
-    $routes-&gt;get('/users', fn () =&gt; 'Admin users');
-    $routes-&gt;get('/logs', fn () =&gt; 'Admin logs');
-});</code></pre><p>The group prefix is added to every route inside the callback. These become <code>/admin/users</code> and <code>/admin/logs</code>. Groups reduce repetition and make related routes easier to organize.</p><h3>Advanced group options</h3><pre><code>$routes-&gt;group([
-    'prefix' =&gt; '/api',
-    'name' =&gt; 'api.',
-    'meta' =&gt; ['area' =&gt; 'api'],
-], function (RouteManager $routes) {
-    $routes-&gt;get('/status', fn () =&gt; 'OK')-&gt;name('status');
-});</code></pre><p>This form applies a path prefix, a route-name prefix and shared metadata. The route name becomes <code>api.status</code>.</p><h2>9. Run code before a route with middleware</h2><p>Middleware sits between the incoming request and the final handler. It is useful for authentication, permission checks, rate limits, request logging and other rules that should run before selected routes.</p><pre><code>$routes-&gt;middleware('demo-auth', function (callable $next, $match) {
-    if (($_GET['key'] ?? '') !== 'secret') {
-        http_response_code(401);
-        return 'Unauthorized. Add ?key=secret';
-    }
+if (is_string($result)) echo $result;</code></pre><h2>3. HTTP methods and parameters</h2><pre><code>$routes-&gt;get('/users/{id}', fn ($id) =&gt; "User {$id}");
+$routes-&gt;post('/users', fn () =&gt; 'Create user');
+$routes-&gt;put('/users/{id}', fn ($id) =&gt; "Update {$id}");
+$routes-&gt;delete('/users/{id}', fn ($id) =&gt; "Delete {$id}");
+$routes-&gt;get('/numbers/{id}', fn ($id) =&gt; $id)-&gt;where('id', '\d+');</code></pre><h2>4. Named routes</h2><pre><code>$routes-&gt;get('/profiles/{id}', fn ($id) =&gt; "Profile {$id}")-&gt;name('profiles.show');
+echo $routes-&gt;url('profiles.show', ['id' =&gt; 25]);</code></pre><h2>5. Groups and middleware</h2><pre><code>$routes-&gt;middleware('demo-auth', function (callable $next, $match) {
+    if (($_GET['key'] ?? '') !== 'secret') return 'Unauthorized';
     return $next();
 });
+$routes-&gt;group('/admin', function (RouteManager $routes) {
+    $routes-&gt;get('/users', fn () =&gt; 'Admin users')-&gt;middleware('demo-auth');
+});</code></pre><h2>6. Metadata and integration hints</h2><pre><code>$routes-&gt;get('/documents/{id}', fn ($id) =&gt; "Document {$id}")
+-&gt;name('documents.show')
+-&gt;auth()
+-&gt;permission('documents.view')
+-&gt;log('documents.view');</code></pre><p>These helpers attach metadata. Middleware/integration code performs the actual authentication, authorization and logging.</p><h2>7. Developer tip: trace routing</h2><p>Call the trace helper after a traceable routing operation:</p><pre><code>$match = $routes-&gt;match('GET', '/users/25');
 
-$routes-&gt;get('/protected', fn () =&gt; 'Protected page')
-    -&gt;middleware('demo-auth');</code></pre><p>If the key is missing, middleware returns early and the route handler never runs. Calling <code>$next()</code> passes control to the next middleware or route handler. Test <code>/protected</code>, then <code>/protected?key=secret</code>.</p><h2>10. Redirects and fallback routes</h2><pre><code>$routes-&gt;redirect('/old-page', '/');
-$routes-&gt;redirect('/old-permanent', '/', 301);
-
-$routes-&gt;fallback(function () {
-    http_response_code(404);
-    return 'Custom 404';
-});</code></pre><p>A redirect tells the browser to request another URL. A 301 redirect indicates a permanent move. A fallback runs only when no normal route matches and is commonly used for a custom 404 response.</p><h2>11. Metadata, tags and integration hints</h2><pre><code>$routes-&gt;get('/documents/{id}', fn ($id) =&gt; "Document {$id}")
-    -&gt;name('documents.show')
-    -&gt;tag('documents', 'demo')
-    -&gt;meta(['title' =&gt; 'Document Details'])
-    -&gt;auth()
-    -&gt;permission('documents.view')
-    -&gt;log('documents.view');</code></pre><p>Tags are useful for finding related routes. Metadata stores descriptive information alongside a route. The <code>auth()</code>, <code>permission()</code> and <code>log()</code> helpers describe integration requirements; they do not magically authenticate or authorize the request by themselves. Middleware or integration code reads those requirements and performs the actual enforcement.</p><h2>12. Advanced: controller handlers</h2><p>Closures are useful while learning, but larger applications usually move logic into controller classes.</p><pre><code>$routes = new RouteManager([
-    'controller_namespace' =&gt; 'App\\Controllers',
-]);
-
-$routes-&gt;get('/users/{id}', 'UserController@show');
-// or
-$routes-&gt;get('/users/{id}', [App\Controllers\UserController::class, 'show']);</code></pre><p>This keeps route definitions focused on URLs while controllers contain application behavior.</p><h2>13. Advanced: resource routes</h2><pre><code>use App\Controllers\UserController;
-$routes-&gt;resource('/users', UserController::class);</code></pre><p>A resource route creates the conventional collection of CRUD routes for a controller. It is convenient once the student already understands the individual GET, POST, update and delete routes that it represents.</p><h2>14. Advanced: route arrays and separate files</h2><pre><code>$routes = new RouteManager([
-    'routes' =&gt; [
-        ['GET', '/', fn () =&gt; 'Home', 'home'],
-        [
-            'method' =&gt; 'GET',
-            'path' =&gt; '/items/{id}',
-            'handler' =&gt; fn ($id) =&gt; "Item {$id}",
-            'name' =&gt; 'items.show',
-            'constraints' =&gt; ['id' =&gt; '\d+'],
-            'tags' =&gt; ['items'],
-        ],
-    ],
-]);</code></pre><p>Array definitions are useful when routes come from configuration rather than direct method calls.</p><p>Create <code>routes/web.php</code>:</p><pre><code>&lt;?php
-return [
-    ['GET', '/from-file', fn () =&gt; 'Loaded from routes/web.php', 'from-file'],
-];</code></pre><p>Load the file before dispatch:</p><pre><code>$routes-&gt;load(__DIR__ . '/../routes/web.php');</code></pre><p>Separate route files keep <code>public/index.php</code> small as the application grows.</p><h2>15. Advanced: inspect routing without executing it</h2><pre><code>$match = $routes-&gt;match('GET', '/users/25');
-if ($match) {
-    print_r($match-&gt;parameters());
-}</code></pre><p><code>match()</code> asks “which route would handle this request?” without running the handler. This is useful for tests and diagnostics.</p><pre><code>print_r($routes-&gt;all());
-print_r($routes-&gt;find('profiles.show'));
-print_r($routes-&gt;byTag('documents'));
-print_r($routes-&gt;toArray());
-print_r($routes-&gt;table());
-print_r($routes-&gt;explain());</code></pre><p><code>explain()</code> is especially useful when routes conflict or integrations are resolved unexpectedly.</p><pre><code>$routes-&gt;get('/duplicate', fn () =&gt; 'A');
-$routes-&gt;get('/duplicate', fn () =&gt; 'B');
-print_r($routes-&gt;explain());</code></pre><p>The diagnostic output should identify the duplicate <code>GET /duplicate</code> definition.</p><h2>16. Static files are not routes</h2><p>CSS, JavaScript, images and fonts should normally be stored under <code>public</code> and served directly by the web server. Routes is for application requests that require PHP logic.</p><div class="nextbox"><b>Next:</b> Continue to Database to store and retrieve persistent application data.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Routes stays independent, but it can carry neutral metadata that other Prefab modules or middleware can interpret. This lets routing cooperate with Auth, Permissions and Logs without making those packages hard dependencies.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Auth</code></td><td><strong>Compatible hook</strong></td><td><code>route.auth()</code></td><td>Marks a route as requiring authentication in route metadata. An auth middleware or integration layer reads the metadata and enforces the requirement.</td></tr><tr><td><code>Permissions</code></td><td><strong>Compatible hook</strong></td><td><code>route.permission("documents.view")</code></td><td>Stores the required permission on the route. Permission middleware can call PermissionManager::can() before the controller runs.</td></tr><tr><td><code>Logs</code></td><td><strong>Compatible hook</strong></td><td><code>route.log("documents.view")</code></td><td>Stores the intended audit action on the route. A logging middleware/integration can record it after or around the handler.</td></tr><tr><td><code>Auth + Permissions + Logs</code></td><td><strong>Composable</strong></td><td><code>middleware pipeline</code></td><td>A protected route can authenticate the current user, resolve a permission, run the controller and then record activity as one request pipeline.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Routes does not silently enforce Auth or Permissions by itself. The route helpers intentionally attach metadata so an application can decide how enforcement should work.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>Tracing is optional developer output and should not replace the route's normal response.</p><h2>8. Route diagnostics</h2><pre><code>print_r($routes-&gt;table());
+print_r($routes-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Database.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Auth</code></td><td><code>auth()</code> metadata can be enforced by middleware.</td></tr><tr><td><code>Permissions</code></td><td><code>permission()</code> stores an authorization requirement.</td></tr><tr><td><code>Logs</code></td><td><code>log()</code> stores an intended audit action.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
