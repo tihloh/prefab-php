@@ -3,13 +3,8 @@
     "description": "Standalone, framework-independent database connections and lightweight query building for Prefab PHP.",
     "keywords": ["php", "database", "pdo", "query-builder", "prefab", "modular", "framework-independent"],
     "homepage": "https://github.com/tihloh/prefab-php",
-    "type": "library",
-    "license": "MIT",
-    "authors": [{"name": "Christian Bustamante"}],
+    "type": "library", "license": "MIT", "authors": [{"name": "Christian Bustamante"}],
     "support": {"issues": "https://github.com/tihloh/prefab-php/issues", "source": "https://github.com/tihloh/prefab-php"},
     "require": {"php": ">=8.1", "ext-pdo": "*"},
-    "autoload": {
-        "psr-4": {"Tihloh\\Prefab\\Database\\": "src/"},
-        "files": ["src/prefab-diagnostics.php", "src/prefab.php", "src/database.php"]
-    }
+    "autoload": {"psr-4": {"Tihloh\\Prefab\\Database\\": "src/"}, "files": ["src/prefab-debug-ui.php", "src/prefab-diagnostics.php", "src/prefab.php", "src/database.php"]}
 }
