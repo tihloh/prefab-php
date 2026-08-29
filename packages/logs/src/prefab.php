@@ -73,6 +73,7 @@ namespace Tihloh\Prefab {
             private static array $extensions = [];
             private static array $resolutions = [];
             private static array $traceStack = [];
+            private static array $traceHistory = [];
             private static ?array $lastTrace = null;
             private static bool $configuring = false;
             private static bool $ready = false;
@@ -220,6 +221,36 @@ namespace Tihloh\Prefab {
 
             public static function explain(string $module): array
             {
+                $data = self::explainData($module);
+                $lines = ['Prefab ' . ucfirst($module) . ' Explain'];
+
+                if ($data === []) {
+                    $lines[] = 'No resolution information has been recorded yet.';
+                    $lines[] = 'Use the module at least once or call prefabConfigure() first.';
+                    self::writeDiagnostic(implode("\n", $lines));
+                    return $data;
+                }
+
+                foreach ($data as $resource => $entry) {
+                    $source = (string) ($entry['source'] ?? 'unknown');
+                    $lines[] = '';
+                    $lines[] = self::humanize((string) $resource) . ':';
+                    $lines[] = '  Source: ' . $source;
+                    $lines[] = '  Meaning: ' . self::sourceExplanation($source);
+                    foreach ($entry as $key => $value) {
+                        if ($key === 'source') {
+                            continue;
+                        }
+                        $lines[] = '  ' . self::humanize((string) $key) . ': ' . self::displayValue($value);
+                    }
+                }
+
+                self::writeDiagnostic(implode("\n", $lines));
+                return $data;
+            }
+
+            public static function explainData(string $module): array
+            {
                 return self::$resolutions[$module] ?? [];
             }
 
@@ -338,50 +369,61 @@ namespace Tihloh\Prefab {
                 return self::$lastTrace;
             }
 
+            public static function traceHistory(): array
+            {
+                return self::$traceHistory;
+            }
+
             public static function renderTrace(bool $detailed = false): void
             {
-                $trace = self::$lastTrace;
-                if ($trace === null) {
-                    self::writeTrace("Prefab Trace\nNo Prefab operation has been traced yet.");
+                $traces = self::$traceHistory;
+                if ($traces === [] && self::$lastTrace !== null) {
+                    $traces = [self::$lastTrace];
+                }
+                if ($traces === []) {
+                    self::writeDiagnostic("Prefab Trace\nNo Prefab operation has been traced yet.");
                     return;
                 }
 
-                $status = $trace['status'] === 'success' ? 'OK' : 'FAILED';
-                $lines = [
-                    'Prefab Trace',
-                    $trace['module'] . '::' . $trace['operation'] . ' [' . $status . ']',
-                ];
-
-                foreach ($trace['context'] as $key => $value) {
-                    $lines[] = '  ' . $key . ': ' . self::displayValue($value);
-                }
-
-                if ($detailed) {
-                    foreach ($trace['steps'] as $step) {
-                        $line = sprintf('  %7.3f ms  %s', $step['at_ms'], $step['event']);
-                        if ($step['details']) {
-                            $pairs = [];
-                            foreach ($step['details'] as $key => $value) {
-                                $pairs[] = $key . '=' . self::displayValue($value);
-                            }
-                            $line .= '  ' . implode(', ', $pairs);
-                        }
-                        $lines[] = $line;
+                $lines = ['Prefab Trace'];
+                $multiple = count($traces) > 1;
+                foreach ($traces as $index => $trace) {
+                    if ($multiple) {
+                        $lines[] = '';
+                        $lines[] = ($index + 1) . '. ' . self::traceHeading($trace);
+                    } else {
+                        $lines[] = self::traceHeading($trace);
                     }
-                }
 
-                foreach ($trace['details'] as $key => $value) {
-                    $lines[] = '  ' . $key . ': ' . self::displayValue($value);
+                    foreach ($trace['context'] as $key => $value) {
+                        $lines[] = '  ' . $key . ': ' . self::displayValue($value);
+                    }
+                    if ($detailed) {
+                        foreach ($trace['steps'] as $step) {
+                            $line = sprintf('  %7.3f ms  %s', $step['at_ms'], $step['event']);
+                            if ($step['details']) {
+                                $pairs = [];
+                                foreach ($step['details'] as $key => $value) {
+                                    $pairs[] = $key . '=' . self::displayValue($value);
+                                }
+                                $line .= '  ' . implode(', ', $pairs);
+                            }
+                            $lines[] = $line;
+                        }
+                    }
+                    foreach ($trace['details'] as $key => $value) {
+                        $lines[] = '  ' . $key . ': ' . self::displayValue($value);
+                    }
+                    $lines[] = '  duration: ' . number_format($trace['duration_ms'], 3) . ' ms';
                 }
-                $lines[] = '  duration: ' . number_format($trace['duration_ms'], 3) . ' ms';
-
-                self::writeTrace(implode("\n", $lines));
+                self::writeDiagnostic(implode("\n", $lines));
             }
 
             public static function reset(): void
             {
                 self::$modules = self::$capabilities = self::$extensions = self::$resolutions = [];
                 self::$traceStack = [];
+                self::$traceHistory = [];
                 self::$lastTrace = null;
                 self::$configuring = self::$ready = false;
             }
@@ -397,13 +439,45 @@ namespace Tihloh\Prefab {
                 $trace['duration_ms'] = round((microtime(true) - $trace['started_at']) * 1000, 3);
                 unset($trace['started_at']);
 
-                if (self::$traceStack) {
+                $isNested = self::$traceStack !== [];
+                if ($isNested) {
                     self::traceStep('nested.' . $trace['module'] . '.' . $trace['operation'], [
                         'status' => $status,
                         'duration_ms' => $trace['duration_ms'],
                     ]);
+                } else {
+                    self::$traceHistory[] = $trace;
                 }
                 self::$lastTrace = $trace;
+            }
+
+            private static function traceHeading(array $trace): string
+            {
+                $status = ($trace['status'] ?? null) === 'success' ? 'OK' : 'FAILED';
+                return ($trace['module'] ?? 'prefab') . '::' . ($trace['operation'] ?? 'operation') . ' [' . $status . ']';
+            }
+
+            private static function sourceExplanation(string $source): string
+            {
+                return match ($source) {
+                    'module-local' => 'Configured directly on this module instance.',
+                    'prefab-config-module' => 'Taken from PrefabConfig for this module.',
+                    'prefab-config-common' => 'Taken from shared PrefabConfig.',
+                    'prefab-capability' => 'Automatically discovered from another registered Prefab module.',
+                    'database-provider', 'database-store' => 'Automatically created from the resolved database.',
+                    'users-database' => 'Provided by the database resolved by Prefab Users.',
+                    'automatic-sqlite-fallback' => 'No explicit storage was found, so Prefab created its automatic SQLite storage.',
+                    'internal-default' => 'Using the package default because nothing more explicit was configured.',
+                    'internal-fallback' => 'Using an available fallback selected by the package.',
+                    'runtime-explicit' => 'Changed explicitly while the application was running.',
+                    'unresolved' => 'Prefab could not resolve this resource.',
+                    default => 'Resolution source recorded by the module.',
+                };
+            }
+
+            private static function humanize(string $value): string
+            {
+                return ucwords(str_replace(['_', '-'], ' ', $value));
             }
 
             private static function summarize(mixed $value): mixed
@@ -454,7 +528,7 @@ namespace Tihloh\Prefab {
                 return (string) $value;
             }
 
-            private static function writeTrace(string $text): void
+            private static function writeDiagnostic(string $text): void
             {
                 if (PHP_SAPI === 'cli') {
                     echo $text . PHP_EOL;
