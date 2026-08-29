@@ -2,13 +2,13 @@
 
 namespace Tihloh\Prefab\Users\DTOs;
 
-final readonly class Group
+final class Group
 {
     public function __construct(
-        public int|string $id,
-        public string $name,
-        public ?string $description = null,
-        public int $usersCount = 0,
+        public readonly int|string $id,
+        public readonly string $name,
+        public readonly ?string $description = null,
+        public readonly int $usersCount = 0,
     ) {}
 
     public function toArray(): array
