@@ -6,22 +6,14 @@
   "type": "library",
   "license": "MIT",
   "authors": [{"name": "Christian Bustamante"}],
-  "support": {
-    "issues": "https://github.com/tihloh/prefab-php/issues",
-    "source": "https://github.com/tihloh/prefab-php"
-  },
-  "require": {
-    "php": ">=8.1",
-    "ext-fileinfo": "*"
-  },
+  "support": {"issues": "https://github.com/tihloh/prefab-php/issues", "source": "https://github.com/tihloh/prefab-php"},
+  "require": {"php": ">=8.1", "ext-fileinfo": "*"},
   "suggest": {
     "tihloh/prefab-input": "Optional integration with validated UploadedFile objects.",
     "tihloh/prefab-routes": "Optional integration for protected downloads and file-serving routes."
   },
   "autoload": {
-    "psr-4": {
-      "Tihloh\\Prefab\\Files\\": "src/"
-    },
-    "files": ["src/prefab.php"]
+    "psr-4": {"Tihloh\\Prefab\\Files\\": "src/"},
+    "files": ["src/prefab-diagnostics.php", "src/prefab.php"]
   }
 }

@@ -5,28 +5,15 @@
     "homepage": "https://github.com/tihloh/prefab-php",
     "type": "library",
     "license": "MIT",
-    "authors": [
-        {
-            "name": "Christian Bustamante"
-        }
-    ],
-    "support": {
-        "issues": "https://github.com/tihloh/prefab-php/issues",
-        "source": "https://github.com/tihloh/prefab-php"
-    },
-    "require": {
-        "php": ">=8.1"
-    },
+    "authors": [{"name": "Christian Bustamante"}],
+    "support": {"issues": "https://github.com/tihloh/prefab-php/issues", "source": "https://github.com/tihloh/prefab-php"},
+    "require": {"php": ">=8.1"},
     "suggest": {
         "tihloh/prefab-users": "Optional user provider that Prefab Auth can discover automatically.",
         "tihloh/prefab-logs": "Optional structured activity logging for authentication events."
     },
     "autoload": {
-        "psr-4": {
-            "Tihloh\\Prefab\\Auth\\": "src/"
-        },
-        "files": [
-            "src/prefab.php"
-        ]
+        "psr-4": {"Tihloh\\Prefab\\Auth\\": "src/"},
+        "files": ["src/prefab-diagnostics.php", "src/prefab.php"]
     }
 }

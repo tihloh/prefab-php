@@ -6,10 +6,7 @@
     "type": "library",
     "license": "MIT",
     "authors": [{"name": "Christian Bustamante"}],
-    "support": {
-        "issues": "https://github.com/tihloh/prefab-php/issues",
-        "source": "https://github.com/tihloh/prefab-php"
-    },
+    "support": {"issues": "https://github.com/tihloh/prefab-php/issues", "source": "https://github.com/tihloh/prefab-php"},
     "require": {"php": ">=8.1"},
     "suggest": {
         "tihloh/prefab-auth": "Optional authentication integration.",
@@ -18,6 +15,6 @@
     },
     "autoload": {
         "psr-4": {"Tihloh\\Prefab\\Routes\\": "src/"},
-        "files": ["src/prefab.php"]
+        "files": ["src/prefab-diagnostics.php", "src/prefab.php"]
     }
 }

@@ -5,18 +5,9 @@
     "homepage": "https://github.com/tihloh/prefab-php",
     "type": "library",
     "license": "MIT",
-    "authors": [
-        {
-            "name": "Christian Bustamante"
-        }
-    ],
-    "support": {
-        "issues": "https://github.com/tihloh/prefab-php/issues",
-        "source": "https://github.com/tihloh/prefab-php"
-    },
-    "require": {
-        "php": ">=8.1"
-    },
+    "authors": [{"name": "Christian Bustamante"}],
+    "support": {"issues": "https://github.com/tihloh/prefab-php/issues", "source": "https://github.com/tihloh/prefab-php"},
+    "require": {"php": ">=8.1"},
     "suggest": {
         "ext-pdo": "Required only when using Prefab's built-in PDO/database-backed permission store.",
         "tihloh/prefab-database": "Optional shared/named database manager with automatic Prefab integration.",
@@ -24,12 +15,7 @@
         "tihloh/prefab-logs": "Optional structured activity logging for permission changes."
     },
     "autoload": {
-        "psr-4": {
-            "Tihloh\\Prefab\\Permissions\\": "src/"
-        },
-        "files": [
-            "src/prefab.php",
-            "src/database.php"
-        ]
+        "psr-4": {"Tihloh\\Prefab\\Permissions\\": "src/"},
+        "files": ["src/prefab-diagnostics.php", "src/prefab.php", "src/database.php"]
     }
 }
