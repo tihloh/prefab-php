@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Messaging</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="messaging.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 10</span><h1>Messaging</h1><p class="lead">Messaging sends a message through a named delivery channel. A channel might be email, SMS, a webhook or a project-specific transport. This tutorial begins with a local test channel so the complete delivery flow can be understood before SMTP credentials are introduced.</p><h2>1. Install Messaging</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><p><code>MessagingManager</code> coordinates delivery. <code>Message</code> contains the content. <code>Recipient</code> contains destination information. A channel knows how to deliver that message to that recipient.</p><h2>2. Create a local test channel</h2><p>Create <code>public/messaging.php</code>:</p><pre><code>&lt;?php
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Messaging</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="messaging.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 10</span><h1>Messaging</h1><p class="lead">Send information outside the application. Start with a local test channel, build a small message form, then replace the test channel with real email when you are ready.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-messaging</code></pre><h2>2. Create a local test channel</h2><pre><code>&lt;?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Tihloh\Prefab\Messaging\Channels\CallableChannel;
@@ -6,84 +6,52 @@ use Tihloh\Prefab\Messaging\MessagingManager;
 use Tihloh\Prefab\Messaging\Message;
 use Tihloh\Prefab\Messaging\Recipient;
 
-$messages = [];
+$lastMessage = null;
 
-$testChannel = new CallableChannel(
+$channel = new CallableChannel(
     'test',
-    function (Recipient $recipient, Message $message) use (&amp;$messages) {
-        $messages[] = [
-            'recipient' =&gt; $recipient,
-            'subject' =&gt; $message-&gt;subject,
-            'text' =&gt; $message-&gt;text,
-        ];
-
+    function (Recipient $recipient, Message $message) use (&amp;$lastMessage) {
+        $lastMessage = $message;
         return 'TEST-' . time();
     }
 );
 
-$messaging = new MessagingManager([$testChannel]);</code></pre><p><code>CallableChannel</code> is useful for learning and tests because it does not contact an external service. Instead, its callback receives exactly what a real channel would receive.</p><p>The channel name is <code>test</code>. Later, <code>send('test', ...)</code> selects this channel. The callback captures the message in <code>$messages</code> and returns a fake external delivery ID.</p><h2>3. Send one message</h2><p>Add a temporary send call:</p><pre><code>$recipient = new Recipient([
+$messaging = new MessagingManager([$channel]);</code></pre><p>The test channel does not contact an external provider. It lets you verify the application flow first.</p><h2>3. Send one message</h2><pre><code>$recipient = new Recipient([
     'test' =&gt; 'demo@example.com',
 ]);
 
 $result = $messaging-&gt;send(
     'test',
     $recipient,
-    new Message(
-        'Prefab test',
-        'Hello from Prefab Messaging',
-    ),
-);
-
-print_r($result);</code></pre><p>The recipient can hold destinations for different channels. Here the <code>test</code> channel receives <code>demo@example.com</code>. A real recipient could contain a mail address, phone number or another channel-specific identifier.</p><p><code>send()</code> selects the channel, resolves the recipient destination, passes the message to the channel, and returns a delivery result describing success or failure.</p><div class="nextbox"><b>Checkpoint:</b> The page should show a successful delivery result from the local test channel without sending anything externally.</div><h2>4. Build a browser form</h2><p>Remove the temporary send call and add:</p><pre><code>$result = null;
+    new Message('Prefab test', 'Hello from Prefab Messaging'),
+);</code></pre><div class="nextbox"><b>Checkpoint:</b> The send operation should succeed without sending a real email.</div><h2>4. Add a message form</h2><pre><code>&lt;form method="post"&gt;
+    &lt;input name="to" type="email" placeholder="Recipient" required&gt;
+    &lt;input name="subject" placeholder="Subject" required&gt;
+    &lt;textarea name="message" placeholder="Message" required&gt;&lt;/textarea&gt;
+    &lt;button&gt;Send&lt;/button&gt;
+&lt;/form&gt;</code></pre><pre><code>$result = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $recipient = new Recipient([
-        'test' =&gt; $_POST['to'] ?? 'demo@example.com',
+        'test' =&gt; $_POST['to'],
     ]);
 
     $result = $messaging-&gt;send(
         'test',
         $recipient,
-        new Message(
-            $_POST['subject'] ?? 'Prefab test',
-            $_POST['body'] ?? 'Hello from Prefab Messaging',
-        ),
+        new Message($_POST['subject'], $_POST['message']),
     );
-}</code></pre><p>Add the form:</p><pre><code>&lt;h1&gt;Prefab Messaging Test&lt;/h1&gt;
-&lt;form method="post"&gt;
-    &lt;p&gt;&lt;input name="to" value="demo@example.com"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;input name="subject" value="Prefab test"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;textarea name="body"&gt;Hello from Prefab Messaging&lt;/textarea&gt;&lt;/p&gt;
-    &lt;button&gt;Send test message&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>Display both the delivery result and the captured message:</p><pre><code>&lt;?php if ($result): ?&gt;
-    &lt;h2&gt;Delivery result&lt;/h2&gt;
-    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($result, true)) ?&gt;&lt;/pre&gt;
+}</code></pre><h2>5. Show the delivery result</h2><pre><code>&lt;?php if ($result): ?&gt;
+    &lt;h2&gt;Delivery&lt;/h2&gt;
+    &lt;p&gt;&lt;strong&gt;Channel:&lt;/strong&gt; test&lt;/p&gt;
+    &lt;p&gt;&lt;strong&gt;Status:&lt;/strong&gt; &lt;?= $result-&gt;success ? 'Sent' : 'Failed' ?&gt;&lt;/p&gt;
+&lt;?php endif; ?&gt;</code></pre><p>Keep the page focused on information a user or developer actually needs rather than dumping the complete internal object.</p><h2>6. Developer tip: inspect the last Prefab operation</h2><p>When operation tracing is available for the module, add one line after the operation:</p><pre><code>$result = $messaging-&gt;send('test', $recipient, $message);
 
-    &lt;h2&gt;Captured message&lt;/h2&gt;
-    &lt;pre&gt;&lt;?= htmlspecialchars(print_r($messages, true)) ?&gt;&lt;/pre&gt;
-&lt;?php endif; ?&gt;</code></pre><p>This page verifies the entire application-side flow while keeping external infrastructure out of the equation.</p><h2>5. Understand delivery hooks</h2><pre><code>$messaging-&gt;on('sending', function () {
-    // Runs before delivery.
-});
-
-$messaging-&gt;on('sent', function () {
-    // Runs after successful delivery.
-});
-
-$messaging-&gt;on('failed', function () {
-    // Runs after failed delivery.
-});</code></pre><p>Hooks let other parts of the application react without changing the channel itself. For example, a sent hook could write an audit log, while a failed hook could record an error or queue a retry.</p><p>The order is conceptually:</p><pre><code>Application calls send()
-        ↓
-sending hook
-        ↓
-channel delivers message
-        ↓
-sent hook OR failed hook
-        ↓
-DeliveryResult returned</code></pre><h2>6. Use the mail convenience API</h2><pre><code>$result = $messaging-&gt;mail(
+prefab_trace();</code></pre><p>For the detailed internal steps:</p><pre><code>prefab_trace(true);</code></pre><p>Remove the trace line when it is no longer needed. The actual Messaging call remains unchanged.</p><h2>7. Send email</h2><p>Messaging has a short convenience API for mail:</p><pre><code>$result = $messaging-&gt;mail(
     'user@example.com',
     'Annual Report',
     'Your report is ready.',
-);</code></pre><p><code>mail()</code> is a shortcut for the common email case. It requires a channel registered under the name <code>mail</code>. If no mail channel exists, the manager has nowhere to deliver the message.</p><h2>7. Configure real SMTP</h2><p>Once the local channel works, add a real mail transport:</p><pre><code>use Tihloh\Prefab\Messaging\Channels\MailChannel;
+);</code></pre><p>A <code>mail</code> channel must be configured before this can deliver anything.</p><h2>8. Configure SMTP</h2><pre><code>use Tihloh\Prefab\Messaging\Channels\MailChannel;
 use Tihloh\Prefab\Messaging\Mail\SmtpTransport;
 
 $smtp = new SmtpTransport([
@@ -100,15 +68,7 @@ $smtp = new SmtpTransport([
 
 $messaging = new MessagingManager([
     new MailChannel($smtp),
-]);</code></pre><p><code>SmtpTransport</code> contains the connection details required to talk to the mail server. <code>MailChannel</code> adapts that transport to the common Messaging channel interface.</p><p>Send a real message:</p><pre><code>$result = $messaging-&gt;mail(
-    'recipient@example.com',
-    'SMTP Test',
-    'This message was sent through SMTP.',
-);</code></pre><p>If the local test succeeds but SMTP fails, the problem is likely transport configuration rather than application message construction. That is why the local channel comes first.</p><h2>8. Generic channels</h2><pre><code>$result = $messaging-&gt;send(
-    'sms',
-    $recipient,
-    new Message('OTP', 'Your code is 123456'),
-);</code></pre><p>The manager does not need to know how SMS works. It only needs a registered <code>sms</code> channel. This is the central design idea of Messaging: application code depends on the messaging abstraction, while channels contain transport-specific behavior.</p><h2>9. Templates</h2><pre><code>$template = new Template(
+]);</code></pre><p>Your form and application-facing API do not need to change when the test channel is replaced by a real transport.</p><h2>9. Templates</h2><pre><code>$template = new Template(
     subject: 'Hello {{name}}',
     text: 'Your report {{report}} is ready.'
 );
@@ -116,12 +76,16 @@ $messaging = new MessagingManager([
 $message = $template-&gt;render([
     'name' =&gt; 'Demo User',
     'report' =&gt; 'AR-2026',
-]);</code></pre><p>Templates separate reusable wording from individual recipient data. Rendering replaces placeholders with actual values and produces a normal <code>Message</code> for delivery.</p><h2>10. Attachments</h2><pre><code>$message = new Message(
+]);</code></pre><h2>10. Attachments</h2><pre><code>$message = new Message(
     subject: 'Report',
     text: 'Your report is attached.',
     attachments: [
         Attachment::fromPath('/tmp/report.pdf'),
     ],
-);</code></pre><p><code>Attachment::fromPath()</code> points to an existing file. <code>Attachment::fromData()</code> can be used when the content already exists in memory instead of on disk.</p><h2>11. Advanced hook arguments</h2><pre><code>$messaging-&gt;on('sending', function ($channel, $recipient, $message) {});
-$messaging-&gt;on('sent', function ($channel, $recipient, $message, $result) {});
-$messaging-&gt;on('failed', function ($channel, $recipient, $message, $result) {});</code></pre><p>The richer callback signatures expose the channel, recipient, message and result so integration code can make decisions based on what was actually delivered.</p><div class="nextbox"><b>Finished:</b> The tutorial sequence now ends with a message that can be tested locally first and then delivered through a real transport without changing the application-facing messaging API.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Messaging is the outbound-delivery layer. It can be combined with any module that produces an event, but it does not silently send messages when those modules change data.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Notifications</code></td><td><strong>Direct composition</strong></td><td><code>send both when needed</code></td><td>Create an in-app notification and send an external email/message from the same application action when both channels are appropriate.</td></tr><tr><td><code>Users</code></td><td><strong>Direct composition</strong></td><td><code>user email → Recipient::email()</code></td><td>A user profile email can become a mail recipient without Messaging depending directly on Prefab Users.</td></tr><tr><td><code>Auth</code></td><td><strong>Direct composition</strong></td><td><code>security messages</code></td><td>Password-reset, login-token or security flows can send links/tokens through registered Messaging channels.</td></tr><tr><td><code>Logs</code></td><td><strong>Hook-based composition</strong></td><td><code>on(sending/sent/failed)</code></td><td>Messaging lifecycle hooks can be recorded in Prefab Logs when delivery auditing is required.</td></tr><tr><td><code>Custom providers</code></td><td><strong>Built-in extension</strong></td><td><code>ChannelInterface</code></td><td>Email, SMS, chat, push or another delivery service can be added as a channel while the application keeps using MessagingManager::send().</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Messaging does not auto-send on Users/Auth/Notifications events. External communication is a side effect that applications should opt into deliberately.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+);</code></pre><h2>11. React to delivery</h2><pre><code>$messaging-&gt;on('sent', function ($channel, $recipient, $message, $result) {
+    // Message was delivered.
+});
+
+$messaging-&gt;on('failed', function ($channel, $recipient, $message, $result) {
+    // Delivery failed.
+});</code></pre><p>Hooks are useful for audit logging, metrics or application-specific follow-up without changing the delivery channel.</p><h2>12. What you built</h2><p>You now have a simple message form that can use a local test channel or a real external transport while application code continues to use the same Messaging API.</p><div class="nextbox"><b>Finished:</b> You completed the Prefab tutorial sequence.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>How it works together</th></tr></thead><tbody><tr><td><code>Notifications</code></td><td>An application event can create an internal notice and also send an external message.</td></tr><tr><td><code>Users</code></td><td>User contact information can be used to construct a Messaging recipient.</td></tr><tr><td><code>Auth</code></td><td>Authentication flows can send security messages, links or tokens.</td></tr><tr><td><code>Logs</code></td><td>Delivery hooks can record sent and failed activity when auditing is required.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
