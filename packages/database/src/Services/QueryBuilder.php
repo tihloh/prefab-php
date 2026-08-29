@@ -5,6 +5,7 @@ namespace Tihloh\Prefab\Database\Services;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\PrefabRuntime;
 
 /** Lightweight, framework-independent query builder for common portable CRUD. */
 final class QueryBuilder
@@ -69,10 +70,15 @@ final class QueryBuilder
 
     public function get(): array
     {
-        [$sql, $bindings] = $this->selectSql();
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($bindings);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return PrefabRuntime::traceCall('database', 'get', [
+            'table' => $this->table,
+            'bindings' => count($this->bindings),
+        ], function (): array {
+            [$sql, $bindings] = $this->selectSql();
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($bindings);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        });
     }
 
     public function first(): ?array
@@ -86,18 +92,23 @@ final class QueryBuilder
             throw new InvalidArgumentException('Insert values cannot be empty.');
         }
 
-        $columns = array_keys($values);
-        foreach ($columns as $column) {
-            $this->assertIdentifier((string) $column);
-        }
-        $placeholders = array_map(fn (string $column): string => ':i_' . $column, $columns);
-        $bindings = [];
-        foreach ($values as $column => $value) {
-            $bindings[':i_' . $column] = $value;
-        }
+        return PrefabRuntime::traceCall('database', 'insert', [
+            'table' => $this->table,
+            'columns' => array_keys($values),
+        ], function () use ($values): bool {
+            $columns = array_keys($values);
+            foreach ($columns as $column) {
+                $this->assertIdentifier((string) $column);
+            }
+            $placeholders = array_map(fn (string $column): string => ':i_' . $column, $columns);
+            $bindings = [];
+            foreach ($values as $column => $value) {
+                $bindings[':i_' . $column] = $value;
+            }
 
-        $sql = sprintf('INSERT INTO %s (%s) VALUES (%s)', $this->table, implode(', ', $columns), implode(', ', $placeholders));
-        return $this->pdo->prepare($sql)->execute($bindings);
+            $sql = sprintf('INSERT INTO %s (%s) VALUES (%s)', $this->table, implode(', ', $columns), implode(', ', $placeholders));
+            return $this->pdo->prepare($sql)->execute($bindings);
+        });
     }
 
     public function insertGetId(array $values): int|string
@@ -109,28 +120,40 @@ final class QueryBuilder
     public function update(array $values): int
     {
         if ($values === []) {
+            PrefabRuntime::traceStart('database', 'update', ['table' => $this->table, 'columns' => []]);
+            PrefabRuntime::traceEnd(['result' => 0]);
             return 0;
         }
 
-        $sets = [];
-        $bindings = $this->bindings;
-        foreach ($values as $column => $value) {
-            $this->assertIdentifier((string) $column);
-            $parameter = ':u_' . $column;
-            $sets[] = "{$column} = {$parameter}";
-            $bindings[$parameter] = $value;
-        }
+        return PrefabRuntime::traceCall('database', 'update', [
+            'table' => $this->table,
+            'columns' => array_keys($values),
+        ], function () use ($values): int {
+            $sets = [];
+            $bindings = $this->bindings;
+            foreach ($values as $column => $value) {
+                $this->assertIdentifier((string) $column);
+                $parameter = ':u_' . $column;
+                $sets[] = "{$column} = {$parameter}";
+                $bindings[$parameter] = $value;
+            }
 
-        $stmt = $this->pdo->prepare("UPDATE {$this->table} SET " . implode(', ', $sets) . $this->whereSql());
-        $stmt->execute($bindings);
-        return $stmt->rowCount();
+            $stmt = $this->pdo->prepare("UPDATE {$this->table} SET " . implode(', ', $sets) . $this->whereSql());
+            $stmt->execute($bindings);
+            return $stmt->rowCount();
+        });
     }
 
     public function delete(): int
     {
-        $stmt = $this->pdo->prepare("DELETE FROM {$this->table}" . $this->whereSql());
-        $stmt->execute($this->bindings);
-        return $stmt->rowCount();
+        return PrefabRuntime::traceCall('database', 'delete', [
+            'table' => $this->table,
+            'bindings' => count($this->bindings),
+        ], function (): int {
+            $stmt = $this->pdo->prepare("DELETE FROM {$this->table}" . $this->whereSql());
+            $stmt->execute($this->bindings);
+            return $stmt->rowCount();
+        });
     }
 
     private function selectSql(): array
