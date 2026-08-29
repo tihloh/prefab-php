@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tihloh\Prefab\Files;
 
+use Tihloh\Prefab\PrefabRuntime;
+
 /** Immutable metadata snapshot for a stored file. */
 final class FileInfo
 {
@@ -14,7 +16,15 @@ final class FileInfo
         private ?int $modifiedAt = null,
         private ?string $url = null,
         private ?string $checksum = null,
-    ) {}
+    ) {
+        PrefabRuntime::traceStart('files', 'file', [
+            'path' => $path,
+        ]);
+        PrefabRuntime::traceEnd([
+            'size' => $size,
+            'mime' => $mime,
+        ]);
+    }
 
     public function path(): string { return $this->path; }
     public function name(): string { return basename($this->path); }
