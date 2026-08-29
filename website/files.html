@@ -1,126 +1,32 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Files</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="files.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 8</span><h1>Files</h1><p class="lead">The Files module gives application code one API for storing, reading and moving files without tying the rest of the application to one physical folder. This tutorial starts with local private storage, then adds public files, uploads, collision rules, streams and temporary downloads.</p><h2>1. Install Files</h2><pre><code>composer require tihloh/prefab-files</code></pre><h2>2. Create private and public storage folders</h2><pre><code>mkdir storage
-mkdir storage/private
-mkdir public/uploads</code></pre><p><code>storage/private</code> sits outside the web document root, so files placed there cannot normally be requested directly by URL. <code>public/uploads</code> is intentionally browser-accessible.</p><p>This distinction matters because not every uploaded document should be public. A private report may require an authorization check before the application sends it to a user.</p><h2>3. Configure storage disks</h2><p>Create <code>public/files.php</code> and begin with:</p><pre><code>&lt;?php
-require __DIR__ . '/../vendor/autoload.php';
-
-use Tihloh\Prefab\Files\FileManager;
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Files</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="files.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 8</span><h1>Files</h1><p class="lead">Store, read, list and manage files without tying application code to one physical folder.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-files</code></pre><h2>2. Configure disks</h2><pre><code>use Tihloh\Prefab\Files\FileManager;
 $files = new FileManager([
-    'default' =&gt; 'private',
-    'disks' =&gt; [
-        'private' =&gt; [
-            'driver' =&gt; 'local',
-            'root' =&gt; __DIR__ . '/../storage/private',
-        ],
-        'public' =&gt; [
-            'driver' =&gt; 'local',
-            'root' =&gt; __DIR__ . '/uploads',
-            'url' =&gt; '/uploads',
-        ],
-    ],
-]);</code></pre><p>A <b>disk</b> is a named storage destination. The application talks to the disk name instead of hard-coding physical paths everywhere. Both disks in this tutorial use the local driver, but they have different roots and visibility.</p><p>The <code>default</code> disk is used when an operation does not explicitly name a disk. Here, storage is private by default, which is safer for application documents.</p><h2>4. Store one file</h2><pre><code>$info = $files-&gt;put(
-    'documents/demo.txt',
-    'Hello Prefab'
-);
-
-echo $info-&gt;path();</code></pre><p>The path <code>documents/demo.txt</code> is relative to the disk root. Prefab combines the disk root and relative path internally. Application code therefore does not need to know whether the disk lives in <code>C:\...</code>, <code>/srv/...</code>, or another storage backend.</p><div class="nextbox"><b>Checkpoint:</b> <code>storage/private/documents/demo.txt</code> should exist and contain <b>Hello Prefab</b>.</div><h2>5. Read and inspect the file</h2><pre><code>echo $files-&gt;read('documents/demo.txt');
-
-$info = $files-&gt;info('documents/demo.txt');
-print_r($info-&gt;toArray());</code></pre><p><code>read()</code> returns the contents. <code>info()</code> returns metadata about the stored file, which is useful when building file lists or download screens.</p><pre><code>echo $info-&gt;name();
-echo $info-&gt;extension();
-echo $info-&gt;size();
-echo $info-&gt;mime();
-echo $info-&gt;checksum();</code></pre><p>The checksum is a content fingerprint. It can be used to detect whether a file changed or to compare two files without reading them byte-for-byte in application code.</p><h2>6. Add browser controls</h2><p>Add a POST handler so the page can create, copy, move and delete files:</p><pre><code>$message = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? 'put';
-    $path = trim($_POST['path'] ?? 'documents/demo.txt');
-
-    if ($action === 'put') {
-        $info = $files-&gt;put($path, $_POST['contents'] ?? 'Hello Prefab');
-        $message = 'Stored: ' . $info-&gt;path();
-    }
-    if ($action === 'copy') {
-        $files-&gt;copy($path, 'copies/' . basename($path));
-        $message = 'Copied.';
-    }
-    if ($action === 'move') {
-        $files-&gt;move($path, 'moved/' . basename($path));
-        $message = 'Moved.';
-    }
-    if ($action === 'delete') {
-        $files-&gt;delete($path);
-        $message = 'Deleted.';
-    }
-}
-
-$list = $files-&gt;files('', recursive: true);</code></pre><p><code>copy()</code> leaves the original in place. <code>move()</code> changes its location. <code>delete()</code> removes it. <code>files('', recursive: true)</code> scans the disk and returns files from nested directories as well.</p><p>Add the form:</p><pre><code>&lt;h1&gt;Prefab Files Test&lt;/h1&gt;
-&lt;p&gt;&lt;?= htmlspecialchars($message) ?&gt;&lt;/p&gt;
-&lt;form method="post"&gt;
-    &lt;p&gt;&lt;input name="path" value="documents/demo.txt" size="40"&gt;&lt;/p&gt;
-    &lt;p&gt;&lt;textarea name="contents" rows="5" cols="50"&gt;Hello Prefab&lt;/textarea&gt;&lt;/p&gt;
-    &lt;button name="action" value="put"&gt;Store / overwrite&lt;/button&gt;
-    &lt;button name="action" value="copy"&gt;Copy&lt;/button&gt;
-    &lt;button name="action" value="move"&gt;Move&lt;/button&gt;
-    &lt;button name="action" value="delete"&gt;Delete&lt;/button&gt;
-&lt;/form&gt;</code></pre><p>Display the current contents of the disk:</p><pre><code>&lt;h2&gt;Stored files&lt;/h2&gt;
-&lt;pre&gt;&lt;?php
-foreach ($list as $file) {
-    echo $file-&gt;path() . ' (' . $file-&gt;size() . " bytes)\n";
-}
-?&gt;&lt;/pre&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Store a file, copy it, move one copy, and delete another. The list should reflect each operation.</div><h2>7. Decide what happens when a path already exists</h2><pre><code>$files-&gt;put('reports/report.txt', 'A', ['collision' =&gt; 'overwrite']);
-$files-&gt;put('reports/report.txt', 'B', ['collision' =&gt; 'skip']);
-$files-&gt;put('reports/report.txt', 'C', ['collision' =&gt; 'rename']);
-$files-&gt;put('reports/report.txt', 'D', ['collision' =&gt; 'error']);</code></pre><p>A collision policy makes duplicate-path behavior explicit. <code>overwrite</code> replaces the existing file, <code>skip</code> keeps it unchanged, <code>rename</code> stores the new file under another available name, and <code>error</code> rejects the operation.</p><h2>8. Work with directories</h2><pre><code>$files-&gt;makeDirectory('documents/2026');
-$files-&gt;directoryExists('documents/2026');
-$files-&gt;directories('documents');
-$files-&gt;directories('documents', recursive: true);
-$files-&gt;files('documents');
-$files-&gt;files('documents', recursive: true);
-$files-&gt;deleteDirectory('documents/old');
-$files-&gt;deleteDirectory('temporary/import-1', recursive: true);</code></pre><p>Directory methods are useful for organizing user uploads, imports, report years or other logical groups. Recursive operations include nested folders.</p><h2>9. Advanced: streams and existing files</h2><pre><code>$stream = fopen($sourcePath, 'rb');
-try {
-    $files-&gt;putStream('archives/backup.zip', $stream);
-} finally {
-    fclose($stream);
-}
-
-$files-&gt;putFile('/tmp/report.pdf', 'reports/report.pdf');
-$stream = $files-&gt;readStream('archives/backup.zip');</code></pre><p>Streams are useful for large files because the application can process data incrementally instead of loading the entire file into memory.</p><h2>10. Advanced: storage usage</h2><pre><code>$files-&gt;checksum('documents/demo.txt');
-$files-&gt;checksum('documents/demo.txt', 'sha512');
-$files-&gt;size('documents/demo.txt');
-$files-&gt;directorySize('documents');
-$files-&gt;usage();</code></pre><p>These methods help build storage quotas, administration pages and integrity checks.</p><h2>11. Public files and URLs</h2><pre><code>$files-&gt;put('demo.txt', 'Public file', 'public');
-echo $files-&gt;url('demo.txt', 'public');</code></pre><p>The public disk has a URL base, so Prefab can turn a storage path into a browser URL. The private disk does not expose a normal public URL because access should go through application logic instead.</p><pre><code>print_r($files-&gt;names());
-echo $files-&gt;defaultName();
-var_dump($files-&gt;hasDisk('public'));
-$files-&gt;useDefault('public');</code></pre><h2>12. Validate uploads before storing them</h2><p>An uploaded file is still user input. Validate it before it reaches permanent storage. Install Prefab Input if it is not already present:</p><pre><code>composer require tihloh/prefab-input</code></pre><p>The HTML form must use <code>multipart/form-data</code>; without that encoding, the browser does not send file contents correctly.</p><pre><code>&lt;form method="post" enctype="multipart/form-data"&gt;
-    &lt;input type="file" name="document" required&gt;
-    &lt;button&gt;Upload&lt;/button&gt;
-&lt;/form&gt;</code></pre><pre><code>$result = Input::fromRequest()-&gt;process([
-    'document' =&gt; 'required|file|mimes:pdf|max_size:20mb',
+'default' =&gt; 'private',
+'disks' =&gt; [
+'private' =&gt; ['driver' =&gt; 'local', 'root' =&gt; __DIR__ . '/../storage/private'],
+'public' =&gt; ['driver' =&gt; 'local', 'root' =&gt; __DIR__ . '/uploads', 'url' =&gt; '/uploads'],
+],
+]);</code></pre><h2>3. Store and read</h2><pre><code>$info = $files-&gt;put('documents/demo.txt', 'Hello Prefab');
+echo $files-&gt;read('documents/demo.txt');
+echo $info-&gt;path();</code></pre><h2>4. List and manage</h2><pre><code>$list = $files-&gt;files('', recursive: true);
+$files-&gt;copy('documents/demo.txt', 'copies/demo.txt');
+$files-&gt;move('copies/demo.txt', 'moved/demo.txt');
+$files-&gt;delete('moved/demo.txt');</code></pre><pre><code>&lt;ul&gt;
+&lt;?php foreach ($list as $file): ?&gt;
+&lt;li&gt;&lt;?= htmlspecialchars($file-&gt;path()) ?&gt; (&lt;?= $file-&gt;size() ?&gt; bytes)&lt;/li&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/ul&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Stored files appear in the visible list and copy/move/delete change the list.</div><h2>5. Collision policies</h2><pre><code>$files-&gt;put('report.txt', 'A', ['collision' =&gt; 'overwrite']);
+$files-&gt;put('report.txt', 'B', ['collision' =&gt; 'skip']);
+$files-&gt;put('report.txt', 'C', ['collision' =&gt; 'rename']);
+$files-&gt;put('report.txt', 'D', ['collision' =&gt; 'error']);</code></pre><h2>6. Validate uploads before storage</h2><pre><code>$result = Input::fromRequest()-&gt;process([
+'document' =&gt; 'required|file|mimes:pdf|max_size:20mb',
 ]);
-
 if ($result-&gt;passes()) {
-    $stored = $files-&gt;storeUploaded(
-        $result-&gt;validated('document'),
-        'documents',
-    );
+    $stored = $files-&gt;storeUploaded($result-&gt;validated('document'), 'documents');
+}</code></pre><h2>7. Public and private delivery</h2><pre><code>$files-&gt;put('demo.txt', 'Public file', 'public');
+echo $files-&gt;url('demo.txt', 'public');
+$url = $files-&gt;temporaryUrl('documents/private.pdf', 600);</code></pre><h2>8. Developer tip: trace a file operation</h2><pre><code>$info = $files-&gt;put('documents/demo.txt', 'Hello Prefab');
 
-    print_r($stored-&gt;toArray());
-}</code></pre><p>The flow is deliberate: browser upload → Input validation → Files storage. Files should not have to decide whether the uploaded PDF is acceptable business input.</p><h2>13. Advanced: capabilities and hooks</h2><pre><code>var_dump($files-&gt;supports('checksum'));
-var_dump($files-&gt;supports('atomic_write'));
-var_dump($files-&gt;supports('public_url', 'public'));
-
-$files-&gt;on('stored', function ($file, $disk, $context) {
-    echo 'Stored: ' . $file-&gt;path();
-});</code></pre><p>Capabilities let code ask what a disk supports before using an optional feature. Hooks let the application react to file events without putting unrelated behavior directly inside the storage operation.</p><h2>14. Advanced: temporary URLs and downloads</h2><pre><code>$url = $files-&gt;temporaryUrl('documents/private.pdf', 600);</code></pre><p>A temporary URL grants time-limited access to a private path. The lifetime here is 600 seconds.</p><pre><code>$valid = $files-&gt;verifyTemporaryUrl(
-    $_GET['path'] ?? '',
-    (int) ($_GET['expires'] ?? 0),
-    $_GET['signature'] ?? '',
-    $_GET['disk'] ?? null,
-);</code></pre><p>The signature prevents someone from simply changing the path or expiry value in the URL.</p><pre><code>$download = $files-&gt;download(
-    'documents/report.pdf',
-    'Annual Report.pdf'
-);
-print_r($download-&gt;headers());</code></pre><p>The download helper describes how a file should be returned to the client, including download-related headers and the user-facing filename.</p><div class="nextbox"><b>Next:</b> Continue to Notifications to create persistent messages for application users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><p>Prefab Files stays storage-focused, but its APIs are intentionally shaped to work with validated uploads, routes and application authorization without owning those concerns.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Input</code></td><td><strong>Direct compatible handoff</strong></td><td><code>Input UploadedFile → storeUploaded()</code></td><td>Input validates the incoming upload; Files permanently stores the same normalized object.</td></tr><tr><td><code>Routes</code></td><td><strong>Direct composition</strong></td><td><code>download() / temporaryUrl()</code></td><td>A route/controller can use FileDownload to stream files or verify signed temporary URLs without Files forcing an HTTP framework.</td></tr><tr><td><code>Auth + Permissions</code></td><td><strong>Direct composition</strong></td><td><code>authorize before read/download</code></td><td>Private-file routes can ask Auth/Permissions before calling Files. Files deliberately does not decide who may access a document.</td></tr><tr><td><code>Logs</code></td><td><strong>Hook-based composition</strong></td><td><code>on(stored/deleted/copied/moved)</code></td><td>Lifecycle hooks can record storage activity through Prefab Logs when an application wants file-level audit history.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Files does not automatically log or authorize operations because storage can also be used in CLI jobs, background tasks and public asset workflows where those policies differ.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>Tracing is optional developer diagnostics. Keep the file list/status as the normal application result.</p><h2>9. Streams and storage information</h2><pre><code>$stream = $files-&gt;readStream('archives/backup.zip');
+$files-&gt;checksum('documents/demo.txt');
+$files-&gt;directorySize('documents');
+$files-&gt;usage();</code></pre><div class="nextbox"><b>Next:</b> Continue to Notifications.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Input</code></td><td>Validate uploads before permanent storage.</td></tr><tr><td><code>Routes</code></td><td>Routes/controllers can deliver downloads and temporary URLs.</td></tr><tr><td><code>Auth + Permissions</code></td><td>Authorize access before private-file reads/downloads.</td></tr><tr><td><code>Logs</code></td><td>Lifecycle hooks can be used for file audit history.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
