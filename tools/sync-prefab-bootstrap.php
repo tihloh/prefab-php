@@ -23,6 +23,11 @@ $groups = [
             $root . '/packages/auth/src/prefab.php',
             $root . '/packages/permissions/src/prefab.php',
             $root . '/packages/logs/src/prefab.php',
+            $root . '/packages/routes/src/prefab.php',
+            $root . '/packages/input/src/prefab.php',
+            $root . '/packages/files/src/prefab.php',
+            $root . '/packages/messaging/src/prefab.php',
+            $root . '/packages/notifications/src/prefab.php',
         ],
     ],
     [
