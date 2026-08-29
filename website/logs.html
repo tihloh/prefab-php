@@ -1,25 +1,32 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Turn audit records into a simple activity screen. Start by recording one event, then show recent activity in a UI a user or administrator can actually read.</p><h2>1. Install Logs</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>2. Start Logs</h2><p>If a Prefab database capability is already available, keep setup short:</p><pre><code>use Tihloh\Prefab\Logs\Services\LogManager;
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Record application activity and show it in a simple table an administrator can actually read.</p><h2>1. Install Logs</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>2. Start Logs</h2><pre><code>use Tihloh\Prefab\Logs\Services\LogManager;
 
-$logs = new LogManager();</code></pre><p>Logs can reuse the shared Prefab database automatically. The module owns its technical log storage.</p><h2>3. Record an event</h2><pre><code>$logs-&gt;record([
+$logs = new LogManager();</code></pre><p>Logs can reuse the shared Prefab database automatically.</p><h2>3. Record an event</h2><pre><code>$logs-&gt;record([
     'action' =&gt; 'document.approved',
     'subject_type' =&gt; 'document',
     'subject_id' =&gt; 1001,
     'actor_id' =&gt; 1,
     'message' =&gt; 'Document was approved.',
-]);</code></pre><p><code>action</code> is the machine-readable event name. The subject identifies what changed, the actor identifies who caused it, and <code>message</code> is what people can read.</p><h2>4. Load recent activity</h2><pre><code>$recent = $logs-&gt;recent(20);</code></pre><p>This gives you the newest records for an activity screen or dashboard.</p><h2>5. Show an activity list</h2><p>Do not dump the log array. Give the student a small UI that already looks useful:</p><pre><code>&lt;h2&gt;Recent activity&lt;/h2&gt;
+]);</code></pre><h2>4. Load recent activity</h2><pre><code>$recent = $logs-&gt;recent(20);</code></pre><h2>5. Display the activity</h2><p>Audit records naturally fit a table:</p><pre><code>&lt;h2&gt;Recent activity&lt;/h2&gt;
 
-&lt;?php foreach ($recent as $log): ?&gt;
-    &lt;div class="card card-body mb-2"&gt;
-        &lt;strong&gt;&lt;?= htmlspecialchars($log['message'] ?? $log['action']) ?&gt;&lt;/strong&gt;
-        &lt;small class="text-muted"&gt;Actor #&lt;?= $log['actor_id'] ?? 'System' ?&gt;&lt;/small&gt;
-    &lt;/div&gt;
-&lt;?php endforeach; ?&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> The browser should now show “Document was approved.” as an activity item.</div><h2>6. Query useful history</h2><pre><code>$logs-&gt;recent(50);
+&lt;table border="1" cellpadding="8"&gt;
+    &lt;tr&gt;
+        &lt;th&gt;Action&lt;/th&gt;&lt;th&gt;Subject&lt;/th&gt;&lt;th&gt;Actor&lt;/th&gt;&lt;th&gt;Message&lt;/th&gt;
+    &lt;/tr&gt;
+    &lt;?php foreach ($recent as $log): ?&gt;
+    &lt;tr&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($log['action']) ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($log['subject_type']) ?&gt; #&lt;?= $log['subject_id'] ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= $log['actor_id'] ?? 'System' ?&gt;&lt;/td&gt;
+        &lt;td&gt;&lt;?= htmlspecialchars($log['message'] ?? '') ?&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> You should see “Document was approved.” as a row in the activity table.</div><h2>6. Query useful history</h2><pre><code>$logs-&gt;recent(50);
 $logs-&gt;forSubject('document', 1001);
-$logs-&gt;forActor(1);</code></pre><p><code>forSubject()</code> answers “what happened to this record?” while <code>forActor()</code> answers “what did this user do?”</p><h2>7. Show human-friendly activity</h2><p>When IDs need readable labels, let Logs prepare human-facing records:</p><pre><code>$activity = $logs-&gt;humanRecent(
+$logs-&gt;forActor(1);</code></pre><p><code>forSubject()</code> answers “what happened to this record?” while <code>forActor()</code> answers “what did this user do?”</p><h2>7. Human-friendly labels</h2><pre><code>$activity = $logs-&gt;humanRecent(
     20,
     actorResolver: fn ($id) =&gt; "User #{$id}",
     subjectResolver: fn ($type, $id) =&gt; "{$type} #{$id}",
-);</code></pre><p>You can render <code>$activity</code> with the same small card/list pattern instead of exposing the raw database record.</p><h2>8. Store structured changes</h2><pre><code>$logs-&gt;record([
+);</code></pre><p>Use the returned labels in the same table when you want names instead of raw IDs.</p><h2>8. Store structured changes</h2><pre><code>$logs-&gt;record([
     'action' =&gt; 'user.updated',
     'subject_type' =&gt; 'user',
     'subject_id' =&gt; 25,
@@ -27,10 +34,10 @@ $logs-&gt;forActor(1);</code></pre><p><code>forSubject()</code> answers “what 
     'changes' =&gt; [
         'office' =&gt; ['old' =&gt; 'Accounting', 'new' =&gt; 'Budget'],
     ],
-]);</code></pre><p>Structured changes make it possible to later show exactly what changed without parsing a message string.</p><h2>9. Automatic logging</h2><p>When compatible modules such as Users are installed, normal operations can create logs automatically:</p><pre><code>$logs = new LogManager();
+]);</code></pre><h2>9. Automatic logging</h2><pre><code>$logs = new LogManager();
 $users = new UserManager(['database' =&gt; $pdo]);
 
 $users-&gt;create([
     'name' =&gt; 'Alice',
     'email' =&gt; 'alice@example.com',
-]);</code></pre><p>The application does not need a second <code>$logs-&gt;record()</code> for the user creation when the logger capability is available.</p><h2>10. Developer tip: diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><p>Use diagnostics only when storage or automatic integration is not resolving as expected. The normal tutorial result is the activity screen.</p><div class="nextbox"><b>Next:</b> Continue to Files and build a small document/upload interface.</div><section class="interop-reference-static"><h2>Automatic logging and module coexistence</h2><p>Prefab Logs publishes a logger capability that compatible modules can discover, so normal module operations can produce audit records without repeating <code>LogManager::record()</code> throughout application code.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Users</code></td><td><strong>Automatic logging</strong></td><td><code>user.created / user.updated / user.deleted</code></td><td>UserManager produces structured changes and sends them to the discovered logger. Actor information can come automatically from Auth.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic logging</strong></td><td><code>auth.* events</code></td><td>Authentication activity can be sent to Logs automatically when Auth discovers the logger capability.</td></tr><tr><td><code>Permissions</code></td><td><strong>Automatic logging</strong></td><td><code>permission.granted / denied / cleared</code></td><td>Permission changes emit structured log payloads that the Prefab runtime can forward to Logs.</td></tr><tr><td><code>Database</code></td><td><strong>Automatic storage reuse</strong></td><td><code>database capability</code></td><td>Logs can build its PDO repository from the shared database without a separate database setup.</td></tr><tr><td><code>Other modules / app code</code></td><td><strong>Compatible</strong></td><td><code>logger capability / record()</code></td><td>Application code can call record() directly for domain-specific events.</td></tr></tbody></table></div><div class="callout"><b>Important:</b> Automatic logging does not mean Logs watches the database. Compatible modules emit structured events while performing their operations.</div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+]);</code></pre><p>Compatible modules can send their activity to Logs automatically.</p><h2>10. Developer tip</h2><pre><code>print_r($logs-&gt;explain());</code></pre><p>Use diagnostics only while debugging. The normal visible result is the activity table.</p><div class="nextbox"><b>Next:</b> Continue to Files and build a simple file manager.</div><section class="interop-reference-static"><h2>Automatic logging and module coexistence</h2><p>Prefab Logs publishes a logger capability that compatible modules can discover.</p><div class="api-table-wrap"><table class="api-table interop-table"><thead><tr><th>Module</th><th>Integration</th><th>How</th><th>What happens</th></tr></thead><tbody><tr><td><code>Users</code></td><td><strong>Automatic logging</strong></td><td><code>user.created / user.updated / user.deleted</code></td><td>User operations can produce structured audit records.</td></tr><tr><td><code>Auth</code></td><td><strong>Automatic logging</strong></td><td><code>auth.* events</code></td><td>Authentication activity can be recorded automatically.</td></tr><tr><td><code>Permissions</code></td><td><strong>Automatic logging</strong></td><td><code>permission.* events</code></td><td>Permission changes can be recorded automatically.</td></tr><tr><td><code>Database</code></td><td><strong>Automatic storage reuse</strong></td><td><code>database capability</code></td><td>Logs can reuse the shared database.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
