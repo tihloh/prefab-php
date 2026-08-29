@@ -13,6 +13,7 @@ use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\DTOs\OperationResult;
 use Tihloh\Prefab\Users\Mapping\UserMap;
 use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
+use Tihloh\Prefab\Users\Support\DefaultUserStorage;
 use Tihloh\Prefab\Users\User\PrefabUser;
 
 /**
@@ -105,6 +106,8 @@ final class UserManager
                     ? $map['value']
                     : new UserMap((string) $table['value']);
 
+                DefaultUserStorage::ensureSchema($database, $userMap);
+
                 $this->provider = new PdoUserProvider(
                     $database,
                     $userMap,
@@ -156,17 +159,32 @@ final class UserManager
             $candidate = $groupEntry['value'];
             if (is_object($candidate) && method_exists($candidate, 'groupIdsForUser')) {
                 $this->groups = $candidate;
-                PrefabRuntime::recordResolution('users', 'group_provider', 'prefab-capability', ['provider' => $groupEntry['provider']]);
+                PrefabRuntime::recordResolution(
+                    'users',
+                    'group_provider',
+                    'prefab-capability',
+                    ['provider' => $groupEntry['provider']],
+                );
             }
         }
 
         if (!$this->groups && $this->database) {
             $this->groups = new GroupManager($this->database);
-            PrefabRuntime::recordResolution('users', 'group_provider', 'users-database', ['provider' => GroupManager::class]);
+            PrefabRuntime::recordResolution(
+                'users',
+                'group_provider',
+                'users-database',
+                ['provider' => GroupManager::class],
+            );
         }
 
         if ($this->groups) {
-            PrefabRuntime::provide('group_provider', $this->groups, 'prefab-users', priority: 10);
+            PrefabRuntime::provide(
+                'group_provider',
+                $this->groups,
+                'prefab-users',
+                priority: 10,
+            );
         }
 
         if (!$this->autoLogger) {
@@ -420,9 +438,57 @@ final class UserManager
     private function provider(): UserProviderInterface
     {
         if (!$this->provider) {
-            throw new RuntimeException(
-                'Prefab Users needs a provider or database capability/configuration.',
+            $this->prefabConfigure();
+        }
+
+        if (!$this->provider) {
+            $table = (string) ($this->config['table'] ?? 'users');
+            $this->database = DefaultUserStorage::database($this->config);
+            $map = new UserMap(table: $table);
+            DefaultUserStorage::ensureSchema($this->database, $map);
+            $this->provider = new PdoUserProvider(
+                $this->database,
+                $map,
             );
+
+            PrefabRuntime::recordResolution(
+                'users',
+                'database',
+                'automatic-sqlite-fallback',
+                [
+                    'driver' => $this->database->driver(),
+                    'path' => DefaultUserStorage::path($this->config),
+                ],
+            );
+            PrefabRuntime::recordResolution(
+                'users',
+                'user_provider',
+                'automatic-sqlite-fallback',
+                ['provider' => $this->provider::class, 'table' => $table],
+            );
+
+            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
+            PrefabRuntime::provide(
+                'database',
+                $this->database,
+                'prefab-users',
+                priority: -10,
+                meta: [
+                    'role' => 'users-database',
+                    'driver' => $this->database->driver(),
+                    'path' => DefaultUserStorage::path($this->config),
+                ],
+            );
+
+            if (!$this->groups) {
+                $this->groups = new GroupManager($this->database);
+                PrefabRuntime::provide(
+                    'group_provider',
+                    $this->groups,
+                    'prefab-users',
+                    priority: 10,
+                );
+            }
         }
 
         return $this->provider;
