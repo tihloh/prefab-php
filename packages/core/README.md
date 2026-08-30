@@ -9,6 +9,7 @@ It is not a business feature module. Applications normally install a feature pac
 Core provides infrastructure shared across Prefab:
 
 - runtime, configuration, capabilities, lifecycle and fluent-extension plumbing
+- automatic `.env` loading and environment-value access
 - database connections, PDO adapter, transactions, parameterized SQL and lightweight query building
 - session storage through a small session contract and native PHP implementation
 - cache contracts plus in-memory and file-backed cache implementations
@@ -23,6 +24,7 @@ Core does **not** own user management, authentication rules, permissions, audit 
 ```text
 prefab-core
 ├─ Runtime / Config
+├─ Environment
 ├─ Database
 ├─ Session
 ├─ Cache
@@ -43,6 +45,60 @@ Feature packages
 ```
 
 All feature packages depend on Core for shared infrastructure rather than carrying private copies of the runtime/database bootstrap. Optional integrations still use Core capabilities/contracts at runtime so feature packages remain independently useful.
+
+## Environment (.env)
+
+Core automatically looks for a `.env` file when Composer loads Prefab. No separate dotenv package or bootstrap call is required.
+
+Example `.env`:
+
+```dotenv
+APP_ENV=development
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=myapp
+DB_USER=root
+DB_PASS=secret
+DEBUG=true
+```
+
+Use the values directly:
+
+```php
+$host = env('DB_HOST');
+$port = env('DB_PORT', 3306);
+$debug = env('DEBUG', false);
+```
+
+`prefab_env()` is also available as Prefab's explicit helper:
+
+```php
+$host = prefab_env('DB_HOST');
+```
+
+Values are also placed in the normal process environment, so `getenv('DB_HOST')` and `$_ENV['DB_HOST']` work. Existing process environment variables take precedence over `.env` values.
+
+Common boolean/null values are normalized by `env()` / `prefab_env()`:
+
+```dotenv
+DEBUG=true
+CACHE=false
+OPTIONAL=null
+```
+
+```php
+env('DEBUG');    // true
+env('CACHE');    // false
+env('OPTIONAL'); // null
+```
+
+Prefab searches upward from the current working directory and web document root for `.env`. A specific file can be selected with the `PREFAB_ENV_FILE` process environment variable or loaded explicitly:
+
+```php
+use Tihloh\Prefab\Core\Environment\Env;
+
+Env::load(__DIR__ . '/.env');
+```
 
 ## Database is now part of Core
 
@@ -147,4 +203,4 @@ Useful diagnostics include module/resource inspection and tracing through the sh
 
 ## Development
 
-The monorepo is the development source of truth. Core itself is now the canonical owner of the shared runtime, diagnostics, database infrastructure, session, cache and console code. Package splitting publishes `packages/core` to `tihloh/prefab-core`.
+The monorepo is the development source of truth. Core itself is now the canonical owner of the shared runtime, diagnostics, database infrastructure, session, cache, environment and console code. Package splitting publishes `packages/core` to `tihloh/prefab-core`.
