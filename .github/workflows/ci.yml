@@ -31,7 +31,7 @@ jobs:
       - name: Use monorepo Core
         if: ${{ matrix.package != 'core' && matrix.package != 'database' }}
         working-directory: packages/${{ matrix.package }}
-        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - name: Install package
         working-directory: packages/${{ matrix.package }}
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -62,7 +62,7 @@ jobs:
           tools: composer:v2
           extensions: fileinfo
       - working-directory: packages/input
-        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - working-directory: packages/input
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/input
@@ -78,7 +78,7 @@ jobs:
           tools: composer:v2
           extensions: fileinfo
       - working-directory: packages/files
-        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - working-directory: packages/files
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/files
@@ -93,7 +93,7 @@ jobs:
           php-version: '8.1'
           tools: composer:v2
       - working-directory: packages/messaging
-        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - working-directory: packages/messaging
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/messaging
@@ -109,7 +109,7 @@ jobs:
           tools: composer:v2
           extensions: pdo, pdo_sqlite
       - working-directory: packages/notifications
-        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - working-directory: packages/notifications
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/notifications
@@ -135,7 +135,7 @@ jobs:
           tools: composer:v2
           extensions: pdo, pdo_sqlite
       - working-directory: examples/database-integration-test
-        run: composer config repositories.prefab-core '{"type":"path","url":"../../packages/core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.x-dev"}}}'
+        run: composer config repositories.prefab-core '{"type":"path","url":"../../packages/core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
       - working-directory: examples/database-integration-test
         run: composer update --no-interaction --prefer-dist --no-progress
       - run: php -l examples/database-integration-test/index.php
