@@ -1,7 +1,7 @@
 {
   "name": "tihloh/prefab-core",
-  "description": "Shared infrastructure for Prefab PHP modules: runtime, config, database, session, cache, contracts and diagnostics.",
-  "keywords": ["php", "prefab", "core", "runtime", "database", "session", "cache", "modular", "framework-independent"],
+  "description": "Shared infrastructure for Prefab PHP modules: runtime, config, database, session, cache, contracts, diagnostics and CLI.",
+  "keywords": ["php", "prefab", "core", "runtime", "database", "session", "cache", "cli", "modular", "framework-independent"],
   "homepage": "https://github.com/tihloh/prefab-php",
   "type": "library",
   "license": "MIT",
@@ -26,7 +26,11 @@
       "src/prefab-debug-ui.php",
       "src/prefab-diagnostics.php",
       "src/prefab.php",
-      "src/database.php"
+      "src/database.php",
+      "src/Console/helpers.php"
     ]
-  }
+  },
+  "bin": [
+    "bin/prefab"
+  ]
 }
