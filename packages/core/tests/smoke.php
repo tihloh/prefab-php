@@ -8,6 +8,7 @@ use PDO;
 use Tihloh\Prefab\Core\Cache\ArrayCache;
 use Tihloh\Prefab\Core\Console\Input;
 use Tihloh\Prefab\Core\Database\DatabaseManager;
+use Tihloh\Prefab\Core\Environment\Env;
 
 $pdo = new PDO('sqlite::memory:');
 $db = new DatabaseManager($pdo);
@@ -42,5 +43,16 @@ assert(isset($console->commands()['help']));
 assert(isset($console->commands()['about']));
 assert(isset($console->commands()['init']));
 assert(isset($console->commands()['test:hello']));
+
+$envFile = tempnam(sys_get_temp_dir(), 'prefab-env-');
+assert($envFile !== false);
+file_put_contents($envFile, "PREFAB_SMOKE_NAME=Prefab\nPREFAB_SMOKE_ENABLED=true\nPREFAB_SMOKE_URL=\"https://example.com/api\"\nPREFAB_SMOKE_COPY=\${PREFAB_SMOKE_NAME}\n");
+Env::reset();
+assert(Env::load($envFile, true) !== null);
+assert(env('PREFAB_SMOKE_NAME') === 'Prefab');
+assert(prefab_env('PREFAB_SMOKE_ENABLED') === true);
+assert(env('PREFAB_SMOKE_URL') === 'https://example.com/api');
+assert(env('PREFAB_SMOKE_COPY') === 'Prefab');
+unlink($envFile);
 
 echo "Prefab Core smoke OK\n";
