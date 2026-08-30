@@ -141,3 +141,12 @@ if (!class_exists(PdoDatabaseAdapter::class, false)) {
         }
     }
 }
+
+// Temporary migration aliases for applications upgrading from prefab-database.
+if (!class_exists('Tihloh\\Prefab\\Database\\Services\\DatabaseManager', false)) {
+    class_alias(\Tihloh\Prefab\Core\Database\DatabaseManager::class, 'Tihloh\\Prefab\\Database\\Services\\DatabaseManager');
+}
+
+if (!class_exists('Tihloh\\Prefab\\Database\\Services\\QueryBuilder', false)) {
+    class_alias(\Tihloh\Prefab\Core\Database\QueryBuilder::class, 'Tihloh\\Prefab\\Database\\Services\\QueryBuilder');
+}
