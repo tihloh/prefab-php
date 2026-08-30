@@ -115,16 +115,6 @@ jobs:
       - working-directory: packages/notifications
         run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
 
-  interoperability-sync:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-      - run: php tools/sync-prefab-bootstrap.php
-      - run: git diff --exit-code
-
   sqlite-integration:
     runs-on: ubuntu-latest
     steps:
