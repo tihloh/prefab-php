@@ -1,24 +1,52 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 2</span><h1>Database</h1><p class="lead">Connect to MariaDB/MySQL, perform CRUD, use raw SQL and transactions, then inspect an operation with Prefab tracing.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-database</code></pre><h2>2. Create a table</h2><pre><code>CREATE TABLE users (
-id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-name VARCHAR(100) NOT NULL,
-email VARCHAR(190) NOT NULL UNIQUE,
-active TINYINT(1) NOT NULL DEFAULT 1
-);</code></pre><h2>3. Connect</h2><pre><code>use Tihloh\Prefab\Database\Services\DatabaseManager;
-$database = new DatabaseManager([
-'connections' =&gt; ['main' =&gt; [
-'driver' =&gt; 'mysql', 'host' =&gt; '127.0.0.1',
-'database' =&gt; 'prefab_tutorial', 'username' =&gt; 'root', 'password' =&gt; '',
-]],
-]);
-var_dump($database-&gt;ping('main'));</code></pre><h2>4. Insert and read</h2><pre><code>$id = $database-&gt;table('users')-&gt;insertGetId([
-'name' =&gt; 'Demo User', 'email' =&gt; 'demo@example.com', 'active' =&gt; true,
-]);
-$user = $database-&gt;table('users')-&gt;where('id', $id)-&gt;first();</code></pre><h2>5. Update and delete</h2><pre><code>$database-&gt;table('users')-&gt;where('id', $id)-&gt;update(['name' =&gt; 'Updated User']);
-$database-&gt;table('users')-&gt;where('id', $id)-&gt;delete();</code></pre><h2>6. Raw SQL</h2><pre><code>$rows = $database-&gt;select('SELECT * FROM users WHERE active = ?', [1]);
-$database-&gt;statement('UPDATE users SET active = ? WHERE email = ?', [false, 'demo@example.com']);</code></pre><p>Keep values in bindings instead of concatenating untrusted input into SQL.</p><h2>7. Transactions</h2><pre><code>$database-&gt;transaction(function ($db) {
-    $db-&gt;table('users')-&gt;insert(['name' =&gt; 'Transactional User', 'email' =&gt; 'transaction@example.com']);
-});</code></pre><h2>8. Developer tip: trace a database operation</h2><pre><code>$rows = $database-&gt;table('users')-&gt;where('active', true)-&gt;get();
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Core Database</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="database.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Core Infrastructure</span><h1>Database with Prefab Core</h1><p class="lead">Database infrastructure now lives in Prefab Core. Start with a connection, then learn CRUD, raw SQL, transactions and diagnostics in small testable steps.</p><div class="callout"><b>Changed in the current architecture:</b> the standalone <code>prefab-database</code> package has been retired. Use <code>prefab-core</code> and the <code>Tihloh\Prefab\Core\Database</code> namespace for new code.</div><h2>1. Install Core</h2><pre><code>composer require tihloh/prefab-core</code></pre><p>If you already installed another current Prefab feature package, Core may already be present. Check with:</p><pre><code>composer show tihloh/prefab-core</code></pre><h2>2. Create a small test table</h2><pre><code>CREATE DATABASE prefab_tutorial;
+USE prefab_tutorial;
 
-prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p>The Database module traces safe summaries such as table/operation and binding counts rather than exposing bound secret values.</p><h2>9. Multiple connections and diagnostics</h2><pre><code>print_r($database-&gt;names());
-echo $database-&gt;defaultName();
-print_r($database-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Users.</div><section class="interop-reference-static"><h2>Works with other Prefab modules</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>Can reuse the shared database capability.</td></tr><tr><td><code>Auth</code></td><td>Can use shared storage for Auth-owned credentials/tokens.</td></tr><tr><td><code>Permissions</code></td><td>Can reuse shared persistence.</td></tr><tr><td><code>Logs</code></td><td>Can reuse shared persistence.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+CREATE TABLE users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    active TINYINT(1) NOT NULL DEFAULT 1
+);</code></pre><h2>3. Connect</h2><p>Create <code>database-test.php</code>:</p><pre><code>&lt;?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Tihloh\Prefab\Core\Database\DatabaseManager;
+
+$pdo = new PDO(
+    'mysql:host=127.0.0.1;dbname=prefab_tutorial;charset=utf8mb4',
+    'root',
+    '',
+    [PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION]
+);
+
+$database = new DatabaseManager($pdo);
+
+var_dump($database-&gt;ping());</code></pre><p>Run it:</p><pre><code>php database-test.php</code></pre><p>Continue only when it returns <code>true</code>.</p><h2>4. Insert one row</h2><p>Add this below the connection code:</p><pre><code>$id = $database-&gt;table('users')-&gt;insertGetId([
+    'name' =&gt; 'Demo User',
+    'email' =&gt; 'demo@example.com',
+    'active' =&gt; true,
+]);
+
+echo "Created user #{$id}";</code></pre><h2>5. Read it back</h2><pre><code>$user = $database-&gt;table('users')
+    -&gt;where('id', $id)
+    -&gt;first();
+
+print_r($user);</code></pre><h2>6. Query several rows</h2><pre><code>$activeUsers = $database-&gt;table('users')
+    -&gt;where('active', 1)
+    -&gt;orderBy('name')
+    -&gt;limit(20)
+    -&gt;get();
+
+print_r($activeUsers);</code></pre><h2>7. Update</h2><pre><code>$database-&gt;table('users')
+    -&gt;where('id', $id)
+    -&gt;update(['name' =&gt; 'Updated User']);</code></pre><h2>8. Raw parameterized SQL</h2><pre><code>$rows = $database-&gt;select(
+    'SELECT * FROM users WHERE active = ?',
+    [1]
+);</code></pre><p>Keep user values in bindings. Do not concatenate untrusted values into SQL.</p><h2>9. Transactions</h2><pre><code>$database-&gt;transaction(function ($db) {
+    $db-&gt;table('users')-&gt;insert([
+        'name' =&gt; 'Transactional User',
+        'email' =&gt; 'transaction@example.com',
+        'active' =&gt; true,
+    ]);
+});</code></pre><h2>10. Delete the test row</h2><pre><code>$database-&gt;table('users')
+    -&gt;where('id', $id)
+    -&gt;delete();</code></pre><h2>11. Multiple connections and diagnostics</h2><p>Core's <code>DatabaseManager</code> also supports named connections and the shared Prefab diagnostics/runtime infrastructure. For ordinary applications, start with one PDO connection first and add named connections only when you actually need them.</p><h2>What Core Database is not</h2><p>It is intentionally lightweight. It provides PDO connections, parameterized SQL, transactions and a query builder. It is not an ORM and does not try to own models, relations, migrations or your database schema.</p><div class="nextbox"><b>Next:</b> Continue to Users. Users can use your existing PDO/database infrastructure and your existing table instead of forcing a Prefab-specific users schema.</div><section class="interop-reference-static"><h2>Shared by Prefab features</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>Can resolve Core database infrastructure for user persistence.</td></tr><tr><td><code>Auth</code></td><td>Can use shared persistence for Auth-owned credentials and tokens.</td></tr><tr><td><code>Permissions</code></td><td>Can reuse Core database infrastructure.</td></tr><tr><td><code>Logs</code></td><td>Can reuse Core database infrastructure for persistent logs.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
