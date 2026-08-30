@@ -1,24 +1,23 @@
 # Getting Started with Prefab
 
-> **Prefab is a set of PHP building blocks. Use one, several, or many.**
-
-If you remember only one thing, remember this:
+> **Prefab is a set of PHP building blocks. Install the feature you need; shared infrastructure comes from Core.**
 
 ```text
-You choose the modules.
+You choose the feature modules.
+Composer brings Prefab Core with them.
 Prefab connects compatible infrastructure.
 Your application keeps the business logic.
 ```
 
 ## 1. What Prefab is — and is not
 
-Prefab is **not a full-stack framework** and does not require a project skeleton, MVC structure, ORM, base controller or special deployment model.
+Prefab is **not a full-stack framework**. It does not require a project skeleton, MVC structure, ORM, base controller or special deployment model.
 
-Each package solves one area:
+Current packages are organized like this:
 
 | Need | Package |
 |---|---|
-| Database connections and simple queries | `prefab-database` |
+| Shared runtime, database, session and cache infrastructure | `prefab-core` |
 | Existing/project-owned users | `prefab-users` |
 | Login, logout and current user | `prefab-auth` |
 | Roles/groups/permissions | `prefab-permissions` |
@@ -29,17 +28,17 @@ Each package solves one area:
 | Email/external messages | `prefab-messaging` |
 | Internal user notifications | `prefab-notifications` |
 
-You do **not** need to install all of them.
+The old standalone `prefab-database` package has been retired. Database infrastructure now lives in `prefab-core`.
+
+You still do **not** install every feature package. Install the feature you need and Composer resolves Core automatically.
 
 ## 2. Smallest possible use
 
-Install only what you need:
+Install only the feature you need:
 
 ```bash
 composer require tihloh/prefab-routes
 ```
-
-Then use it normally:
 
 ```php
 require __DIR__ . '/vendor/autoload.php';
@@ -52,9 +51,26 @@ $routes->get('/', fn () => 'Hello');
 echo $routes->dispatch();
 ```
 
-Nothing else in Prefab is required.
+`prefab-core` is installed as the shared infrastructure dependency; you do not have to require it separately for ordinary feature-package use.
 
-## 3. Add another block
+## 3. Use Core directly
+
+If you specifically need Core infrastructure, such as the database API, install it directly:
+
+```bash
+composer require tihloh/prefab-core
+```
+
+```php
+use Tihloh\Prefab\Core\Database\DatabaseManager;
+
+$db = new DatabaseManager(new PDO('sqlite::memory:'));
+$rows = $db->table('users')->where('active', 1)->get();
+```
+
+Core also provides session and lightweight cache infrastructure. It deliberately does not contain business features.
+
+## 4. Add another block
 
 Later you may need validated input:
 
@@ -62,9 +78,7 @@ Later you may need validated input:
 composer require tihloh/prefab-input
 ```
 
-You now have Routes **and** Input. Each remains usable independently, but compatible integrations may become available when they make sense.
-
-This is the Prefab growth model:
+Your application grows progressively:
 
 ```text
 Routes
@@ -76,54 +90,27 @@ Routes + Input + Auth
 Routes + Input + Auth + Permissions
 ```
 
-You grow the application without replacing its foundation.
+All of those feature packages share the same Core infrastructure instead of carrying duplicated runtime/database bootstrap files.
 
-## 4. Three ways modules work together
-
-This is the most important Prefab concept.
+## 5. Three ways modules work together
 
 ### A. Auto-Wiring — automatic infrastructure
 
 When one module can safely provide infrastructure another module needs, Prefab can connect them automatically.
-
-Example:
 
 ```text
 Users provides user_provider
           ↓
 Auth discovers it
           ↓
-Auth can authenticate project users
+Auth authenticates project users
 ```
 
-Another example:
+Explicit configuration still wins over automatic resolution.
 
-```text
-Auth provides current actor
-          ↓
-Permissions / Logs can use that actor
-```
+### B. Fluent Extensions — explicit optional capabilities
 
-You can still configure these relationships manually. **Explicit configuration always wins.**
-
-### B. Fluent Extensions — optional features appear on compatible Prefab objects
-
-Installing a module can add useful actions to objects from another module.
-
-Conceptually:
-
-```php
-$users->update($id, $data);
-```
-
-Add Notifications and a compatible user operation can gain:
-
-```php
-$users->update($id, $data)
-      ->notify();
-```
-
-Add Messaging too:
+Compatible modules can add useful actions without hiding business decisions.
 
 ```php
 $users->update($id, $data)
@@ -131,86 +118,48 @@ $users->update($id, $data)
       ->email();
 ```
 
-The important part: **Users does not need to contain Notifications or Messaging code.** The module providing the feature owns and registers the extension.
+The provider owns the extension; Users does not need Messaging or Notifications business code embedded inside it.
 
-Prefab's own extension-aware objects handle this internally. Normal application code should not need to add an internal extension trait merely to use built-in Prefab integrations.
+### C. Object Interoperability
 
-### C. Object Interoperability — objects simply fit together
-
-Sometimes no new method is needed.
-
-For example:
+Sometimes ordinary compatible objects are enough:
 
 ```text
-Input UploadedFile
-       ↓
-Files stores it
+Input UploadedFile → Files → Messaging attachment
 ```
 
-or:
+Prefab prefers the simplest integration that makes sense.
 
-```text
-Files attachment
-       ↓
-Messaging sends it
-```
+## 6. Core database replaces prefab-database
 
-Prefab prefers normal object interoperability when that is clearer than adding another fluent method.
-
-## 5. What is automatic and what is explicit?
-
-A useful rule:
-
-> **Prefab automates plumbing. Your application decides business behavior.**
-
-For example, a successful login is naturally an authentication event, so if Logs is integrated it can be audited automatically.
-
-But updating a user's name does **not** necessarily mean that user should receive an email. That is your application's decision:
+For new code use:
 
 ```php
-$users->update($id, $data)
-      ->notify()
-      ->email();
+use Tihloh\Prefab\Core\Database\DatabaseManager;
 ```
 
-The code stays short, but the business decision remains visible.
+not the retired standalone Database package namespace.
 
-## 6. Standalone vs integrated
+Core supports named PDO connections, parameterized SQL, transactions and a lightweight query builder. It is intentionally not an ORM.
 
-### Users alone
+## 7. Core cache infrastructure
+
+Core includes lightweight in-memory and file-backed cache implementations. Core supplies the storage mechanism; feature modules decide their own safe cache policy and invalidation rules.
+
+Direct Core use is available when you need it:
 
 ```php
-$users = new UserManager([
-    'database' => $pdo,
-    'map' => $map,
-]);
+use Tihloh\Prefab\Core\Cache\FileCache;
 
-$users->update(25, ['name' => 'Christian']);
+$cache = new FileCache(__DIR__ . '/cache');
+$value = $cache->remember('example', 300, fn () => expensiveWork());
 ```
 
-### Users + Auth
+Feature-level automatic caching can expose simpler configuration such as `cache => true` without requiring normal application code to call `remember()` manually.
 
-Users can become Auth's user source automatically when compatible configuration is available.
+## 8. Configuration: simple first
 
-### Users + Auth + Logs
-
-Authentication/user infrastructure events can be audited with the current actor context.
-
-### Users + Notifications + Messaging
-
-Compatible operation results can expose explicit communication actions:
-
-```php
-$users->update(25, $data)
-      ->notify()
-      ->email();
-```
-
-The base Users API remains valid regardless of which optional modules are installed.
-
-## 7. Configuration: simple first
-
-For a small application, configure a module directly:
+Small applications can configure a feature directly:
 
 ```php
 $users = new UserManager([
@@ -219,22 +168,9 @@ $users = new UserManager([
 ]);
 ```
 
-For a larger application, shared configuration can reduce repetition:
+Larger applications can share configuration through Core's `PrefabConfig` runtime infrastructure.
 
-```php
-PrefabConfig::set([
-    'database' => $pdo,
-    'modules' => [
-        'users' => [
-            'map' => $map,
-        ],
-    ],
-]);
-
-$users = new UserManager();
-```
-
-Resolution is straightforward:
+Resolution remains predictable:
 
 ```text
 Direct module configuration       highest priority
@@ -245,32 +181,14 @@ Common PrefabConfig
         ↓
 Auto-discovered compatible capability
         ↓
-Sensible default, if one exists
+Sensible default
         ↓
-Clear error if still unresolved
+Clear error if unresolved
 ```
 
-You do not need central configuration for small applications.
+## 9. Errors and diagnostics
 
-## 8. Errors are not hidden
-
-Prefab should fail clearly instead of silently guessing.
-
-Examples:
-
-```text
-Invalid form input          → validation result/errors
-Missing required resource   → clear exception
-Missing fluent extension    → BadMethodCallException
-Ambiguous provider          → RuntimeException explaining the conflict
-Delivery failure            → documented delivery result/exception
-```
-
-Prefab modules should not unexpectedly call `die()` or `exit()` for ordinary library failures. Your application decides how an error becomes HTML, JSON, a redirect or a log entry.
-
-## 9. See what Prefab connected
-
-Automatic behavior must be explainable.
+Prefab should fail clearly instead of silently guessing. Invalid input returns validation errors; missing required resources raise clear exceptions; ambiguous integrations are errors rather than guesses.
 
 Inspect a module:
 
@@ -279,32 +197,29 @@ $auth->explain();
 $users->explain();
 ```
 
-Inspect the assembled Prefab runtime:
+Inspect the assembled runtime:
 
 ```php
 $info = PrefabRuntime::inspect();
 ```
 
-This can show registered modules, capabilities, fluent extensions and resource-resolution decisions.
-
 ## 10. Recommended learning order
 
-If you are new to Prefab, do not begin with the runtime internals. Start with the package you need, then learn integration only when you add a second package.
-
 ```text
-1. Pick a module
-2. Read its Quick Start
-3. Build the feature
-4. Add another module when needed
-5. Read Auto-Wiring / Fluent Extensions when modules begin cooperating
+1. Install PHP + Composer
+2. Pick one feature module
+3. Build its smallest working example
+4. Add another module only when needed
+5. Learn Auto-Wiring / Fluent Extensions when modules cooperate
+6. Use Core directly when you need database/session/cache infrastructure
 ```
 
 ## Next
 
 - [Main documentation](../README.md)
+- [Prefab Core](../packages/core/README.md)
 - [Automatic integration / Auto-Wiring](auto-integration.md)
 - [Fluent Extensions](fluent-extensions.md)
-- [Database](../packages/database/README.md)
 - [Users](../packages/users/README.md)
 - [Auth](../packages/auth/README.md)
 - [Permissions](../packages/permissions/README.md)
