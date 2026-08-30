@@ -12,6 +12,7 @@ Core provides infrastructure shared across Prefab:
 - database connections, PDO adapter, transactions, parameterized SQL and lightweight query building
 - session storage through a small session contract and native PHP implementation
 - cache contracts plus in-memory and file-backed cache implementations
+- lightweight CLI command registration, argument/options parsing and terminal output
 - diagnostics, tracing, redaction and debug rendering
 - shared contracts and interoperability helpers
 
@@ -25,6 +26,7 @@ prefab-core
 ├─ Database
 ├─ Session
 ├─ Cache
+├─ Console
 ├─ Contracts
 └─ Diagnostics
 
@@ -77,8 +79,6 @@ Authentication behavior remains in `prefab-auth`; Core only provides session mec
 
 ## Cache
 
-Core now contains the shared cache mechanism:
-
 ```php
 use Tihloh\Prefab\Core\Cache\FileCache;
 
@@ -88,28 +88,63 @@ $users = $cache->remember('users.all', 300, fn () => loadUsers());
 
 Available lightweight stores include `ArrayCache` and `FileCache`. Core owns storage mechanics only. A feature module owns its own cache policy: whether caching is enabled, which reads are safe to cache, TTL values and invalidation after writes.
 
-This allows feature APIs to support simple configuration such as:
+## CLI
 
-```php
-$users = new UserManager([
-    'cache' => true,
-]);
+Composer exposes Core's console executable as `vendor/bin/prefab`.
+
+```bash
+php vendor/bin/prefab list
+php vendor/bin/prefab help init
+php vendor/bin/prefab about
+php vendor/bin/prefab init
 ```
 
-when that feature's automatic cache integration is implemented, without making application code manually call `remember()` for normal module operations.
+`init` creates optional project directories only when explicitly requested:
+
+```text
+config/
+bootstrap/
+storage/
+app/Console/
+```
+
+You can choose another project path:
+
+```bash
+php vendor/bin/prefab init --path=/path/to/project
+```
+
+Register application or feature commands with the small helper API:
+
+```php
+use Tihloh\Prefab\Core\Console\Input;
+use Tihloh\Prefab\Core\Console\Output;
+
+prefab_command('user:create', function (Input $input, Output $output) {
+    $name = $input->argument(0);
+    $email = $input->option('email');
+    $admin = $input->flag('admin');
+
+    $output->info("Creating {$name}");
+}, 'Create a user');
+```
+
+Run it with:
+
+```bash
+php vendor/bin/prefab user:create Juan --admin --email=juan@example.com
+```
+
+When `bootstrap/prefab.php` exists in the current project directory, the CLI loads it automatically before dispatching a command. This gives applications one place to register commands and initialize Prefab services.
+
+Core provides the command infrastructure; feature packages remain responsible for their own feature-specific commands.
 
 ## Runtime and diagnostics
 
-Core owns the canonical Prefab runtime and diagnostics. Feature modules use the Core runtime instead of shipping duplicate `prefab.php`, `prefab-diagnostics.php` or database contract copies.
+Core owns the canonical Prefab runtime and diagnostics. Feature modules use the Core runtime instead of shipping duplicate runtime, diagnostics or database-contract files.
 
 Useful diagnostics include module/resource inspection and tracing through the shared runtime.
 
 ## Development
 
-The monorepo is the development source of truth. Canonical shared runtime/diagnostic sources live under `tools/` and are synchronized into Core with:
-
-```bash
-php tools/sync-prefab-bootstrap.php
-```
-
-The synchronization process now targets Core; it no longer recreates the retired legacy Core/database copies inside feature packages.
+The monorepo is the development source of truth. Core itself is now the canonical owner of the shared runtime, diagnostics, database infrastructure, session, cache and console code. Package splitting publishes `packages/core` to `tihloh/prefab-core`.
