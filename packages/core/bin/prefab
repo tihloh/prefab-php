@@ -1,0 +1,19 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$autoload = $_composer_autoload_path ?? dirname(__DIR__, 3) . '/autoload.php';
+if (!is_file($autoload)) {
+    fwrite(STDERR, "Prefab CLI could not locate Composer autoload.php." . PHP_EOL);
+    exit(1);
+}
+
+require $autoload;
+
+$bootstrap = (getcwd() ?: '.') . DIRECTORY_SEPARATOR . 'bootstrap' . DIRECTORY_SEPARATOR . 'prefab.php';
+if (is_file($bootstrap)) {
+    require $bootstrap;
+}
+
+exit(prefab_cli($argv));
