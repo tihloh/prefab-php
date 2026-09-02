@@ -1,25 +1,48 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Record application activity and show it in a table an administrator can read.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>2. Start Logs</h2><pre><code>use Tihloh\Prefab\Logs\Services\LogManager;
-$logs = new LogManager();</code></pre><h2>3. Record an event</h2><pre><code>$entry = $logs-&gt;record([
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Audit Logs</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="logs.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Module 7</span><h1>Audit Logs</h1><p class="lead">Record structured application activity, then present the event, its details, and creation time separately.</p><h2>1. Install</h2><pre><code>composer require tihloh/prefab-logs</code></pre><h2>2. Start Logs</h2><pre><code>use Tihloh\Prefab\Logs\Services\LogManager;
+$logs = new LogManager();</code></pre><h2>3. Record a simple event</h2><pre><code>$logs-&gt;record([
 'action' =&gt; 'document.approved',
 'subject_type' =&gt; 'document',
 'subject_id' =&gt; 1001,
 'actor_id' =&gt; 1,
-'message' =&gt; 'Document was approved.',
-]);</code></pre><h2>4. Show recent activity</h2><pre><code>$recent = $logs-&gt;recent(20);
-?&gt;
-&lt;table border="1" cellpadding="8"&gt;
-&lt;tr&gt;&lt;th&gt;Action&lt;/th&gt;&lt;th&gt;Subject&lt;/th&gt;&lt;th&gt;Actor&lt;/th&gt;&lt;th&gt;Message&lt;/th&gt;&lt;/tr&gt;
-&lt;?php foreach ($recent as $log): ?&gt;
-&lt;tr&gt;&lt;td&gt;&lt;?= htmlspecialchars($log['action']) ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($log['subject_type']) ?&gt; #&lt;?= $log['subject_id'] ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= $log['actor_id'] ?? 'System' ?&gt;&lt;/td&gt;&lt;td&gt;&lt;?= htmlspecialchars($log['message'] ?? '') ?&gt;&lt;/td&gt;&lt;/tr&gt;
-&lt;?php endforeach; ?&gt;
-&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> The recorded event appears as a normal activity row.</div><h2>5. Query useful history</h2><pre><code>$logs-&gt;recent(50);
-$logs-&gt;forSubject('document', 1001);
-$logs-&gt;forActor(1);</code></pre><h2>6. Structured changes</h2><pre><code>$logs-&gt;record([
+]);</code></pre><div class="nextbox"><b>Checkpoint:</b> One structured event is now stored. Do not build the display sentence into the timestamp.</div><h2>4. Record what changed</h2><pre><code>$logs-&gt;record([
 'action' =&gt; 'user.updated',
 'subject_type' =&gt; 'user',
 'subject_id' =&gt; 25,
 'actor_id' =&gt; 7,
-'changes' =&gt; ['office' =&gt; ['old' =&gt; 'Accounting', 'new' =&gt; 'Budget']],
-]);</code></pre><h2>7. Developer tip: trace the operation</h2><pre><code>$entry = $logs-&gt;record($data);
-
-prefab_trace();</code></pre><p>Detailed mode:</p><pre><code>prefab_trace(true);</code></pre><p><code>prefab_trace()</code> is temporary developer diagnostics. Prefab Logs is persistent application/audit history; they serve different purposes.</p><h2>8. Configuration diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Files.</div><section class="interop-reference-static"><h2>Automatic logging and module coexistence</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>User writes can produce audit records.</td></tr><tr><td><code>Auth</code></td><td>Authentication activity can be recorded.</td></tr><tr><td><code>Permissions</code></td><td>Permission changes can be recorded.</td></tr><tr><td><code>Database</code></td><td>Logs can reuse shared persistence.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
+'changes' =&gt; [
+'office' =&gt; ['old' =&gt; 'Accounting', 'new' =&gt; 'Budget'],
+'active' =&gt; ['old' =&gt; false, 'new' =&gt; true],
+],
+]);</code></pre><p>Structured changes let the human view explain what happened instead of only saying that a record was updated.</p><h2>5. Human-friendly recent activity</h2><pre><code>$recent = $logs-&gt;humanRecent(
+20,
+actorResolver: fn ($id) =&gt; $users-&gt;find($id)?-&gt;name,
+subjectResolver: fn ($type, $id) =&gt; $type === 'user'
+? $users-&gt;find($id)?-&gt;name
+: null,
+);</code></pre><p>Each presented row keeps the three display concerns separate:</p><pre><code>$log['event'];      // Demo Admin updated Test User.
+$log['details'];    // before/after change rows
+$log['created_at']; // when the log record was created</code></pre><p><code>summary</code> remains a compatibility alias for <code>event</code>, but new UIs should use <code>event</code>.</p><h2>6. Build a readable activity table</h2><pre><code>&lt;table border="1" cellpadding="8"&gt;
+&lt;tr&gt;
+&lt;th&gt;Event&lt;/th&gt;
+&lt;th&gt;Details&lt;/th&gt;
+&lt;th&gt;Created&lt;/th&gt;
+&lt;/tr&gt;
+&lt;?php foreach ($recent as $log): ?&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;?= htmlspecialchars($log['event']) ?&gt;&lt;/td&gt;
+&lt;td&gt;
+&lt;?php foreach ($log['details'] as $change): ?&gt;
+&lt;div&gt;
+&lt;?= htmlspecialchars($change['field']) ?&gt;:
+&lt;?= htmlspecialchars($change['old']) ?&gt; →
+&lt;?= htmlspecialchars($change['new']) ?&gt;
+&lt;/div&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/td&gt;
+&lt;td&gt;&lt;?= htmlspecialchars((string) $log['created_at']) ?&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;?php endforeach; ?&gt;
+&lt;/table&gt;</code></pre><div class="nextbox"><b>Checkpoint:</b> Event text, change details, and creation time now have independent columns.</div><h2>7. Query useful history</h2><pre><code>$logs-&gt;recent(50);
+$logs-&gt;forSubject('document', 1001);
+$logs-&gt;forActor(1);</code></pre><h2>8. Technical vs human view</h2><p>Use <code>recent()</code> when you need the original technical audit fields. Use <code>humanRecent()</code> for an activity feed. Both come from the same stored structured record.</p><h2>9. Developer trace</h2><pre><code>$logs-&gt;record($data);
+prefab_trace();</code></pre><p>For detailed diagnostics:</p><pre><code>prefab_trace_detailed();</code></pre><p>Trace output is temporary developer diagnostics. Prefab Logs is persistent application/audit history.</p><h2>10. Configuration diagnostics</h2><pre><code>print_r($logs-&gt;explain());</code></pre><div class="nextbox"><b>Next:</b> Continue to Files.</div><section class="interop-reference-static"><h2>Automatic logging and module coexistence</h2><div class="api-table-wrap"><table class="api-table interop-table"><tbody><tr><td><code>Users</code></td><td>User writes can produce structured audit records.</td></tr><tr><td><code>Auth</code></td><td>Authentication activity can be recorded.</td></tr><tr><td><code>Permissions</code></td><td>Permission changes can be recorded.</td></tr><tr><td><code>Core Database</code></td><td>Logs can reuse shared persistence infrastructure.</td></tr></tbody></table></div></section></article></main></div><script src="assets/js/app.js"></script></body></html>
