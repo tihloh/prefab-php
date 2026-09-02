@@ -55,4 +55,13 @@ assert(env('PREFAB_SMOKE_URL') === 'https://example.com/api');
 assert(env('PREFAB_SMOKE_COPY') === 'Prefab');
 unlink($envFile);
 
+assert(val(' Hello ')->trim()->upper()->get() === 'HELLO');
+assert(val('42')->toInt()->get() === 42);
+assert(val('nope')->toInt()->fallback(0)->get() === 0);
+assert(val(null)->default('Guest')->get() === 'Guest');
+assert(val(['user' => ['name' => 'Ada']])->getPath('user.name')->get() === 'Ada');
+assert(val('09171234567')->format('phone') === '0917 123 4567');
+assert(val(1234567.5)->format('currency', ['symbol' => '₱']) === '₱1,234,567.50');
+assert(val('2026-09-02 18:30:00')->format('date') === '2026-09-02');
+
 echo "Prefab Core smoke OK\n";
