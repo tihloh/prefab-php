@@ -10,6 +10,8 @@ Core provides infrastructure shared across Prefab:
 
 - runtime, configuration, capabilities, lifecycle and fluent-extension plumbing
 - automatic `.env` loading and environment-value access
+- universal fluent values through `val()`
+- date/time convenience utilities
 - database connections, PDO adapter, transactions, parameterized SQL and lightweight query building
 - session storage through a small session contract and native PHP implementation
 - cache contracts plus in-memory and file-backed cache implementations
@@ -19,80 +21,82 @@ Core provides infrastructure shared across Prefab:
 
 Core does **not** own user management, authentication rules, permissions, audit logging, routing, validation, file management, messaging or notifications. Those remain separate feature packages.
 
-## Current architecture
+## Universal values
 
-```text
-prefab-core
-├─ Runtime / Config
-├─ Environment
-├─ Database
-├─ Session
-├─ Cache
-├─ Console
-├─ Contracts
-└─ Diagnostics
+`val()` wraps an ordinary PHP value with small fluent operations while keeping native PHP underneath.
 
-Feature packages
-├─ prefab-users
-├─ prefab-auth
-├─ prefab-permissions
-├─ prefab-logs
-├─ prefab-routes
-├─ prefab-input
-├─ prefab-files
-├─ prefab-messaging
-└─ prefab-notifications
+```php
+$name = val(' Christian ')->trim()->upper();
+$age = val('42')->toInt();
+$active = val('true')->toBool()->fallback(false);
 ```
 
-All feature packages depend on Core for shared infrastructure rather than carrying private copies of the runtime/database bootstrap. Optional integrations still use Core capabilities/contracts at runtime so feature packages remain independently useful.
+The wrapper deliberately remains fluent so an operation can be extended safely:
+
+```php
+$age = val($input)
+    ->toInt()
+    ->fallback(0);
+```
+
+Use `value()` only when external code specifically requires the native scalar/array value:
+
+```php
+$age = val('42')->toInt()->value();
+```
+
+Nested data uses `get()`:
+
+```php
+$name = val($data)
+    ->get('user.profile.name')
+    ->default('Guest');
+```
+
+Formatting is terminal and returns display text directly:
+
+```php
+echo val(12500)->format('currency', ['currency' => 'PHP']);
+echo val('09171234567')->format('phone');
+```
+
+Prefab-owned database boundaries understand `Value` objects and unwrap them automatically:
+
+```php
+$db->table('users')->insert([
+    'name' => val($_POST['name'] ?? null)->trim()->default('Unknown'),
+    'age' => val($_POST['age'] ?? null)->toInt()->fallback(0),
+]);
+
+$user = $db->table('users')
+    ->where('age', val($_GET['age'] ?? null)->toInt()->fallback(0))
+    ->first();
+```
+
+An unresolved failed conversion is not silently written to the database; the boundary propagates the failure.
 
 ## Environment (.env)
 
-Core automatically looks for a `.env` file when Composer loads Prefab. No separate dotenv package or bootstrap call is required.
-
-Example `.env`:
+Core automatically looks for a `.env` file when Composer loads Prefab. Existing process/server values win over `.env` values.
 
 ```dotenv
 APP_ENV=development
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=myapp
-DB_USER=root
-DB_PASS=secret
 DEBUG=true
 ```
 
-Use the values directly:
-
-```php
-$host = env('DB_HOST');
-$port = env('DB_PORT', 3306);
-$debug = env('DEBUG', false);
-```
-
-`prefab_env()` is also available as Prefab's explicit helper:
+Prefer Prefab's collision-safe accessor in reusable/framework-integrated code:
 
 ```php
 $host = prefab_env('DB_HOST');
+$port = prefab_env('DB_PORT', 3306);
+$debug = prefab_env('DEBUG', false);
 ```
 
-Values are also placed in the normal process environment, so `getenv('DB_HOST')` and `$_ENV['DB_HOST']` work. Existing process environment variables take precedence over `.env` values.
+Values are also available through `getenv()` and `$_ENV`. A global `env()` convenience helper may be available when another library/application has not already defined it, but reusable Prefab code should prefer `prefab_env()` to avoid global-helper ownership conflicts.
 
-Common boolean/null values are normalized by `env()` / `prefab_env()`:
-
-```dotenv
-DEBUG=true
-CACHE=false
-OPTIONAL=null
-```
-
-```php
-env('DEBUG');    // true
-env('CACHE');    // false
-env('OPTIONAL'); // null
-```
-
-Prefab searches upward from the current working directory and web document root for `.env`. A specific file can be selected with the `PREFAB_ENV_FILE` process environment variable or loaded explicitly:
+A specific dotenv file can be loaded explicitly:
 
 ```php
 use Tihloh\Prefab\Core\Environment\Env;
@@ -100,15 +104,26 @@ use Tihloh\Prefab\Core\Environment\Env;
 Env::load(__DIR__ . '/.env');
 ```
 
-## Database is now part of Core
+## Date and time
 
-The standalone `prefab-database` package has been retired from the monorepo and package splitting. New applications should use Core's database API.
+Use Prefab's explicit helper when reusable code must avoid collisions with application/framework globals:
 
-If a feature package is already installed, Core is normally already present. To use Core directly:
-
-```bash
-composer require tihloh/prefab-core
+```php
+$when = prefab_datetime('2026-09-03 08:30:00');
+echo $when->format('datetime');
 ```
+
+Date/time values can also be reached through `val()`:
+
+```php
+$when = val('2026-09-03')->toDateTime();
+```
+
+Common global names such as `now()` can conflict with helpers declared by an application or framework depending on Composer load order. Prefer the Prefab-prefixed API in reusable code.
+
+## Database
+
+Database infrastructure is part of Core. New applications should use the Core namespace:
 
 ```php
 use Tihloh\Prefab\Core\Database\DatabaseManager;
@@ -117,9 +132,7 @@ $db = new DatabaseManager(new PDO('sqlite::memory:'));
 $rows = $db->table('users')->where('active', 1)->get();
 ```
 
-Core also keeps database compatibility aliases for code migrating from the earlier database API, but new documentation and new code should use the `Tihloh\Prefab\Core\Database` namespace.
-
-Core database infrastructure intentionally stays small: named PDO connections, parameterized SQL, transactions and a lightweight query builder. It is not an ORM and does not own models, relations, migrations or schema design.
+Core intentionally stays small: named PDO connections, parameterized SQL, transactions and a lightweight query builder. It is not an ORM and does not own models, relations, migrations or schema design.
 
 ## Session
 
@@ -142,35 +155,29 @@ $cache = new FileCache(__DIR__ . '/cache');
 $users = $cache->remember('users.all', 300, fn () => loadUsers());
 ```
 
-Available lightweight stores include `ArrayCache` and `FileCache`. Core owns storage mechanics only. A feature module owns its own cache policy: whether caching is enabled, which reads are safe to cache, TTL values and invalidation after writes.
+Available lightweight stores include `ArrayCache` and `FileCache`.
 
 ## CLI
 
 Composer exposes Core's console executable as `vendor/bin/prefab`.
 
-```bash
-php vendor/bin/prefab list
-php vendor/bin/prefab help init
-php vendor/bin/prefab about
-php vendor/bin/prefab init
-```
-
-`init` creates optional project directories only when explicitly requested:
-
-```text
-config/
-bootstrap/
-storage/
-app/Console/
-```
-
-You can choose another project path:
+Linux/macOS:
 
 ```bash
-php vendor/bin/prefab init --path=/path/to/project
+./vendor/bin/prefab list
+./vendor/bin/prefab help init
+./vendor/bin/prefab init
 ```
 
-Register application or feature commands with the small helper API:
+Windows:
+
+```powershell
+.\vendor\bin\prefab list
+.\vendor\bin\prefab help init
+.\vendor\bin\prefab init
+```
+
+Register commands with:
 
 ```php
 use Tihloh\Prefab\Core\Console\Input;
@@ -180,27 +187,30 @@ prefab_command('user:create', function (Input $input, Output $output) {
     $name = $input->argument(0);
     $email = $input->option('email');
     $admin = $input->flag('admin');
-
     $output->info("Creating {$name}");
 }, 'Create a user');
 ```
 
-Run it with:
-
-```bash
-php vendor/bin/prefab user:create Juan --admin --email=juan@example.com
-```
-
-When `bootstrap/prefab.php` exists in the current project directory, the CLI loads it automatically before dispatching a command. This gives applications one place to register commands and initialize Prefab services.
-
-Core provides the command infrastructure; feature packages remain responsible for their own feature-specific commands.
+When `bootstrap/prefab.php` exists in the current project directory, the CLI loads it before dispatching a command.
 
 ## Runtime and diagnostics
 
-Core owns the canonical Prefab runtime and diagnostics. Feature modules use the Core runtime instead of shipping duplicate runtime, diagnostics or database-contract files.
+Core owns the canonical Prefab runtime and diagnostics. Feature modules use the Core runtime instead of carrying duplicate infrastructure.
 
-Useful diagnostics include module/resource inspection and tracing through the shared runtime.
+Normal trace:
+
+```php
+prefab_trace();
+```
+
+Detailed trace:
+
+```php
+prefab_trace_detailed();
+```
+
+Tracing is temporary developer diagnostics; persistent application/audit history belongs to Prefab Logs.
 
 ## Development
 
-The monorepo is the development source of truth. Core itself is now the canonical owner of the shared runtime, diagnostics, database infrastructure, session, cache, environment and console code. Package splitting publishes `packages/core` to `tihloh/prefab-core`.
+The monorepo is the development source of truth. Package splitting publishes `packages/core` to `tihloh/prefab-core`.
