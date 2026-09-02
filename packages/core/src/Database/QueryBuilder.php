@@ -41,6 +41,33 @@ final class QueryBuilder
         return $clone;
     }
 
+    public function whereIn(string $column, array $values): self
+    {
+        $this->assertIdentifier($column);
+        if ($values === []) {
+            throw new InvalidArgumentException('whereIn values cannot be empty.');
+        }
+
+        $clone = clone $this;
+        $placeholders = [];
+        foreach (array_values($values) as $value) {
+            $parameter = ':w' . count($clone->bindings);
+            $clone->bindings[$parameter] = self::unwrap($value);
+            $placeholders[] = $parameter;
+        }
+
+        $clone->wheres[] = sprintf('%s IN (%s)', $column, implode(', ', $placeholders));
+        return $clone;
+    }
+
+    public function whereNull(string $column): self
+    {
+        $this->assertIdentifier($column);
+        $clone = clone $this;
+        $clone->wheres[] = "{$column} IS NULL";
+        return $clone;
+    }
+
     public function orderBy(string $column, string $direction = 'asc'): self
     {
         $this->assertIdentifier($column);
@@ -68,6 +95,60 @@ final class QueryBuilder
     }
 
     public function first(): ?array { return $this->limit(1)->get()[0] ?? null; }
+
+    public function find(int|string $id, string $column = 'id'): ?array
+    {
+        return $this->where($column, $id)->first();
+    }
+
+    public function value(string $column): mixed
+    {
+        $this->assertIdentifier($column);
+        return PrefabRuntime::traceCall('database', 'value', ['table' => $this->table, 'column' => $column, 'bindings' => $this->bindings], function () use ($column): mixed {
+            [$sql, $bindings] = $this->limit(1)->selectSql([$column]);
+            PrefabRuntime::traceStep('database.sql', ['sql' => $sql, 'bindings' => $bindings]);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($bindings);
+            $value = $stmt->fetchColumn();
+            return $value === false ? null : $value;
+        });
+    }
+
+    public function pluck(string $column): array
+    {
+        $this->assertIdentifier($column);
+        return PrefabRuntime::traceCall('database', 'pluck', ['table' => $this->table, 'column' => $column, 'bindings' => $this->bindings], function () use ($column): array {
+            [$sql, $bindings] = $this->selectSql([$column]);
+            PrefabRuntime::traceStep('database.sql', ['sql' => $sql, 'bindings' => $bindings]);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($bindings);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+        });
+    }
+
+    public function count(): int
+    {
+        return PrefabRuntime::traceCall('database', 'count', ['table' => $this->table, 'bindings' => $this->bindings], function (): int {
+            $sql = "SELECT COUNT(*) FROM {$this->table}" . $this->whereSql();
+            PrefabRuntime::traceStep('database.sql', ['sql' => $sql, 'bindings' => $this->bindings]);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($this->bindings);
+            return (int) $stmt->fetchColumn();
+        });
+    }
+
+    public function exists(): bool
+    {
+        return PrefabRuntime::traceCall('database', 'exists', ['table' => $this->table, 'bindings' => $this->bindings], function (): bool {
+            $sql = $this->driver() === 'sqlsrv'
+                ? "SELECT TOP 1 1 FROM {$this->table}" . $this->whereSql()
+                : "SELECT 1 FROM {$this->table}" . $this->whereSql() . ' LIMIT 1';
+            PrefabRuntime::traceStep('database.sql', ['sql' => $sql, 'bindings' => $this->bindings]);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($this->bindings);
+            return $stmt->fetchColumn() !== false;
+        });
+    }
 
     public function insert(array $values): bool
     {
@@ -117,10 +198,14 @@ final class QueryBuilder
         });
     }
 
-    private function selectSql(): array
+    private function selectSql(array $columns = ['*']): array
     {
+        foreach ($columns as $column) {
+            if ($column !== '*') { $this->assertIdentifier((string) $column); }
+        }
+
         $driver = $this->driver();
-        $sql = "SELECT * FROM {$this->table}" . $this->whereSql();
+        $sql = 'SELECT ' . implode(', ', $columns) . " FROM {$this->table}" . $this->whereSql();
         if ($this->orders !== []) { $sql .= ' ORDER BY ' . implode(', ', $this->orders); }
         if ($driver === 'sqlsrv') {
             if (($this->limitValue !== null || $this->offsetValue > 0) && $this->orders === []) { $sql .= ' ORDER BY (SELECT 0)'; }
