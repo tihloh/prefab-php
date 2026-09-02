@@ -57,11 +57,36 @@ unlink($envFile);
 
 assert(val(' Hello ')->trim()->upper()->get() === 'HELLO');
 assert(val('42')->toInt()->get() === 42);
+assert(val('true')->toBool()->get() === true);
+assert(val('not-bool')->toBool()->failed() === true);
 assert(val('nope')->toInt()->fallback(0)->get() === 0);
 assert(val(null)->default('Guest')->get() === 'Guest');
+assert(val(0)->default(99)->get() === 0);
+assert(val(false)->default(true)->get() === false);
+
+$fallbackCalls = 0;
+assert(val('ready')->fallback(function () use (&$fallbackCalls): string {
+    $fallbackCalls++;
+    return 'fallback';
+})->get() === 'ready');
+assert($fallbackCalls === 0);
+assert(val(null)->fallback(function () use (&$fallbackCalls): string {
+    $fallbackCalls++;
+    return 'fallback';
+})->get() === 'fallback');
+assert($fallbackCalls === 1);
+
 assert(val(['user' => ['name' => 'Ada']])->getPath('user.name')->get() === 'Ada');
+assert(val(['user' => ['name' => null]])->getPath('user.name', 'Guest')->get() === null);
+assert(val(['user' => []])->getPath('user.name', 'Guest')->get() === 'Guest');
+assert(val('test@example.com')->isEmail());
+assert(val('192.168.1.10')->isIp());
+assert(val('https://example.com')->isUrl());
+
 assert(val('09171234567')->format('phone') === '0917 123 4567');
-assert(val(1234567.5)->format('currency', ['symbol' => '₱']) === '₱1,234,567.50');
+assert(val('09171234567')->format('phone', ['international' => true]) === '+63 917 123 4567');
+assert(val(1234567.5)->format('currency', ['currency' => 'PHP']) === '₱1,234,567.50');
+assert(val(0.125)->format('percent', ['decimals' => 1]) === '12.5%');
 assert(val('2026-09-02 18:30:00')->format('date') === '2026-09-02');
 
 echo "Prefab Core smoke OK\n";
