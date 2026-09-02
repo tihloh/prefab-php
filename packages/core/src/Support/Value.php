@@ -20,7 +20,6 @@ final class Value
     }
 
     public function value(): mixed { return $this->value; }
-    public function get(): mixed { return $this->value; }
     public function type(): string { return get_debug_type($this->value); }
     public function error(): ?Throwable { return $this->error; }
     public function ok(): bool { return $this->error === null; }
@@ -81,7 +80,8 @@ final class Value
         return $this;
     }
 
-    public function getPath(string $path, mixed $default = null): self
+    /** Read a nested array/object value using dot notation while keeping the fluent wrapper. */
+    public function get(string $path, mixed $default = null): self
     {
         $current = $this->value;
         foreach (explode('.', $path) as $part) {
@@ -91,6 +91,12 @@ final class Value
             break;
         }
         return new self($current);
+    }
+
+    /** Compatibility alias for the initial API. */
+    public function getPath(string $path, mixed $default = null): self
+    {
+        return $this->get($path, $default);
     }
 
     public function trim(): self { return $this->mapString(static fn (string $v): string => trim($v)); }
