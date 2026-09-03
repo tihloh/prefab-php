@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Core Session</title><link rel="stylesheet" href="assets/css/app.css?v=20260829-1"></head><body data-page="core-session.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Core · 5</span><h1>Session</h1><p class="lead">Core provides session storage mechanics. Authentication rules remain in Prefab Auth.</p><h2>1. Create a session store</h2><pre><code>use Tihloh\Prefab\Core\Session\NativeSession;
+
+$session = new NativeSession();</code></pre><h2>2. Read and write values</h2><pre><code>$session-&gt;set('user_id', 42);
+$id = $session-&gt;get('user_id');
+
+$session-&gt;has('user_id');
+$session-&gt;remove('user_id');</code></pre><h2>3. Flash data</h2><pre><code>$session-&gt;flash('success', 'Saved!');</code></pre><p>Flash values are intended for short-lived messages such as success or error notices between requests.</p><h2>4. Session lifecycle</h2><pre><code>$session-&gt;regenerate();
+$session-&gt;destroy();</code></pre><p>Use regeneration around identity/session transitions. Core only provides the mechanism; Auth decides when login/logout behavior should happen.</p><div class="nextbox"><b>Next:</b> Continue to Cache.</div></article></main></div><script src="assets/js/app.js?v=20260829-1"></script></body></html>
