@@ -6,6 +6,14 @@ const pages=[
 ['GETTING STARTED','install.html','Install PHP & Composer'],
 ['GETTING STARTED','packages.html','Package Availability'],
 ['GETTING STARTED','project.html','Create a Project'],
+['CORE','core.html','1. Core Overview'],
+['CORE','values.html','2. Values with val()'],
+['CORE','environment.html','3. Environment & .env'],
+['CORE','datetime.html','4. Date & Time'],
+['CORE','core-session.html','5. Session'],
+['CORE','cache.html','6. Cache'],
+['CORE','cli.html','7. CLI'],
+['CORE','runtime.html','8. Runtime & Diagnostics'],
 ['TUTORIAL','routes.html','1. Routing'],
 ['TUTORIAL','database.html','2. Database'],
 ['TUTORIAL','users.html','3. Users & Groups'],
@@ -188,4 +196,3 @@ osGrids.forEach(grid=>{
 function applyOS(os){selectedOS=os;localStorage.setItem(osKey,os);document.documentElement.dataset.os=os;document.querySelectorAll('.os-tabs button').forEach(button=>{const active=button.dataset.osChoice===os;button.classList.toggle('active',active);button.setAttribute('aria-selected',active?'true':'false');});document.querySelectorAll('.os-grid > section').forEach(panel=>{panel.hidden=panel.dataset.os!==os;});}
 document.querySelectorAll('.os-tabs button').forEach(button=>button.addEventListener('click',()=>applyOS(button.dataset.osChoice)));
 if(osGrids.length) applyOS(selectedOS);
-
