@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Core Overview</title><link rel="stylesheet" href="assets/css/app.css?v=20260829-1"></head><body data-page="core.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Core · 1</span><h1>Prefab Core</h1><p class="lead">Core is the small shared foundation used by Prefab modules. It provides common infrastructure without turning Prefab into a full framework.</p><h2>1. How Core is installed</h2><p>When you install a feature package such as Routes, Users or Logs, Composer installs <code>tihloh/prefab-core</code> automatically when that package requires it. You may also install Core directly.</p><pre><code>composer require tihloh/prefab-core</code></pre><h2>2. What Core provides</h2><pre><code>Core
+├─ Values: val()
+├─ Environment: .env and prefab_env()
+├─ Date &amp; time
+├─ Database basics
+├─ Session
+├─ Cache
+├─ CLI
+├─ Runtime / configuration
+└─ Diagnostics / trace</code></pre><p>Business features remain separate packages. Core does not own users, authentication rules, permissions, audit logs, routing, files, messaging or notifications.</p><h2>3. The intended experience</h2><p>Core is designed to make ordinary PHP shorter while keeping native PHP underneath.</p><pre><code>$age = val($_POST['age'] ?? null)
+    -&gt;toInt()
+    -&gt;fallback(0);
+
+$host = prefab_env('DB_HOST', '127.0.0.1');
+
+prefab_trace();</code></pre><div class="nextbox"><b>Next:</b> Continue to Values to learn the universal <code>val()</code> helper.</div></article></main></div><script src="assets/js/app.js?v=20260829-1"></script></body></html>
