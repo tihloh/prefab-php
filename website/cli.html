@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — CLI</title><link rel="stylesheet" href="assets/css/app.css?v=20260829-1"></head><body data-page="cli.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Core · 7</span><h1>Command Line</h1><p class="lead">Prefab Core includes a lightweight console for project and feature commands without introducing a full framework CLI.</p><h2>1. Built-in commands</h2><div class="os-grid"><section><span class="os-label">Windows</span><h2>PowerShell</h2><pre><code>.\vendor\bin\prefab list
+.\vendor\bin\prefab help init
+.\vendor\bin\prefab about
+.\vendor\bin\prefab init</code></pre></section><section><span class="os-label">Linux / macOS</span><h2>Shell</h2><pre><code>./vendor/bin/prefab list
+./vendor/bin/prefab help init
+./vendor/bin/prefab about
+./vendor/bin/prefab init</code></pre></section></div><h2>2. Initialize optional project folders</h2><pre><code>config/
+bootstrap/
+storage/
+app/Console/</code></pre><p><code>prefab init</code> creates these folders only when requested. Prefab does not require a fixed application structure.</p><h2>3. Register a command</h2><pre><code>use Tihloh\Prefab\Core\Console\Input;
+use Tihloh\Prefab\Core\Console\Output;
+
+prefab_command('user:create', function (Input $input, Output $output) {
+    $name = $input-&gt;argument(0);
+    $email = $input-&gt;option('email');
+    $admin = $input-&gt;flag('admin');
+
+    $output-&gt;info("Creating {$name}");
+}, 'Create a user');</code></pre><h2>4. Run it</h2><pre><code>./vendor/bin/prefab user:create Juan --admin --email=juan@example.com</code></pre><p>If <code>bootstrap/prefab.php</code> exists in the current project, the CLI loads it before dispatching commands.</p><div class="nextbox"><b>Next:</b> Continue to Runtime &amp; Diagnostics.</div></article></main></div><script src="assets/js/app.js?v=20260829-1"></script></body></html>
