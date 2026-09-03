@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prefab PHP — Date & Time</title><link rel="stylesheet" href="assets/css/app.css?v=20260829-1"></head><body data-page="datetime.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Core · 4</span><h1>Date &amp; Time</h1><p class="lead">Prefab Core wraps <code>DateTimeImmutable</code> with a small fluent API for common parsing, formatting, comparison and date arithmetic.</p><h2>1. Create a date value</h2><pre><code>$date = prefab_datetime('2026-09-03 08:30:00');</code></pre><p><code>prefab_datetime()</code> is the collision-safe global helper. You can also use <code>Tihloh\Prefab\Core\DateTime\Date::make()</code> directly.</p><h2>2. Format it</h2><pre><code>echo $date-&gt;date();
+echo $date-&gt;time();
+echo $date-&gt;datetime();
+echo $date-&gt;iso();</code></pre><h2>3. Add and subtract time</h2><pre><code>$nextWeek = prefab_datetime()-&gt;addDays(7);
+$yesterday = prefab_datetime()-&gt;subDays(1);</code></pre><h2>4. Compare values</h2><pre><code>$a = prefab_datetime('2026-09-01');
+$b = prefab_datetime('2026-09-10');
+
+$a-&gt;isBefore($b);
+$b-&gt;isAfter($a);
+$a-&gt;diffInDays($b);</code></pre><h2>5. Use with val()</h2><pre><code>$date = val('2026-09-03')-&gt;toDateTime();
+echo $date-&gt;format('date');</code></pre><div class="nextbox"><b>Next:</b> Continue to Session.</div></article></main></div><script src="assets/js/app.js?v=20260829-1"></script></body></html>
