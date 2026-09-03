@@ -19,6 +19,11 @@ final class Image
         $this->format = self::normalizeFormat($format);
     }
 
+    public function __destruct()
+    {
+        imagedestroy($this->image);
+    }
+
     public static function open(string $path): self
     {
         if (!is_file($path) || !is_readable($path)) {
@@ -31,8 +36,7 @@ final class Image
         }
 
         $format = self::formatFromMime((string) $info['mime']);
-        $image = self::decodeFile($path, $format);
-        $instance = new self($image, $format);
+        $instance = new self(self::decodeFile($path, $format), $format);
         $instance->sourcePath = $path;
         return $instance;
     }
@@ -60,9 +64,16 @@ final class Image
         return ImageInfo::fromFile($path);
     }
 
+    /** Generate a derivative only when the target is missing or older than the source. */
     public static function generate(string $source, string $target, callable $processor): string
     {
-        if (is_file($target) && filemtime($target) >= filemtime($source)) {
+        if (!is_file($source) || !is_readable($source)) {
+            throw new RuntimeException("Image is not readable: {$source}");
+        }
+
+        $sourceMtime = filemtime($source);
+        $targetMtime = is_file($target) ? filemtime($target) : false;
+        if ($sourceMtime !== false && $targetMtime !== false && $targetMtime >= $sourceMtime) {
             return $target;
         }
 
@@ -83,18 +94,16 @@ final class Image
 
     public function quality(int $quality): self
     {
-        $clone = clone $this;
-        $clone->quality = max(0, min(100, $quality));
-        return $clone;
+        $this->quality = max(0, min(100, $quality));
+        return $this;
     }
 
     public function format(string $format): self
     {
         $format = self::normalizeFormat($format);
         self::assertEncoderAvailable($format);
-        $clone = clone $this;
-        $clone->format = $format;
-        return $clone;
+        $this->format = $format;
+        return $this;
     }
 
     public function resize(int $width, ?int $height = null, bool $upscale = false): self
@@ -105,12 +114,9 @@ final class Image
 
         $sourceWidth = $this->width();
         $sourceHeight = $this->height();
-
-        if ($height === null) {
-            $scale = $width / $sourceWidth;
-        } else {
-            $scale = min($width / $sourceWidth, $height / $sourceHeight);
-        }
+        $scale = $height === null
+            ? $width / $sourceWidth
+            : min($width / $sourceWidth, $height / $sourceHeight);
 
         if (!$upscale) {
             $scale = min(1.0, $scale);
@@ -120,12 +126,16 @@ final class Image
         $targetHeight = max(1, (int) round($sourceHeight * $scale));
 
         if ($targetWidth === $sourceWidth && $targetHeight === $sourceHeight) {
-            return clone $this;
+            return $this;
         }
 
         $canvas = self::canvas($targetWidth, $targetHeight, $this->needsAlpha());
-        imagecopyresampled($canvas, $this->image, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight);
-        return $this->withImage($canvas);
+        if (!imagecopyresampled($canvas, $this->image, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight)) {
+            imagedestroy($canvas);
+            throw new RuntimeException('Unable to resize image.');
+        }
+
+        return $this->replaceImage($canvas);
     }
 
     public function cover(int $width, int $height, bool $upscale = false): self
@@ -150,11 +160,11 @@ final class Image
         $cropHeight = min($height, $scaledHeight);
         $sourceX = max(0, (int) floor(($scaledWidth - $cropWidth) / 2));
         $sourceY = max(0, (int) floor(($scaledHeight - $cropHeight) / 2));
-
         $canvas = self::canvas($cropWidth, $cropHeight, $this->needsAlpha());
         imagecopy($canvas, $temp, 0, 0, $sourceX, $sourceY, $cropWidth, $cropHeight);
         imagedestroy($temp);
-        return $this->withImage($canvas);
+
+        return $this->replaceImage($canvas);
     }
 
     public function thumbnail(int $width, int $height): self
@@ -179,7 +189,7 @@ final class Image
             throw new RuntimeException('Unable to crop image with the requested dimensions.');
         }
 
-        return $this->withImage($cropped);
+        return $this->replaceImage($cropped);
     }
 
     public function rotate(float $degrees): self
@@ -191,34 +201,36 @@ final class Image
         }
         imagealphablending($rotated, false);
         imagesavealpha($rotated, true);
-        return $this->withImage($rotated);
+        return $this->replaceImage($rotated);
     }
 
     public function flip(string $direction = 'horizontal'): self
     {
-        $direction = strtolower($direction);
-        $mode = match ($direction) {
+        $mode = match (strtolower($direction)) {
             'horizontal', 'h' => IMG_FLIP_HORIZONTAL,
             'vertical', 'v' => IMG_FLIP_VERTICAL,
             'both' => IMG_FLIP_BOTH,
             default => throw new InvalidArgumentException('Flip direction must be horizontal, vertical, or both.'),
         };
 
-        $clone = $this->copy();
-        imageflip($clone->image, $mode);
-        return $clone;
+        if (!imageflip($this->image, $mode)) {
+            throw new RuntimeException('Unable to flip image.');
+        }
+        return $this;
     }
 
     public function autoOrient(): self
     {
         if ($this->sourcePath === null || $this->format !== 'jpeg' || !function_exists('exif_read_data')) {
-            return clone $this;
+            return $this;
         }
 
         $exif = @exif_read_data($this->sourcePath, 'IFD0', true, false);
-        $orientation = (int) ($exif['IFD0']['Orientation'] ?? $exif['Orientation'] ?? 1);
+        $orientation = is_array($exif)
+            ? (int) ($exif['IFD0']['Orientation'] ?? $exif['Orientation'] ?? 1)
+            : 1;
 
-        return match ($orientation) {
+        match ($orientation) {
             2 => $this->flip('horizontal'),
             3 => $this->rotate(180),
             4 => $this->flip('vertical'),
@@ -226,8 +238,10 @@ final class Image
             6 => $this->rotate(90),
             7 => $this->rotate(270)->flip('horizontal'),
             8 => $this->rotate(270),
-            default => clone $this,
+            default => $this,
         };
+
+        return $this;
     }
 
     public function encode(?string $format = null, ?int $quality = null): string
@@ -279,6 +293,7 @@ final class Image
         return $path;
     }
 
+    /** Emit the processed image body and HTTP image/cache headers. Does not exit. */
     public function display(array $options = []): void
     {
         $format = isset($options['format']) ? self::normalizeFormat((string) $options['format']) : $this->format;
@@ -306,26 +321,11 @@ final class Image
         $this->writeToOutput($format, $quality, null);
     }
 
-    public function __clone()
+    private function replaceImage(GdImage $replacement): self
     {
-        $copy = imagecreatetruecolor($this->width(), $this->height());
-        imagealphablending($copy, false);
-        imagesavealpha($copy, true);
-        imagecopy($copy, $this->image, 0, 0, 0, 0, $this->width(), $this->height());
-        $this->image = $copy;
-    }
-
-    private function copy(): self
-    {
-        return clone $this;
-    }
-
-    private function withImage(GdImage $image): self
-    {
-        $clone = clone $this;
-        imagedestroy($clone->image);
-        $clone->image = $image;
-        return $clone;
+        imagedestroy($this->image);
+        $this->image = $replacement;
+        return $this;
     }
 
     private function needsAlpha(): bool
