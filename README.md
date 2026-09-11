@@ -28,7 +28,7 @@ Need permissions?   Add Permissions.
 Need audit logs?    Add Logs.
 ```
 
-You do **not** install everything. There is **no required Core package**.
+You do **not** install everything. Feature packages install the compatible shared **Prefab Core** infrastructure they need automatically; install Core directly only when your application wants Core infrastructure by itself.
 
 ## What makes Prefab different?
 
@@ -174,7 +174,7 @@ Authentication
 Auditing
 ```
 
-This is the meaning of ***Independent*** and ***Better Together***: each block remains useful on its own, while compatible blocks can provide more value when combined.
+This is the meaning of ***Independent*** and ***Better Together***: each feature block remains useful without requiring every other feature block, while compatible blocks can provide more value when combined. Shared Core infrastructure is installed transitively where required.
 
 > **Note:** Prefab is actively evolving. Documentation distinguishes established APIs from integration direction; an example should not be treated as a guarantee that every illustrated integration is available in every released package version.
 
@@ -313,16 +313,19 @@ Short code, but no hidden business policy.
 
 | I need... | Use | What it owns |
 |---|---|---|
-| Database connections / lightweight queries | [Database](packages/database/README.md) | Database infrastructure |
+| Shared runtime, database, session, cache, CLI and diagnostics | [Core](packages/core/README.md) | Shared infrastructure |
 | Existing/project-owned users | [Users](packages/users/README.md) | User mapping and management |
 | Login/logout/current user | [Auth](packages/auth/README.md) | Authentication |
 | Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
 | HTTP routing | [Routes](packages/routes/README.md) | Request routing |
 | Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
 | File storage | [Files](packages/files/README.md) | Filesystem/storage operations |
+| Image inspection/resize/crop/conversion | [Image](packages/image/README.md) | Image processing and delivery |
 | Audit/activity history | [Logs](packages/logs/README.md) | Logging |
 | Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
 | Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
+
+The standalone `prefab-database` package is retired. Database connections, transactions and lightweight query infrastructure now belong to Prefab Core.
 
 A useful distinction:
 
@@ -335,6 +338,8 @@ Notifications   = Show/store a notice inside the application
 
 Input           = Understand/validate incoming data
 Files           = Store/manage files
+Image           = Inspect/transform/deliver images
+Core Database   = Shared database infrastructure
 ```
 
 ## Start small
@@ -484,11 +489,16 @@ If you are learning Prefab, follow this order:
 5. **[Fluent Extensions](docs/fluent-extensions.md)** — understand features such as `->notify()` and `->email()`.
 6. **[Packagist / release process](docs/packagist-release.md)** — maintainer/release information.
 
+Architecture direction is also documented in:
+
+- [Prefab Logs v2](docs/logs-v2.md)
+- [Prefab Files visibility](docs/files-visibility.md)
+
 ## Integration rules
 
 These rules keep ***Better Together*** from turning into hidden framework magic:
 
-1. **Standalone first.** Every module must remain useful by itself.
+1. **Standalone first.** Every feature module must remain useful without requiring unrelated feature modules; shared Core infrastructure may be a transitive dependency.
 2. **Auto-wire infrastructure, not business policy.**
 3. **Explicit configuration always wins.**
 4. **The provider owns its fluent extension.**
