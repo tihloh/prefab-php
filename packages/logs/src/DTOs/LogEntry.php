@@ -18,6 +18,8 @@ final class LogEntry
         public ?string $userAgent = null,
         public ?string $occurredAt = null,
     ) {
+        $this->changes = self::normalizeChanges($changes);
+
         PrefabRuntime::traceStart('logs', 'entry', [
             'action' => $action,
             'subject_type' => $subjectType,
@@ -25,6 +27,7 @@ final class LogEntry
         ]);
         PrefabRuntime::traceEnd([
             'actor_id' => $actorId,
+            'changes' => count($this->changes),
         ]);
     }
 
@@ -42,6 +45,62 @@ final class LogEntry
             userAgent: $data['user_agent'] ?? $data['userAgent'] ?? null,
             occurredAt: $data['occurred_at'] ?? $data['occurredAt'] ?? null,
         );
+    }
+
+    public static function changes(array $before, array $now, array $ignore = []): array
+    {
+        $changes = [];
+        $fields = array_unique([...array_keys($before), ...array_keys($now)]);
+
+        foreach ($fields as $field) {
+            if (in_array($field, $ignore, true)) { continue; }
+
+            $old = $before[$field] ?? null;
+            $new = $now[$field] ?? null;
+
+            if (self::same($old, $new)) { continue; }
+
+            $changes[$field] = [
+                'before' => $old,
+                'now' => $new,
+            ];
+        }
+
+        return $changes;
+    }
+
+    public static function normalizeChanges(array $changes): array
+    {
+        $normalized = [];
+
+        foreach ($changes as $field => $change) {
+            if (!is_array($change)) { continue; }
+
+            $before = array_key_exists('before', $change)
+                ? $change['before']
+                : ($change['old'] ?? null);
+            $now = array_key_exists('now', $change)
+                ? $change['now']
+                : ($change['new'] ?? null);
+
+            if (self::same($before, $now)) { continue; }
+
+            $normalized[$field] = [
+                'before' => $before,
+                'now' => $now,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private static function same(mixed $before, mixed $now): bool
+    {
+        if (is_array($before) || is_array($now)) {
+            return json_encode($before) === json_encode($now);
+        }
+
+        return $before === $now;
     }
 
     public function toArray(): array
