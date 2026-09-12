@@ -2,7 +2,7 @@
 
 **Prefab Logs** provides framework-independent structured activity and audit logging for PHP applications.
 
-> Store structured facts once, then present the event, details, and time independently.
+> Store compact structured facts, then present them as a human-readable activity trail.
 
 ## Installation
 
@@ -13,25 +13,52 @@ composer require tihloh/prefab-logs
 ## Quick start
 
 ```php
+use Tihloh\Prefab\Logs\DTOs\LogEntry;
 use Tihloh\Prefab\Logs\Services\LogManager;
 
 $logs = new LogManager();
+
+$before = [
+    'office' => 'Accounting',
+    'active' => false,
+    'email' => 'user@example.com',
+];
+
+$now = [
+    'office' => 'Budget',
+    'active' => true,
+    'email' => 'user@example.com',
+];
 
 $logs->record([
     'action' => 'user.updated',
     'subject_type' => 'user',
     'subject_id' => 25,
     'actor_id' => 7,
-    'changes' => [
-        'office' => ['old' => 'Accounting', 'new' => 'Budget'],
-        'active' => ['old' => false, 'new' => true],
-    ],
+    'changes' => LogEntry::changes($before, $now),
 ]);
 ```
 
-Prefab prefers structured facts over a prebuilt display sentence. The same record can serve auditing, troubleshooting and a human activity feed.
+Only fields whose values actually changed are stored. In this example `email` is omitted automatically.
 
-## Human-friendly activity
+The stored changes are compact and explicit:
+
+```php
+[
+    'office' => [
+        'before' => 'Accounting',
+        'now' => 'Budget',
+    ],
+    'active' => [
+        'before' => false,
+        'now' => true,
+    ],
+]
+```
+
+## Human-first activity
+
+Prefab Logs is intended to produce activity that reads naturally to people, not just developers.
 
 ```php
 $human = $logs->humanRecent(
@@ -43,72 +70,155 @@ $human = $logs->humanRecent(
 );
 ```
 
-A presented record separates display concerns:
-
-```php
-$log['event'];       // Demo Admin updated Test User.
-$log['details'];     // structured friendly before/after rows
-$log['created_at'];  // log creation time
-$log['occurred_at']; // optional business/event occurrence time
-```
-
-`summary` remains a compatibility alias for `event`. New interfaces should prefer `event`.
-
-### Event is not the timestamp
-
-Do not concatenate the creation time into the human event sentence.
-
-Recommended UI:
+A presented log can read like:
 
 ```text
-Event                         Details                    Created
------------------------------------------------------------------------
-Admin updated Vendo #2        Enabled: No → Yes          2 min ago
-Admin signed in                                          8 min ago
+Christian updated Juan Dela Cruz.
 ```
 
-The application decides whether `created_at` is shown as an absolute date, a relative time, or omitted. Prefab keeps it separate from the event description.
+Its details remain separate:
 
-## Structured changes
+```text
+Office
+Accounting → Budget
+
+Active
+No → Yes
+```
+
+The presenter returns:
 
 ```php
-'changes' => [
-    'office' => [
-        'old' => 'Accounting',
-        'new' => 'Budget',
-    ],
-    'active' => [
-        'old' => false,
-        'new' => true,
-    ],
-],
+$log['event'];
+$log['details'];
+$log['created_at'];
+$log['occurred_at'];
 ```
 
-The human presenter exposes these separately from `event`:
+Each change detail contains:
 
 ```php
-foreach ($log['details'] as $change) {
-    echo $change['field'];
-    echo $change['old'];
-    echo $change['new'];
-}
+[
+    'field' => 'Office',
+    'before' => 'Accounting',
+    'now' => 'Budget',
+]
 ```
 
-Sensitive change fields such as passwords, hashes, tokens and secrets are not included in friendly change details.
+### Custom human sentence
+
+Applications may supply a message when the generic actor/action/subject sentence is not enough:
+
+```php
+$logs->record([
+    'action' => 'purchase_request.forwarded',
+    'subject_type' => 'purchase_request',
+    'subject_id' => 182,
+    'actor_id' => 7,
+    'message' => 'Christian forwarded Purchase Request PR-2026-00182 to Provincial Accounting Office',
+]);
+```
+
+When `message` is supplied, the human presenter uses it as the event sentence while the structured action, subject and actor remain available for technical use.
+
+## Update tracking
+
+Use `LogEntry::changes()` whenever an operation has before and current values:
+
+```php
+$changes = LogEntry::changes($before, $now);
+```
+
+Fields may be excluded explicitly:
+
+```php
+$changes = LogEntry::changes(
+    $before,
+    $now,
+    ['updated_at', 'last_seen_at'],
+);
+```
+
+The rules are simple:
+
+```text
+same value       → not stored
+changed value    → before + now
+new field        → None → value
+removed field    → value → None
+```
+
+Manually supplied change arrays are also normalized. Prefab accepts the older `old`/`new` shape when encountered, but stores the current canonical `before`/`now` shape and removes unchanged pairs.
 
 ## Actor and subject
 
 ```text
 Actor   → who performed the action
 Action  → what happened
-Subject → what/who was affected
+Subject → what or who was affected
 ```
 
-Resolvers can replace technical IDs with useful names. If a subject cannot be resolved, the presenter can still fall back to a type and ID such as `user #25`.
+Resolvers replace technical IDs with useful names. Without a resolver, Prefab falls back to values such as `Someone #7` and `user #25`.
+
+Typical human events include:
+
+```text
+Christian created Purchase Request PR-2026-00182.
+Christian updated Juan Dela Cruz.
+Christian approved Loan #1024.
+Christian rejected Application #85.
+Christian uploaded Requirement #12.
+Christian signed in.
+```
+
+## Sensitive fields
+
+Sensitive values should never be shown as human change details. The presenter filters common fields including:
+
+```text
+password
+password_hash
+token
+secret
+access_token
+refresh_token
+api_key
+authorization
+cookie
+```
+
+Applications should still avoid placing secrets in log metadata or changes in the first place.
+
+## Event and time are separate
+
+Do not build timestamps into the human sentence.
+
+Recommended UI:
+
+```text
+Activity                                      Time
+------------------------------------------------------------
+Christian updated Purchase Request PR-00182   2 min ago
+Christian signed in                           8 min ago
+```
+
+Selecting a row can reveal only the changed details:
+
+```text
+Christian updated Purchase Request PR-00182
+
+Amount
+₱12,000.00 → ₱15,000.00
+
+Status
+Draft → Submitted
+```
+
+The application decides whether time is absolute, relative or hidden.
 
 ## Technical view
 
-Use the normal query APIs when the original structured audit data is required:
+The original structured records remain available:
 
 ```php
 $logs->recent(50);
@@ -117,7 +227,7 @@ $logs->forSubject('user', 25);
 $logs->forActor(7);
 ```
 
-Technical records retain action, actor ID, subject type/ID, metadata, changes and timestamps.
+Technical records retain the action, actor ID, subject type/ID, structured changes, metadata and timestamps.
 
 ## Metadata
 
@@ -131,19 +241,19 @@ Project-specific context belongs in metadata:
 ],
 ```
 
-Prefab does not require every application to share the same metadata schema.
+Metadata is optional. Do not duplicate ordinary record contents into logs unnecessarily.
 
 ## Storage
 
-Logs stores records through `LogRepositoryInterface`. The built-in repository can use compatible shared database infrastructure while Logs remains responsible for its own persistence concern.
+Prefab Logs uses database-backed persistence through `LogRepositoryInterface`. The built-in repository uses compatible shared database infrastructure while Logs remains responsible for its own log records.
 
-A custom repository can be supplied directly:
+A custom repository may still be supplied directly:
 
 ```php
 $logs = new LogManager($customRepository);
 ```
 
-Or built-in database configuration can be used:
+Or database configuration can be supplied:
 
 ```php
 $logs = new LogManager([
@@ -151,7 +261,7 @@ $logs = new LogManager([
 ]);
 ```
 
-By default Logs owns only its own log storage; it does not own application user, permission or business tables.
+Logs owns only its own audit/activity data. It does not own application user, permission or business tables.
 
 ## Automatic Prefab activity
 
@@ -167,8 +277,6 @@ Logs does not perform authentication, user management or permission decisions it
 
 ## Diagnostics
 
-Use normal trace output while developing:
-
 ```php
 $logs->record($data);
 prefab_trace();
@@ -180,9 +288,7 @@ Detailed trace:
 prefab_trace_detailed();
 ```
 
-Tracing is temporary developer diagnostics. Logs is persistent application/audit history.
-
-Configuration resolution can be inspected with:
+Configuration resolution:
 
 ```php
 $info = $logs->explain();
@@ -193,6 +299,8 @@ $info = $logs->explain();
 | API | Purpose |
 |---|---|
 | `record()` | Store a structured activity/audit event |
+| `LogEntry::changes()` | Compare before/current values and keep only changed fields |
+| `LogEntry::normalizeChanges()` | Normalize manual changes to `before`/`now` and remove unchanged values |
 | `recent()` | Return recent technical records |
 | `humanRecent()` | Return human-friendly presented records |
 | `find()` | Find a record by ID |
@@ -205,7 +313,7 @@ Human presentation fields:
 | Field | Purpose |
 |---|---|
 | `event` | Human-readable event sentence |
-| `details` | Friendly structured change rows |
+| `details` | Changed fields only, presented as before → now |
 | `created_at` | Time the log record was created |
 | `occurred_at` | Optional event/business occurrence time |
 | `technical` | Original technical record |
@@ -214,18 +322,20 @@ Human presentation fields:
 ## Design philosophy
 
 ```text
-Application event
+Application action
        ↓
 structured LogEntry
        ↓
-repository
+changed fields only
        ↓
-stored once
+database
    ┌───┴─────────────┐
    ↓                 ↓
 technical        human presenter
                      ↓
-             event / details / time
+          natural event + before → now
 ```
 
-The core principle is: **record structured facts once; decide how to display them later.**
+The core principle is:
+
+> **Store structured facts compactly. Show them like a person wrote the audit trail.**
