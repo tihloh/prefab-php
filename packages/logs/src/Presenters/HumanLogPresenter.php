@@ -2,32 +2,8 @@
 
 namespace Tihloh\Prefab\Logs\Presenters;
 
-/**
- * Converts technical structured log records into compact, human-friendly data.
- *
- * Event content, change details, and creation time are deliberately separate so
- * applications can render them in independent columns or UI regions.
- */
 final class HumanLogPresenter
 {
-    /**
-     * @param array $log Raw log record returned by the repository.
-     * @param callable|null $actorResolver fn (int|string $id): ?string
-     * @param callable|null $subjectResolver fn (string $type, int|string|null $id, array $log): ?string
-     *
-     * @return array{
-     *     id:mixed,
-     *     who:string,
-     *     did:string,
-     *     what:string,
-     *     event:string,
-     *     summary:string,
-     *     details:array,
-     *     created_at:mixed,
-     *     occurred_at:mixed,
-     *     technical:array
-     * }
-     */
     public function present(array $log, ?callable $actorResolver = null, ?callable $subjectResolver = null): array
     {
         $actor = $this->resolveActor($actorResolver, $log['actor_id'] ?? null);
@@ -43,12 +19,9 @@ final class HumanLogPresenter
             'did' => $this->actionLabel($action),
             'what' => $subject,
             'event' => $event,
-            // Kept as a compatibility alias. New UIs should prefer `event`.
             'summary' => $event,
             'details' => str_starts_with($action, 'permission.') ? [] : $this->changeDetails($log['changes'] ?? []),
-            // Repository creation time is presentation metadata, never part of the event sentence.
             'created_at' => $log['created_at'] ?? $log['occurred_at'] ?? null,
-            // Business/event occurrence time remains available separately when supplied.
             'occurred_at' => $log['occurred_at'] ?? null,
             'technical' => $log,
         ];
@@ -61,31 +34,35 @@ final class HumanLogPresenter
 
     private function summary(string $action, string $actor, string $subject, string $permission, array $log): string
     {
+        if (!empty($log['message'])) { return rtrim((string) $log['message'], '.') . '.'; }
+
         return match ($action) {
             'permission.granted' => "$actor allowed $permission for $subject.",
             'permission.denied' => "$actor denied $permission for $subject.",
             'permission.cleared' => "$actor restored inherited $permission for $subject.",
-            default => $this->genericSummary($action, $actor, $subject, $log),
+            default => $this->genericSummary($action, $actor, $subject),
         };
     }
 
-    private function genericSummary(string $action, string $actor, string $subject, array $log): string
+    private function genericSummary(string $action, string $actor, string $subject): string
     {
         $verb = match (true) {
             str_contains($action, 'created') => 'created',
             str_contains($action, 'updated') => 'updated',
             str_contains($action, 'deleted') => 'deleted',
+            str_contains($action, 'approved') => 'approved',
+            str_contains($action, 'rejected') => 'rejected',
+            str_contains($action, 'submitted') => 'submitted',
+            str_contains($action, 'restored') => 'restored',
+            str_contains($action, 'uploaded') => 'uploaded',
+            str_contains($action, 'downloaded') => 'downloaded',
             str_contains($action, 'login') => 'signed in',
             str_contains($action, 'logout') => 'signed out',
-            default => $this->actionLabel($action),
+            default => strtolower($this->actionLabel($action)),
         };
 
         if (str_contains($action, 'login') || str_contains($action, 'logout')) {
             return "$actor $verb.";
-        }
-
-        if ($actor === 'Someone' && !empty($log['message'])) {
-            return (string) $log['message'];
         }
 
         return trim("$actor $verb $subject.");
@@ -128,16 +105,31 @@ final class HumanLogPresenter
     private function changeDetails(array $changes): array
     {
         $details = [];
-        $sensitiveFields = ['password', 'password_hash', 'token', 'secret'];
+        $sensitiveFields = ['password', 'password_hash', 'token', 'secret', 'access_token', 'refresh_token', 'api_key', 'authorization', 'cookie'];
+
         foreach ($changes as $field => $change) {
-            if (!is_array($change) || in_array((string) $field, $sensitiveFields, true)) { continue; }
+            if (!is_array($change) || in_array(strtolower((string) $field), $sensitiveFields, true)) { continue; }
+
+            $before = array_key_exists('before', $change) ? $change['before'] : ($change['old'] ?? null);
+            $now = array_key_exists('now', $change) ? $change['now'] : ($change['new'] ?? null);
+            if ($this->same($before, $now)) { continue; }
+
             $details[] = [
                 'field' => ucfirst($this->words((string) $field)),
-                'old' => $this->friendlyValue($change['old'] ?? null),
-                'new' => $this->friendlyValue($change['new'] ?? null),
+                'before' => $this->friendlyValue($before),
+                'now' => $this->friendlyValue($now),
             ];
         }
+
         return $details;
+    }
+
+    private function same(mixed $before, mixed $now): bool
+    {
+        if (is_array($before) || is_array($now)) {
+            return json_encode($before) === json_encode($now);
+        }
+        return $before === $now;
     }
 
     private function friendlyValue(mixed $value): string
