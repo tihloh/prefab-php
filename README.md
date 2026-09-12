@@ -491,7 +491,6 @@ If you are learning Prefab, follow this order:
 
 Architecture direction is also documented in:
 
-- [Prefab Logs v2](docs/logs-v2.md)
 - [Prefab Files visibility](docs/files-visibility.md)
 
 ## Integration rules
