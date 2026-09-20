@@ -164,7 +164,7 @@ final class ThemeManager
             . '<script src="' . $this->escape($this->asset('/theme.js')) . '" defer></script>';
     }
 
-    public function publish(?string $publicPath = null, bool $overwrite = false): array
+    public function publish(?string $publicPath = null, bool $overwrite = true): array
     {
         return PrefabRuntime::traceCall(
             'theme',
