@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [core, users, auth, permissions, logs, routes, input, files, image, messaging, notifications]
+        package: [core, users, auth, permissions, logs, routes, input, live, files, image, messaging, notifications]
 
     steps:
       - name: Checkout complete history
