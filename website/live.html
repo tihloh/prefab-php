@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Learn Prefab Live server-driven reactive PHP components."><title>Prefab PHP — Live</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="live.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Live</span><h1>Server-driven reactive UI with normal PHP.</h1><p class="lead">Prefab Live keeps component state and actions on the server. Small <code>pf:*</code> attributes connect ordinary HTML controls to PHP without requiring React, Vue, Alpine, jQuery or a frontend build step.</p><div class="callout"><b>Prefab Live is not a frontend framework.</b> Your application still owns routing, authorization, persistence and page structure. Live owns the reusable request/state/render plumbing inside a mounted component.</div><h2>1. Install Live</h2><pre><code>composer require tihloh/prefab-live</code></pre><h2>2. Create a component</h2><pre><code>&lt;?php
+
+use Tihloh\Prefab\Live\Attributes\Action;
+use Tihloh\Prefab\Live\Component;
+
+final class Counter extends Component
+{
+    public int $count = 0;
+
+    protected function mount(int $start = 0): void
+    {
+        $this-&gt;count = $start;
+    }
+
+    #[Action]
+    public function increment(): void
+    {
+        $this-&gt;count++;
+    }
+
+    public function render(): string
+    {
+        return &lt;&lt;&lt;HTML
+        &lt;button pf:click="increment"&gt;Count: {$this-&gt;count}&lt;/button&gt;
+        &lt;span pf:loading&gt;Updating...&lt;/span&gt;
+        HTML;
+    }
+}</code></pre><p>Public properties are component state. Browser requests may call only public methods explicitly marked with <code>#[Action]</code>.</p><h2>3. Register the component</h2><pre><code>use Tihloh\Prefab\Live\ComponentRegistry;
+use Tihloh\Prefab\Live\LiveManager;
+
+$registry = new ComponentRegistry();
+$registry-&gt;register('counter', Counter::class);
+
+$live = new LiveManager(
+    registry: $registry,
+    signingKey: $_ENV['PREFAB_LIVE_KEY'],
+    endpoint: '/prefab/live',
+);</code></pre><p>Use a private signing key of at least 32 bytes. The browser sends a component alias such as <code>counter</code>; it never chooses arbitrary PHP class names.</p><h2>4. Mount it in a page</h2><pre><code>&lt;?= $live-&gt;mount('counter', ['start' =&gt; 5]) ?&gt;
+
+&lt;script src="/assets/prefab-live.js" defer&gt;&lt;/script&gt;</code></pre><p>The current runtime is a small vanilla-JavaScript bridge. No JavaScript application code is required for ordinary Live actions.</p><h2>5. Handle the Live endpoint</h2><pre><code>$payload = LiveManager::decodeRequest(
+    file_get_contents('php://input') ?: ''
+);
+
+$response = $live-&gt;handle(
+    $payload,
+    $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null,
+);
+
+header('Content-Type: application/json');
+echo json_encode($response, JSON_THROW_ON_ERROR);</code></pre><p>The host application owns the HTTP route and response handling. Live restores signed state, applies permitted updates, calls the requested action and renders the next component HTML.</p><h2>6. Bind form values</h2><pre><code>&lt;form pf:submit="save"&gt;
+    &lt;input pf:model="name" value="&lt;?= htmlspecialchars($name) ?&gt;"&gt;
+    &lt;input type="checkbox" pf:model="active"&gt;
+
+    &lt;button type="submit"&gt;Save&lt;/button&gt;
+    &lt;span pf:loading&gt;Saving...&lt;/span&gt;
+&lt;/form&gt;</code></pre><p><code>pf:model</code> collects input values when a Live action is sent. Nested array paths such as <code>pf:model="filters.search"</code> are supported when the top-level public property is an array.</p><div class="nextbox"><b>Current behavior:</b> <code>pf:model</code> is action-synchronized. Automatic live/debounced requests while typing are not part of the current public behavior yet.</div><h2>7. Protect server-controlled state</h2><pre><code>use Tihloh\Prefab\Live\Attributes\Locked;
+
+#[Locked]
+public int $documentId;</code></pre><p>A signed snapshot prevents modification of previous state, while <code>#[Locked]</code> additionally prevents a browser model update from changing that public property. Authorization still belongs inside your application/action.</p><h2>8. Understand the request cycle</h2><pre><code>browser action
+    ↓
+verify signed snapshot
+    ↓
+resolve registered component
+    ↓
+restore public state
+    ↓
+apply pf:model updates
+    ↓
+call #[Action]
+    ↓
+render HTML
+    ↓
+sign next snapshot
+    ↓
+update only the component</code></pre><h2>9. Lifecycle</h2><pre><code>protected function mount(): void {}
+protected function hydrate(): void {}
+protected function dehydrate(): void {}</code></pre><p><code>mount()</code> runs on initial mounting, <code>hydrate()</code> after signed state is restored for a Live request, and <code>dehydrate()</code> at the end of the render cycle.</p><h2>10. Responsibility boundary</h2><pre><code>Prefab Live owns:
+component state + signed protocol + browser bridge + component rendering
+
+Your application owns:
+database + authorization + page routing + business rules + overall architecture</code></pre><div class="nextbox"><b>Checkpoint:</b> If clicking the counter changes only the mounted component without a full page reload or application-written AJAX code, Prefab Live is working.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
