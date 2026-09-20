@@ -135,7 +135,11 @@
                 mode: state.mode,
                 density: state.density
             })
-        }).catch(storeLocal);
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Theme preference save failed.');
+            })
+            .catch(storeLocal);
     };
 
     const apply = (source = 'api', persist = true) => {
