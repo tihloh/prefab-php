@@ -1,135 +1,188 @@
-# Packagist Release Guide
+# Packagist and Release Guide
 
-Prefab is a **single development monorepo**. `tihloh/prefab-php` is the source of truth for every module, all tests, examples, documentation and release work.
+Prefab is a **single development monorepo with unified versioning**. `tihloh/prefab-php` is the source of truth for every official module, test, example, document and release.
 
-Composer/Packagist expects an independently published package to expose that package's `composer.json` at the root of its VCS repository. Because Prefab intentionally keeps each module independently installable, release automation generates one **distribution mirror** per module from the monorepo. These mirrors are publication outputs only, not separate development repositories.
+Individual `tihloh/prefab-*` repositories are **distribution mirrors**. They exist so Composer and Packagist can install modules independently; they are not separate development projects and do not have independent release versions.
 
 ```text
-prefab-php (development monorepo)
+prefab-php (source of truth)
         │
-        ├── packages/database ──────► prefab-database mirror ──────► Packagist
-        ├── packages/users ─────────► prefab-users mirror ─────────► Packagist
-        ├── packages/auth ──────────► prefab-auth mirror ──────────► Packagist
-        ├── packages/permissions ───► prefab-permissions mirror ───► Packagist
-        └── packages/logs ──────────► prefab-logs mirror ──────────► Packagist
+        ├── packages/core ───────────► prefab-core ───────────► Packagist
+        ├── packages/users ──────────► prefab-users ──────────► Packagist
+        ├── packages/auth ───────────► prefab-auth ───────────► Packagist
+        ├── packages/permissions ────► prefab-permissions ────► Packagist
+        ├── packages/logs ───────────► prefab-logs ───────────► Packagist
+        ├── packages/routes ─────────► prefab-routes ─────────► Packagist
+        ├── packages/input ──────────► prefab-input ──────────► Packagist
+        ├── packages/live ───────────► prefab-live ───────────► Packagist
+        ├── packages/theme ──────────► prefab-theme ──────────► Packagist
+        ├── packages/files ──────────► prefab-files ──────────► Packagist
+        ├── packages/image ──────────► prefab-image ──────────► Packagist
+        ├── packages/messaging ──────► prefab-messaging ──────► Packagist
+        └── packages/notifications ──► prefab-notifications ──► Packagist
 ```
+
+The retired standalone `prefab-database` package is not part of current releases. Database infrastructure belongs to Prefab Core.
 
 ## Source-of-truth rule
 
-All changes must be made in:
+All development changes must be made in:
 
 ```text
 tihloh/prefab-php
 ```
 
-Never develop directly in a generated package mirror. If a published module needs a fix, change its source under `packages/<module>` in the monorepo, run CI, then republish the mirrors.
+Never develop directly in a generated package mirror. If a module needs a fix, update `packages/<module>` in the monorepo, run CI, then publish the mirrors again.
+
+## Unified versioning
+
+Prefab uses **one version for the entire official package family**.
+
+For a Prefab release such as `v0.2.0`:
+
+```text
+prefab-php              v0.2.0
+├── prefab-core         v0.2.0
+├── prefab-users        v0.2.0
+├── prefab-auth         v0.2.0
+├── prefab-live         v0.2.0
+├── prefab-theme        v0.2.0
+└── every other official mirror receives v0.2.0
+```
+
+A package receives the release tag even when that package's files did not change in that release. The version identifies the **Prefab release generation**, not the number of changes inside one module.
+
+This keeps cross-module compatibility understandable while Prefab modules share Core infrastructure, runtime contracts, Auto-Wiring and interoperability behavior.
+
+Do not describe official modules as having independent version lines in their documentation. Prefer wording such as “currently provides” or “current scope” instead of “Prefab Live v0.x provides”.
 
 ## Distribution mirrors
 
-Create these empty public GitHub repositories once:
+The package split workflow currently publishes these repositories:
 
-- `tihloh/prefab-database`
-- `tihloh/prefab-users`
-- `tihloh/prefab-auth`
-- `tihloh/prefab-permissions`
-- `tihloh/prefab-logs`
+```text
+tihloh/prefab-core
+tihloh/prefab-users
+tihloh/prefab-auth
+tihloh/prefab-permissions
+tihloh/prefab-logs
+tihloh/prefab-routes
+tihloh/prefab-input
+tihloh/prefab-live
+tihloh/prefab-theme
+tihloh/prefab-files
+tihloh/prefab-image
+tihloh/prefab-messaging
+tihloh/prefab-notifications
+```
 
-They are intentionally thin publication endpoints. Their `main` branches and release tags are generated from the corresponding monorepo subtrees.
+Their `main` branches and version tags are generated from corresponding `packages/<module>` subtrees.
 
 ## One-time GitHub setup
 
-Create a fine-grained personal access token with **Contents: Read and write** permission for the five distribution mirrors.
+Create each distribution repository once and give the package-split credential **Contents: Read and write** access to every mirror.
 
-Add that token to the `tihloh/prefab-php` repository as an Actions secret named:
+Add the credential to `tihloh/prefab-php` as the Actions secret:
 
 ```text
 PREFAB_SPLIT_TOKEN
 ```
 
-The workflow `.github/workflows/split-packages.yml` uses that secret to publish each `packages/<module>` subtree to its matching mirror.
+The workflow `.github/workflows/split-packages.yml` uses this token to push package subtrees and release tags.
+
+Whenever a new official module is added:
+
+1. create its `tihloh/prefab-<module>` mirror;
+2. grant `PREFAB_SPLIT_TOKEN` access;
+3. add the module to the split workflow matrix;
+4. add its Packagist package after the first successful split.
 
 ## Before a release
 
-Work normally on `develop`, then run or wait for Prefab CI. The CI verifies:
+Release from the monorepo, not from a package mirror.
 
-- all five package `composer.json` files with `composer validate --strict`;
-- PHP syntax on PHP 8.1, 8.2, 8.3 and 8.4;
-- package installation through Composer;
-- synchronization of embedded `prefab.php` and `database.php` interoperability files;
-- a SQLite full-stack integration smoke test.
+Before tagging:
 
-Before merging/releasing, the working tree should also be clean locally:
+1. ensure intended changes are on `main`;
+2. verify Prefab CI is green;
+3. verify every package `composer.json` is valid;
+4. run relevant package and integration smoke tests;
+5. confirm documentation reflects new public APIs and modules;
+6. confirm all split target repositories exist and the token can write to them.
 
-```bash
-php tools/sync-prefab-bootstrap.php
-git diff --exit-code
-```
+If local generated/synchronized files are used by a workflow, also verify the working tree is clean after running their sync tools.
 
-## First release
+## Create a release
 
-The recommended first public version is:
+Create the release tag on **`tihloh/prefab-php` only**.
 
-```text
-v0.1.0
-```
-
-After `develop` is tested and merged into `main`, create/push the tag on the **monorepo**:
+Example:
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v0.1.0 -m "Prefab PHP v0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "Prefab PHP v0.2.0"
+git push origin v0.2.0
 ```
 
-Pushing a `v*` tag runs the package publishing workflow. For each module it:
+Pushing a `v*` tag starts the package split workflow. For each module, the workflow:
 
 1. creates a subtree history from `packages/<module>`;
 2. updates the generated mirror's `main` branch;
-3. applies the same release tag to the mirror commit.
+3. applies the same Prefab release tag to that mirror commit.
 
-The workflow may also be run manually from GitHub Actions. An optional `release_tag` input can publish a version tag during a manual run.
+Release tags are immutable. The workflow intentionally refuses to move an existing package tag.
+
+The workflow can also be run manually. Its optional `release_tag` input applies one unified tag to every mirror.
 
 ## Packagist setup
 
-After the first successful mirror publication, submit each generated mirror to Packagist once:
+Each generated mirror is submitted to Packagist once. After that, enable automatic GitHub/Packagist updates so future tags are discovered normally.
 
-```text
-https://github.com/tihloh/prefab-database
-https://github.com/tihloh/prefab-users
-https://github.com/tihloh/prefab-auth
-https://github.com/tihloh/prefab-permissions
-https://github.com/tihloh/prefab-logs
-```
-
-Each mirror has its own root `composer.json`, README and MIT LICENSE after publication, so Packagist sees it as an ordinary independent Composer library while the actual development remains centralized in the monorepo.
-
-Enable Packagist/GitHub automatic updates for each mirror so later tags are discovered automatically.
-
-## Installation after publication
-
-Projects can install only what they need:
+Projects still install only the modules they need:
 
 ```bash
-composer require tihloh/prefab-database
-composer require tihloh/prefab-users
-composer require tihloh/prefab-auth
-composer require tihloh/prefab-permissions
-composer require tihloh/prefab-logs
+composer require tihloh/prefab-routes
+composer require tihloh/prefab-live
+composer require tihloh/prefab-theme
 ```
 
-Modules list compatible Prefab packages under Composer `suggest`, not `require`, so installing one block never forces unrelated Prefab blocks into the application.
+Independent installation and unified versioning solve different problems:
 
-## Versioning policy
+```text
+Independent packages
+    = install only needed capabilities
 
-Use semantic versioning:
+Unified Prefab version
+    = know which package generation was released/tested together
+```
 
-- `0.1.x` — early public API; bug fixes and incremental hardening;
-- `0.x` minor releases may still contain carefully documented API changes while Prefab matures;
-- `1.0.0` — only after the public contracts and interoperability behavior are considered stable.
+## Composer dependency ranges
 
-Because Prefab modules share interoperability contracts, release the five modules with the same version tag while those contracts are evolving. This makes compatibility easier to understand during the pre-1.0 period.
+Unified release tags do not require every internal dependency to use an exact version.
+
+Where compatibility allows it, package constraints should use an appropriate compatible range rather than forcing an exact patch version. This lets patch releases remain practical while preserving the shared Prefab release identity.
+
+## Semantic versioning policy
+
+Prefab follows semantic versioning as one package family:
+
+- `0.x` — evolving public contracts; minor releases may include documented API changes while Prefab matures;
+- patch releases — compatible fixes and hardening within the current release line;
+- `1.0.0` — when core public contracts and interoperability behavior are considered stable.
+
+Unified versioning should remain the default unless Prefab eventually reaches a scale where modules truly require independent release lifecycles. That is a future architecture decision, not something distribution mirrors imply.
 
 ## Why mirrors are necessary
 
-Prefab remains a monorepo whether or not publication mirrors exist. The mirrors solve only one packaging constraint: Packagist/Composer package discovery expects the package metadata at the repository root. Without mirrors, the alternative would be to publish one large `tihloh/prefab` package containing every module, which would prevent true independent installation of `tihloh/prefab-users`, `tihloh/prefab-auth`, and the other Lego blocks.
+Prefab remains one monorepo whether or not mirrors exist.
+
+The mirrors solve a packaging constraint: Composer/Packagist expects an installable package's `composer.json` at the root of its VCS repository. Mirrors let users install modules independently without splitting development ownership or versioning:
+
+```text
+one source of truth
++
+independently installable packages
++
+one Prefab release version
+```
