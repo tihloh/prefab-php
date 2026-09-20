@@ -22,8 +22,10 @@ const pages=[
 ['TUTORIAL','permissions.html','6. Permissions'],
 ['TUTORIAL','logs.html','7. Audit Logs'],
 ['TUTORIAL','files.html','8. Files'],
-['TUTORIAL','notifications.html','9. Notifications'],
-['TUTORIAL','messaging.html','10. Messaging'],
+['TUTORIAL','live.html','9. Live'],
+['TUTORIAL','theme.html','10. Theme'],
+['TUTORIAL','notifications.html','11. Notifications'],
+['TUTORIAL','messaging.html','12. Messaging'],
 ['REFERENCE','config.html','Shared Configuration'],
 ['REFERENCE','sessions.html','Session Isolation'],
 ['REFERENCE','autowiring.html','Auto-Wiring'],
@@ -95,6 +97,37 @@ const apiReferences={
   rows:[
     ['FileManager','add(name, disk)','Register a named storage disk.'],['FileManager','hasDisk(name), names()','Inspect registered disks.'],['FileManager','useDefault(name), defaultName()','Switch/read the default disk.'],['FileManager','disk(name?)','Access the selected DiskInterface directly.'],['FileManager','on(event, listener)','Listen for stored, deleted, copied and moved lifecycle events.'],['FileManager','put(path, contents, disk/options?, options=[])','Store string contents. Supports collision policies.'],['FileManager','putStream(path, stream, disk/options?, options=[])','Store from a readable stream without loading the whole file into memory.'],['FileManager','putFile(sourcePath, targetPath, disk/options?, options=[])','Copy an existing local file into managed storage.'],['FileManager','storeUploaded(upload, directory, name?, disk/options?, options=[])','Store an upload-like object such as Prefab Input UploadedFile.'],['FileManager','read(path, disk?)','Read a file into a string.'],['FileManager','readStream(path, disk?)','Open a readable file stream.'],['FileManager','exists(path, disk?)','Check whether a file exists.'],['FileManager','download(path, filename?, inline?, disk?)','Create a FileDownload object for HTTP streaming.'],['FileManager','delete(path, disk?)','Delete a stored file.'],['FileManager','copy(from, to, disk/options?, options=[])','Copy a file on a disk.'],['FileManager','move(from, to, disk/options?, options=[])','Move/rename a file on a disk.'],['FileManager','info(path, disk?)','Return FileInfo metadata.'],['FileManager','checksum(path, algorithm="sha256", disk?)','Calculate a file checksum.'],['FileManager','size(path, disk?)','Return file size in bytes.'],['FileManager','directorySize(directory, disk?)','Calculate total bytes in a directory.'],['FileManager','usage(disk?)','Return total disk-root usage.'],['FileManager','path(path, disk?)','Return the disk-specific physical/absolute path when supported.'],['FileManager','url(path, disk?)','Return a public URL when the disk provides one.'],['FileManager','supports(capability, disk?)','Ask whether the disk supports a capability.'],['FileManager','files(directory, recursive, disk?)','List files.'],['FileManager','directories(directory, recursive, disk?)','List directories.'],['FileManager','directoryExists(directory, disk?)','Check whether a directory exists.'],['FileManager','makeDirectory(directory, disk?)','Create a directory.'],['FileManager','deleteDirectory(directory, recursive, disk?)','Delete a directory.'],['FileManager','temporaryUrl(path, expires, disk?)','Create a signed temporary application URL for a private file.'],['FileManager','verifyTemporaryUrl(path, expires, signature, disk?)','Verify temporary URL signature, expiry and file existence.'],['FileManager','uniqueName(extension?)','Generate a cryptographically random storage filename.'],
     ['FileInfo','path(), name(), filename(), directory(), extension()','Read normalized path/name metadata.'],['FileInfo','size(), mime(), modifiedAt(), url(), checksum()','Read stored-file metadata.'],['FileInfo','toArray()','Export all FileInfo fields.'],['DiskInterface','put/read/stream/exists/delete/copy/move/info/checksum/...','Contract implemented by storage adapters such as LocalDisk.'],['FileDownload','stream(), filename(), size(), mime(), inline()','Read the download stream and response metadata.'],['FileDownload','headers()','Return Content-Type, Content-Length and Content-Disposition headers for the host HTTP layer.']
+  ]},
+'live.html':{
+  intro:'Prefab Live provides server-driven reactive components. Component is the base class, ComponentRegistry resolves safe aliases, and LiveManager owns mounting and the signed request/response cycle.',
+  rows:[
+    ['Component','render()','Return the component HTML for the current server-side state.'],
+    ['Component','errors(field?) / error(field)','Read the component error bag while rendering validation feedback.'],
+    ['ComponentRegistry','register(name, resolver)','Register a component alias using a class name or factory.'],
+    ['ComponentRegistry','has(name) / names()','Inspect registered component aliases.'],
+    ['ComponentRegistry','make(name)','Resolve a registered alias into a Component instance.'],
+    ['LiveManager','mount(name, params=[])','Run the initial mount lifecycle and return the signed component wrapper plus rendered HTML.'],
+    ['LiveManager','handle(payload, csrfToken?)','Verify signed state, restore the component, apply model updates, call an allowed action, render and return the next signed state.'],
+    ['LiveManager','decodeRequest(json)','Decode and validate the JSON request body for a Live endpoint.'],
+    ['#[Action]','method attribute','Explicitly expose a public component method to browser-triggered Live actions.'],
+    ['#[Locked]','property attribute','Prevent browser model updates from changing server-controlled public state.']
+  ]},
+'theme.html':{
+  intro:'Prefab Theme manages application appearance policy while keeping application markup Bootstrap-compatible. ThemeManager is the main application API; ThemeInstaller manages downloaded theme ZIPs.',
+  rows:[
+    ['ThemeManager','resolve(userPreferences=[])','Resolve application defaults and allowed user preferences into a ThemeAppearance value.'],
+    ['ThemeManager','apply(userPreferences=[])','Resolve and remember the effective appearance once for the current request.'],
+    ['ThemeManager','appearance()','Read the current effective ThemeAppearance.'],
+    ['ThemeManager','installed() / available()','Inspect installed themes and themes currently enabled by application policy.'],
+    ['ThemeManager','attributes()','Render HTML attributes such as the Bootstrap color-mode attribute for the current appearance.'],
+    ['ThemeManager','styles()','Render active theme CSS; inline assets are the default.'],
+    ['ThemeManager','scripts()','Render Theme client configuration and browser runtime.'],
+    ['ThemeManager','publish(publicPath?, overwrite=true)','Optionally publish static Theme assets when published asset mode is selected.'],
+    ['ThemeManager','installer(themesPath?)','Create the downloaded-theme installer.'],
+    ['ThemeManager','refresh()','Reload theme discovery after installing or removing a theme.'],
+    ['ThemeManager','explain(userPreferences=[])','Return diagnostics for effective appearance, policy, installed themes and registry errors.'],
+    ['ThemeInstaller','installZip(archive, replace=false)','Install a validated theme ZIP into application theme storage.'],
+    ['ThemeInstaller','uninstall(id)','Remove an installed external theme.']
   ]},
 'notifications.html':{
   intro:'NotificationManager is the application API. Notification is the value object. NotificationStoreInterface allows persistent or custom stores.',
