@@ -1,0 +1,28 @@
+{
+  "name": "tihloh/prefab-live",
+  "description": "Server-driven reactive PHP components for Prefab PHP with signed state, explicit actions and a tiny browser runtime.",
+  "keywords": ["php", "reactive", "components", "livewire", "ajax", "prefab", "modular", "framework-independent"],
+  "homepage": "https://github.com/tihloh/prefab-php",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {"name": "Christian Bustamante"}
+  ],
+  "support": {
+    "issues": "https://github.com/tihloh/prefab-php/issues",
+    "source": "https://github.com/tihloh/prefab-php"
+  },
+  "require": {
+    "php": ">=8.1",
+    "tihloh/prefab-core": "^0.4 || ^0.5"
+  },
+  "suggest": {
+    "tihloh/prefab-routes": "Optional routing integration for the Prefab Live endpoint.",
+    "tihloh/prefab-input": "Optional validation and normalization for component actions."
+  },
+  "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Live\\": "src/"
+    }
+  }
+}
