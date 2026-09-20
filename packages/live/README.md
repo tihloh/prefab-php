@@ -4,7 +4,7 @@
 
 > Keep application state and actions in PHP. Use small `pf:*` attributes to connect the browser to the server.
 
-Prefab Live v0.1 focuses on the core reactive loop:
+Prefab Live currently focuses on the core reactive loop:
 
 - PHP component classes;
 - public component state;
@@ -181,7 +181,7 @@ final class ProfileForm extends Component
 }
 ```
 
-In v0.1, `pf:model` values are collected when a Live action is sent. Automatic live/debounced model requests are intentionally deferred to a later version.
+Currently, `pf:model` values are collected when a Live action is sent. Automatic live/debounced model requests are intentionally deferred to a later version.
 
 Nested array paths are supported:
 
@@ -325,7 +325,7 @@ The browser runtime sends the token in `X-CSRF-Token`.
 
 ## 14. State types
 
-Prefab Live v0.1 public state is intentionally simple:
+Prefab Live public state is intentionally simple:
 
 ```text
 null
@@ -367,7 +367,7 @@ Example response:
 }
 ```
 
-## 16. v0.1 responsibility boundary
+## 16. Responsibility boundary
 
 Prefab Live owns:
 
