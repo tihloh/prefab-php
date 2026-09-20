@@ -5,46 +5,51 @@ declare(strict_types=1);
 namespace Tihloh\Prefab\Theme;
 
 use RuntimeException;
+use Tihloh\Prefab\PrefabConfig;
+use Tihloh\Prefab\PrefabRuntime;
 
 final class ThemeManager
 {
     private ThemeRegistry $registry;
     private ThemeResolver $resolver;
     private string $packageRoot;
-    private array $config;
+    private array $localConfig;
+    private array $config = [];
+    private array $sources = [];
 
     public function __construct(array $config = [], ?ThemeRegistry $registry = null)
     {
         $this->packageRoot = dirname(__DIR__);
-        $this->config = array_replace_recursive([
-            'default' => 'default',
-            'mode' => 'light',
-            'density' => 'comfortable',
-            'densities' => ['comfortable', 'compact'],
-            'themes' => [],
-            'user' => [
-                'enabled' => false,
-                'theme' => false,
-                'mode' => false,
-                'density' => false,
-            ],
-            'public_path' => null,
-            'asset_url' => '/assets/prefab-theme',
-            'save_url' => null,
-        ], $config);
+        $this->localConfig = $config;
+        $this->registry = $registry ?? new ThemeRegistry();
 
-        $paths = [$this->packageRoot . '/themes'];
-        if (is_string($this->config['public_path']) && $this->config['public_path'] !== '') {
-            $paths[] = rtrim($this->config['public_path'], DIRECTORY_SEPARATOR) . '/themes';
+        $this->configureState();
+        PrefabRuntime::register('theme', $this);
+    }
+
+    public function prefabConfigure(): void
+    {
+        $this->configureState();
+
+        foreach ($this->sources as $resource => $source) {
+            PrefabRuntime::recordResolution('theme', $resource, $source);
         }
 
-        $this->registry = $registry ?? new ThemeRegistry($paths);
-        $this->resolver = new ThemeResolver($this->registry, $this->config);
+        PrefabRuntime::provide(
+            'theme_manager',
+            $this,
+            'prefab-theme',
+        );
     }
 
     public function resolve(array $userPreferences = []): ThemeAppearance
     {
-        return $this->resolver->resolve($userPreferences);
+        return PrefabRuntime::traceCall(
+            'theme',
+            'resolve',
+            ['user_preferences' => array_keys($userPreferences)],
+            fn (): ThemeAppearance => $this->resolver->resolve($userPreferences),
+        );
     }
 
     /** @return array<string, ThemeDefinition> */
@@ -77,6 +82,7 @@ final class ThemeManager
     {
         $enabled = $this->resolver->enabledThemes();
         $entry = $enabled[$appearance->theme] ?? null;
+
         if (!$entry) {
             throw new RuntimeException("Theme is not enabled: {$appearance->theme}");
         }
@@ -87,18 +93,27 @@ final class ThemeManager
             '<link rel="stylesheet" href="' . $this->escape($this->asset('/core.css')) . '" data-prefab-core>',
         ];
 
+        if ($this->adminComponentsEnabled()) {
+            $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->asset('/admin.css')) . '" data-prefab-admin>';
+        }
+
         if ($theme->base !== null) {
             $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->themeAsset($theme, $theme->base)) . '" data-prefab-theme-base>';
         }
 
         foreach (['light', 'dark'] as $mode) {
             $file = $theme->modeFile($mode);
-            if ($file === null || !in_array($mode, $entry['modes'], true)) { continue; }
+
+            if ($file === null || !in_array($mode, $entry['modes'], true)) {
+                continue;
+            }
+
             $media = match ($appearance->mode) {
                 'system' => "(prefers-color-scheme: {$mode})",
                 $mode => 'all',
                 default => 'not all',
             };
+
             $lines[] = sprintf(
                 '<link rel="stylesheet" href="%s" media="%s" data-prefab-theme-mode="%s">',
                 $this->escape($this->themeAsset($theme, $file)),
@@ -108,9 +123,16 @@ final class ThemeManager
         }
 
         foreach ($entry['modes'] as $mode) {
-            if (in_array($mode, ['light', 'dark'], true)) { continue; }
+            if (in_array($mode, ['light', 'dark'], true)) {
+                continue;
+            }
+
             $file = $theme->modeFile($mode);
-            if ($file === null || $appearance->mode !== $mode) { continue; }
+
+            if ($file === null || $appearance->mode !== $mode) {
+                continue;
+            }
+
             $lines[] = sprintf(
                 '<link rel="stylesheet" href="%s" data-prefab-theme-mode="%s">',
                 $this->escape($this->themeAsset($theme, $file)),
@@ -124,7 +146,16 @@ final class ThemeManager
     public function scripts(ThemeAppearance $appearance): string
     {
         $config = $this->clientConfig($appearance);
-        $json = json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        $json = json_encode(
+            $config,
+            JSON_UNESCAPED_SLASHES
+            | JSON_UNESCAPED_UNICODE
+            | JSON_HEX_TAG
+            | JSON_HEX_AMP
+            | JSON_HEX_APOS
+            | JSON_HEX_QUOT,
+        );
+
         if ($json === false) {
             throw new RuntimeException('Unable to encode Prefab Theme client configuration.');
         }
@@ -135,25 +166,45 @@ final class ThemeManager
 
     public function publish(?string $publicPath = null, bool $overwrite = false): array
     {
-        $publicPath ??= is_string($this->config['public_path']) ? $this->config['public_path'] : null;
-        if (!$publicPath) {
-            throw new RuntimeException('Prefab Theme public_path is required to publish assets.');
-        }
+        return PrefabRuntime::traceCall(
+            'theme',
+            'publish',
+            ['overwrite' => $overwrite],
+            function () use ($publicPath, $overwrite): array {
+                $publicPath ??= is_string($this->config['public_path'])
+                    ? $this->config['public_path']
+                    : null;
 
-        $written = (new ThemePublisher($this->packageRoot))->publish($publicPath, $overwrite);
-        $this->registry->addPath(rtrim($publicPath, DIRECTORY_SEPARATOR) . '/themes')->refresh();
-        return $written;
+                if (!$publicPath) {
+                    throw new RuntimeException('Prefab Theme public_path is required to publish assets.');
+                }
+
+                $written = (new ThemePublisher($this->packageRoot))
+                    ->publish($publicPath, $overwrite);
+
+                $this->registry
+                    ->addPath(rtrim($publicPath, DIRECTORY_SEPARATOR) . '/themes')
+                    ->refresh();
+
+                return $written;
+            },
+        );
     }
 
     public function installer(?string $themesPath = null): ThemeInstaller
     {
         if ($themesPath === null) {
-            $publicPath = is_string($this->config['public_path']) ? $this->config['public_path'] : null;
+            $publicPath = is_string($this->config['public_path'])
+                ? $this->config['public_path']
+                : null;
+
             if (!$publicPath) {
                 throw new RuntimeException('Prefab Theme public_path is required to install themes.');
             }
+
             $themesPath = rtrim($publicPath, DIRECTORY_SEPARATOR) . '/themes';
         }
+
         return new ThemeInstaller($themesPath);
     }
 
@@ -166,29 +217,83 @@ final class ThemeManager
     public function explain(array $userPreferences = []): array
     {
         $appearance = $this->resolve($userPreferences);
+
         return [
             'appearance' => $appearance->toArray(),
             'installed' => array_keys($this->installed()),
             'enabled' => array_keys($this->available()),
+            'components' => (array) $this->config['components'],
             'registry_errors' => $this->registry->errors(),
             'user_policy' => $this->resolver->userPolicy(),
+            'runtime' => PrefabRuntime::explainData('theme'),
         ];
+    }
+
+    public function config(): array
+    {
+        return $this->config;
+    }
+
+    private function configureState(): void
+    {
+        $defaults = self::defaults();
+        $config = [];
+        $sources = [];
+
+        foreach ($defaults as $key => $default) {
+            $resolved = PrefabConfig::resolve(
+                'theme',
+                $key,
+                $this->localConfig,
+                $default,
+            );
+
+            $value = $resolved['value'];
+
+            if (is_array($default) && is_array($value)) {
+                $value = array_replace_recursive($default, $value);
+            }
+
+            $config[$key] = $value;
+            $sources[$key] = (string) $resolved['source'];
+        }
+
+        $this->config = $config;
+        $this->sources = $sources;
+
+        $this->registry->addPath($this->packageRoot . '/themes');
+
+        if (is_string($this->config['public_path']) && $this->config['public_path'] !== '') {
+            $this->registry->addPath(
+                rtrim($this->config['public_path'], DIRECTORY_SEPARATOR) . '/themes',
+            );
+        }
+
+        $this->resolver = new ThemeResolver($this->registry, $this->config);
     }
 
     private function clientConfig(ThemeAppearance $appearance): array
     {
         $themes = [];
+
         foreach ($this->resolver->enabledThemes() as $id => $entry) {
             /** @var ThemeDefinition $theme */
             $theme = $entry['theme'];
             $modes = [];
+
             foreach ($entry['modes'] as $mode) {
                 $file = $theme->modeFile($mode);
-                if ($file !== null) { $modes[$mode] = $this->themeAsset($theme, $file); }
+
+                if ($file !== null) {
+                    $modes[$mode] = $this->themeAsset($theme, $file);
+                }
             }
+
             $themes[$id] = [
                 'name' => $theme->name,
-                'base' => $theme->base !== null ? $this->themeAsset($theme, $theme->base) : null,
+                'base' => $theme->base !== null
+                    ? $this->themeAsset($theme, $theme->base)
+                    : null,
                 'modes' => $modes,
             ];
         }
@@ -202,18 +307,61 @@ final class ThemeManager
         ];
     }
 
+    private function adminComponentsEnabled(): bool
+    {
+        return (bool) (
+            is_array($this->config['components'])
+                ? ($this->config['components']['admin'] ?? false)
+                : false
+        );
+    }
+
     private function themeAsset(ThemeDefinition $theme, string $file): string
     {
-        return $this->asset('/themes/' . rawurlencode($theme->id) . '/' . str_replace(DIRECTORY_SEPARATOR, '/', $file));
+        return $this->asset(
+            '/themes/'
+            . rawurlencode($theme->id)
+            . '/'
+            . str_replace(DIRECTORY_SEPARATOR, '/', $file),
+        );
     }
 
     private function asset(string $path): string
     {
-        return rtrim((string) $this->config['asset_url'], '/') . '/' . ltrim($path, '/');
+        return rtrim((string) $this->config['asset_url'], '/')
+            . '/'
+            . ltrim($path, '/');
     }
 
     private function escape(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return htmlspecialchars(
+            $value,
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8',
+        );
+    }
+
+    private static function defaults(): array
+    {
+        return [
+            'default' => 'default',
+            'mode' => 'light',
+            'density' => 'comfortable',
+            'densities' => ['comfortable', 'compact'],
+            'themes' => [],
+            'user' => [
+                'enabled' => false,
+                'theme' => false,
+                'mode' => false,
+                'density' => false,
+            ],
+            'components' => [
+                'admin' => false,
+            ],
+            'public_path' => null,
+            'asset_url' => '/assets/prefab-theme',
+            'save_url' => null,
+        ];
     }
 }
