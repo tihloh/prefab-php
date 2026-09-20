@@ -34,43 +34,68 @@
         if (mode === 'light' || mode === 'dark') root.dataset.bsTheme = mode;
     };
 
-    const syncLinks = () => {
+    const createThemeAsset = (value, mode = null, media = null) => {
+        const inline = config.assetMode !== 'published';
+        const node = document.createElement(inline ? 'style' : 'link');
+
+        if (inline) {
+            node.textContent = value || '';
+        } else {
+            node.rel = 'stylesheet';
+            node.href = value || '';
+        }
+
+        if (mode !== null) node.dataset.prefabThemeMode = mode;
+        else node.dataset.prefabThemeBase = '';
+
+        if (media !== null) node.media = media;
+
+        return node;
+    };
+
+    const syncThemeAssets = () => {
         const theme = config.themes?.[state.theme];
         if (!theme) return false;
 
         const base = document.querySelector('[data-prefab-theme-base]');
         if (theme.base) {
-            if (base) base.href = theme.base;
-            else {
-                const link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = theme.base;
-                link.dataset.prefabThemeBase = '';
-                document.head.appendChild(link);
+            const inline = config.assetMode !== 'published';
+            const valid = base && (
+                (inline && base.tagName === 'STYLE')
+                || (!inline && base.tagName === 'LINK')
+            );
+
+            if (valid) {
+                if (inline) base.textContent = theme.base;
+                else base.href = theme.base;
+            } else {
+                base?.remove();
+                document.head.appendChild(createThemeAsset(theme.base));
             }
-        } else if (base) {
-            base.remove();
+        } else {
+            base?.remove();
         }
 
-        document.querySelectorAll('[data-prefab-theme-mode]').forEach(link => link.remove());
+        document
+            .querySelectorAll('[data-prefab-theme-mode]')
+            .forEach(node => node.remove());
+
         const modes = theme.modes || {};
 
         if (state.mode === 'system') {
             for (const mode of ['light', 'dark']) {
                 if (!modes[mode]) continue;
-                const link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = modes[mode];
-                link.media = '(prefers-color-scheme: ' + mode + ')';
-                link.dataset.prefabThemeMode = mode;
-                document.head.appendChild(link);
+
+                document.head.appendChild(createThemeAsset(
+                    modes[mode],
+                    mode,
+                    '(prefers-color-scheme: ' + mode + ')'
+                ));
             }
         } else if (modes[state.mode]) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = modes[state.mode];
-            link.dataset.prefabThemeMode = state.mode;
-            document.head.appendChild(link);
+            document.head.appendChild(
+                createThemeAsset(modes[state.mode], state.mode)
+            );
         }
 
         return true;
@@ -110,14 +135,18 @@
                 mode: state.mode,
                 density: state.density
             })
-        }).catch(storeLocal);
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Theme preference save failed.');
+            })
+            .catch(storeLocal);
     };
 
     const apply = (source = 'api', persist = true) => {
         root.dataset.theme = state.theme;
         root.dataset.mode = state.mode;
         root.dataset.density = state.density;
-        syncLinks();
+        syncThemeAssets();
         syncBootstrap();
         dispatch(source);
         if (persist) save();
