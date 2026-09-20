@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Learn Prefab Theme appearance policy and Bootstrap admin UI."><title>Prefab PHP — Theme</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="theme.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Theme</span><h1>Shared appearance policy without theme-specific application markup.</h1><p class="lead">Prefab Theme adds theme, light/dark/system mode, density, user preference policy and optional reusable admin structures to normal Bootstrap applications.</p><div class="callout"><b>Keep normal Bootstrap markup.</b> Themes change semantic Prefab tokens and Bootstrap presentation. Application pages should not be rewritten with theme-specific classes.</div><h2>1. Install Theme</h2><pre><code>composer require tihloh/prefab-theme</code></pre><p>Prefab Core is installed transitively. Bootstrap remains an application dependency.</p><h2>2. Configure application policy</h2><pre><code>use Tihloh\Prefab\Theme\ThemeManager;
+
+$themes = new ThemeManager([
+    'default' =&gt; 'default',
+    'mode' =&gt; 'system',
+    'density' =&gt; 'comfortable',
+    'themes' =&gt; [
+        'default' =&gt; ['modes' =&gt; ['light', 'dark']],
+    ],
+    'user' =&gt; [
+        'enabled' =&gt; true,
+        'theme' =&gt; false,
+        'mode' =&gt; true,
+        'density' =&gt; true,
+    ],
+]);</code></pre><p>The application decides which themes are enabled and which appearance settings a user is allowed to change.</p><h2>3. Apply user appearance once</h2><pre><code>$themes-&gt;apply($userAppearance ?? []);</code></pre><p>A missing user value inherits the application default. Direct application policy always wins over user preferences.</p><h2>4. Render Theme in the layout</h2><pre><code>&lt;!doctype html&gt;
+&lt;html &lt;?= $themes-&gt;attributes() ?&gt;&gt;
+&lt;head&gt;
+    &lt;link rel="stylesheet" href="/assets/bootstrap.min.css"&gt;
+    &lt;?= $themes-&gt;styles() ?&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;!-- normal Bootstrap markup --&gt;
+
+    &lt;script src="/assets/bootstrap.bundle.min.js"&gt;&lt;/script&gt;
+    &lt;?= $themes-&gt;scripts() ?&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre><p>Theme defaults to inline package assets, so normal usage does not require a publish/copy step.</p><h2>5. Keep application markup theme-independent</h2><pre><code>&lt;div class="card"&gt;
+    &lt;div class="card-body"&gt;
+        &lt;input class="form-control" type="text"&gt;
+        &lt;button class="btn btn-primary"&gt;Save&lt;/button&gt;
+    &lt;/div&gt;
+&lt;/div&gt;</code></pre><p>Avoid classes such as <code>win11-card</code> or <code>dark-input</code>. The active theme should change appearance without changing business-page markup.</p><h2>6. Add user controls anywhere</h2><pre><code>&lt;button pf:theme="default"&gt;Default&lt;/button&gt;
+
+&lt;button pf:theme-mode="light"&gt;Light&lt;/button&gt;
+&lt;button pf:theme-mode="dark"&gt;Dark&lt;/button&gt;
+&lt;button pf:theme-mode="system"&gt;System&lt;/button&gt;
+&lt;button pf:theme-mode="toggle"&gt;Toggle&lt;/button&gt;
+
+&lt;button pf:theme-density="comfortable"&gt;Comfortable&lt;/button&gt;
+&lt;button pf:theme-density="compact"&gt;Compact&lt;/button&gt;</code></pre><p>These controls respect application policy. The generic <code>pf:mode</code> namespace remains free for broader Prefab use.</p><h2>7. Persist appearance</h2><pre><code>$themes = new ThemeManager([
+    'save_url' =&gt; '/account/appearance',
+]);</code></pre><p>When <code>save_url</code> is configured, browser changes are POSTed to the application. Otherwise Theme can persist browser preference through <code>localStorage</code>.</p><h2>8. Optional admin structures</h2><pre><code>'components' =&gt; [
+    'admin' =&gt; true,
+],</code></pre><p>The optional admin layer supplies application-level structures that Bootstrap does not define, such as <code>pf-shell</code>, <code>pf-sidebar</code>, <code>pf-topbar</code>, <code>pf-page</code>, <code>pf-panel</code>, <code>pf-status</code> and <code>pf-timeline</code>.</p><pre><code>&lt;div class="pf-shell"&gt;
+    &lt;aside class="pf-sidebar"&gt;...&lt;/aside&gt;
+    &lt;div class="pf-workspace"&gt;
+        &lt;header class="pf-topbar"&gt;...&lt;/header&gt;
+        &lt;main class="pf-main"&gt;...&lt;/main&gt;
+    &lt;/div&gt;
+&lt;/div&gt;</code></pre><p>If the sidebar or topbar is omitted, the remaining layout naturally occupies the free space; no <code>no-sidebar</code> or <code>no-topbar</code> class is required.</p><h2>9. Optional published assets</h2><p>Inline assets are the default. Static publishing is available only when the deployment specifically wants files/CDN serving:</p><pre><code>$themes = new ThemeManager([
+    'asset_mode' =&gt; 'published',
+    'public_path' =&gt; __DIR__ . '/public/assets/prefab-theme',
+    'asset_url' =&gt; '/assets/prefab-theme',
+]);
+
+$themes-&gt;publish();</code></pre><h2>10. Diagnostics</h2><pre><code>$themes-&gt;explain($userAppearance ?? []);</code></pre><p>This reports effective appearance, enabled/installed themes, registry errors and user policy.</p><div class="nextbox"><b>Checkpoint:</b> Switch between light/dark/system modes without changing application markup. The same Bootstrap page should follow the active Prefab theme automatically.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
