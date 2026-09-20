@@ -94,25 +94,31 @@ This publishes the core CSS/JS and the bundled fallback theme outside `vendor/`,
 
 ## Render
 
+Apply user appearance once per request when preferences are available:
+
 ```php
-$appearance = $themes->resolve($userAppearance ?? []);
+$themes->apply($userAppearance ?? []);
 ```
+
+Then render without passing the appearance repeatedly:
 
 ```php
 <!doctype html>
-<html <?= $themes->attributes($appearance) ?>>
+<html <?= $themes->attributes() ?>>
 <head>
     <link rel="stylesheet" href="/assets/bootstrap.min.css">
-    <?= $themes->styles($appearance) ?>
+    <?= $themes->styles() ?>
 </head>
 <body>
     <!-- Normal Bootstrap markup -->
 
     <script src="/assets/bootstrap.bundle.min.js"></script>
-    <?= $themes->scripts($appearance) ?>
+    <?= $themes->scripts() ?>
 </body>
 </html>
 ```
+
+If no user appearance is supplied, `attributes()`, `styles()` or `scripts()` lazily resolve the application defaults automatically. `resolve()` remains available when an application explicitly needs a separate `ThemeAppearance` value.
 
 Application markup remains normal Bootstrap:
 
@@ -138,7 +144,7 @@ $userAppearance = [
     'density' => 'compact',
 ];
 
-$appearance = $themes->resolve($userAppearance);
+$themes->apply($userAppearance);
 ```
 
 A missing/null user theme means inherit the application default. User values are ignored when the developer disables that setting.
@@ -251,30 +257,68 @@ Prefab Theme exposes `window.PrefabTheme`:
 PrefabTheme.setTheme('default');
 PrefabTheme.setMode('dark');
 PrefabTheme.setDensity('compact');
+PrefabTheme.toggleMode();
+PrefabTheme.toggleDensity();
 PrefabTheme.get();
 ```
 
-Or use built-in data attributes without application JavaScript:
+User-facing controls can be added to any normal HTML or Bootstrap component with concise Theme-owned directives:
 
 ```html
-<button data-prefab-mode="light">Light</button>
-<button data-prefab-mode="dark">Dark</button>
+<button pf:theme="win11">Windows 11</button>
+<button pf:theme="default">Default</button>
 
-<select data-prefab-density-select>
-    <option value="comfortable">Comfortable</option>
-    <option value="compact">Compact</option>
+<button pf:theme-mode="light">Light</button>
+<button pf:theme-mode="dark">Dark</button>
+<button pf:theme-mode="system">System</button>
+<button pf:theme-mode="toggle">Toggle mode</button>
+
+<button pf:theme-density="comfortable">Comfortable</button>
+<button pf:theme-density="compact">Compact</button>
+<button pf:theme-density="toggle">Toggle density</button>
+```
+
+Select controls are also supported:
+
+```html
+<select pf:theme-mode>
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+    <option value="system">System</option>
 </select>
 ```
 
-Those controls respect the developer's user policy.
+The global `pf:mode` attribute remains unclaimed. Theme owns only `pf:theme`, `pf:theme-mode` and `pf:theme-density`.
 
-If the application provides a persistence endpoint:
+These controls respect the developer's user policy. A user-triggered change applies immediately and persists by default.
+
+When the application provides a persistence endpoint:
 
 ```php
 'save_url' => '/account/appearance',
 ```
 
-the browser runtime POSTs the current theme, mode and density after a change. The application remains responsible for authentication, validation and storage.
+the browser runtime POSTs the current theme, mode and density after a change. If the endpoint is unavailable or not configured, Prefab Theme falls back to `localStorage`.
+
+Temporary previews can use the JavaScript API with persistence disabled:
+
+```js
+PrefabTheme.setTheme('win11', false);
+PrefabTheme.setMode('dark', false);
+```
+
+## Floating mode toggle
+
+A built-in floating Light/Dark toggle is optional and disabled by default:
+
+```php
+'toggle' => [
+    'enabled' => true,
+    'position' => 'bottom-right',
+],
+```
+
+Supported positions are `bottom-right`, `bottom-left`, `top-right` and `top-left`. The toggle is only rendered when user mode changes are permitted by application policy.
 
 ## Theme format
 
