@@ -13,6 +13,7 @@ final class ThemeManager
     private ThemeRegistry $registry;
     private ThemeResolver $resolver;
     private string $packageRoot;
+    private ThemeAssetRenderer $assetRenderer;
     private array $localConfig;
     private array $config = [];
     private array $sources = [];
@@ -21,6 +22,7 @@ final class ThemeManager
     public function __construct(array $config = [], ?ThemeRegistry $registry = null)
     {
         $this->packageRoot = dirname(__DIR__);
+        $this->assetRenderer = new ThemeAssetRenderer($this->packageRoot);
         $this->localConfig = $config;
         $this->registry = $registry ?? new ThemeRegistry();
 
@@ -94,67 +96,10 @@ final class ThemeManager
     public function styles(?ThemeAppearance $appearance = null): string
     {
         $appearance ??= $this->appearance();
-        $enabled = $this->resolver->enabledThemes();
-        $entry = $enabled[$appearance->theme] ?? null;
 
-        if (!$entry) {
-            throw new RuntimeException("Theme is not enabled: {$appearance->theme}");
-        }
-
-        /** @var ThemeDefinition $theme */
-        $theme = $entry['theme'];
-        $lines = [
-            '<link rel="stylesheet" href="' . $this->escape($this->asset('/core.css')) . '" data-prefab-core>',
-        ];
-
-        if ($this->adminComponentsEnabled()) {
-            $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->asset('/admin.css')) . '" data-prefab-admin>';
-        }
-
-        if ($theme->base !== null) {
-            $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->themeAsset($theme, $theme->base)) . '" data-prefab-theme-base>';
-        }
-
-        foreach (['light', 'dark'] as $mode) {
-            $file = $theme->modeFile($mode);
-
-            if ($file === null || !in_array($mode, $entry['modes'], true)) {
-                continue;
-            }
-
-            $media = match ($appearance->mode) {
-                'system' => "(prefers-color-scheme: {$mode})",
-                $mode => 'all',
-                default => 'not all',
-            };
-
-            $lines[] = sprintf(
-                '<link rel="stylesheet" href="%s" media="%s" data-prefab-theme-mode="%s">',
-                $this->escape($this->themeAsset($theme, $file)),
-                $this->escape($media),
-                $this->escape($mode),
-            );
-        }
-
-        foreach ($entry['modes'] as $mode) {
-            if (in_array($mode, ['light', 'dark'], true)) {
-                continue;
-            }
-
-            $file = $theme->modeFile($mode);
-
-            if ($file === null || $appearance->mode !== $mode) {
-                continue;
-            }
-
-            $lines[] = sprintf(
-                '<link rel="stylesheet" href="%s" data-prefab-theme-mode="%s">',
-                $this->escape($this->themeAsset($theme, $file)),
-                $this->escape($mode),
-            );
-        }
-
-        return implode("\n", $lines);
+        return $this->assetMode() === 'published'
+            ? $this->publishedStyles($appearance)
+            : $this->inlineStyles($appearance);
     }
 
     public function scripts(?ThemeAppearance $appearance = null): string
@@ -175,8 +120,15 @@ final class ThemeManager
             throw new RuntimeException('Unable to encode Prefab Theme client configuration.');
         }
 
-        return '<script type="application/json" id="prefab-theme-config">' . $json . '</script>' . "\n"
-            . '<script src="' . $this->escape($this->asset('/theme.js')) . '" defer></script>';
+        $configTag = '<script type="application/json" id="prefab-theme-config">' . $json . '</script>';
+
+        if ($this->assetMode() === 'published') {
+            return $configTag . "\n"
+                . '<script src="' . $this->escape($this->asset('/theme.js')) . '" defer></script>';
+        }
+
+        return $configTag . "\n"
+            . '<script>' . $this->safeScript($this->assetRenderer->runtimeJs()) . '</script>';
     }
 
     public function publish(?string $publicPath = null, bool $overwrite = true): array
@@ -209,15 +161,26 @@ final class ThemeManager
     public function installer(?string $themesPath = null): ThemeInstaller
     {
         if ($themesPath === null) {
-            $publicPath = is_string($this->config['public_path'])
-                ? $this->config['public_path']
+            $themesPath = is_string($this->config['themes_path'])
+                && $this->config['themes_path'] !== ''
+                ? $this->config['themes_path']
                 : null;
 
-            if (!$publicPath) {
-                throw new RuntimeException('Prefab Theme public_path is required to install themes.');
+            if ($themesPath === null) {
+                $publicPath = is_string($this->config['public_path'])
+                    ? $this->config['public_path']
+                    : null;
+
+                if ($publicPath) {
+                    $themesPath = rtrim($publicPath, DIRECTORY_SEPARATOR) . '/themes';
+                }
             }
 
-            $themesPath = rtrim($publicPath, DIRECTORY_SEPARATOR) . '/themes';
+            if (!$themesPath) {
+                throw new RuntimeException(
+                    'Prefab Theme themes_path is required only when installing downloaded themes.'
+                );
+            }
         }
 
         return new ThemeInstaller($themesPath);
@@ -283,6 +246,12 @@ final class ThemeManager
 
         $this->registry->addPath($this->packageRoot . '/themes');
 
+        if (is_string($this->config['themes_path']) && $this->config['themes_path'] !== '') {
+            $this->registry->addPath(
+                rtrim($this->config['themes_path'], DIRECTORY_SEPARATOR),
+            );
+        }
+
         if (is_string($this->config['public_path']) && $this->config['public_path'] !== '') {
             $this->registry->addPath(
                 rtrim($this->config['public_path'], DIRECTORY_SEPARATOR) . '/themes',
@@ -296,6 +265,7 @@ final class ThemeManager
     private function clientConfig(ThemeAppearance $appearance): array
     {
         $themes = [];
+        $inline = $this->assetMode() === 'inline';
 
         foreach ($this->resolver->enabledThemes() as $id => $entry) {
             /** @var ThemeDefinition $theme */
@@ -306,14 +276,18 @@ final class ThemeManager
                 $file = $theme->modeFile($mode);
 
                 if ($file !== null) {
-                    $modes[$mode] = $this->themeAsset($theme, $file);
+                    $modes[$mode] = $inline
+                        ? $this->assetRenderer->themeCss($theme, $file)
+                        : $this->themeAsset($theme, $file);
                 }
             }
 
             $themes[$id] = [
                 'name' => $theme->name,
                 'base' => $theme->base !== null
-                    ? $this->themeAsset($theme, $theme->base)
+                    ? ($inline
+                        ? $this->assetRenderer->themeCss($theme, $theme->base)
+                        : $this->themeAsset($theme, $theme->base))
                     : null,
                 'modes' => $modes,
             ];
@@ -325,9 +299,149 @@ final class ThemeManager
             'densities' => array_values((array) $this->config['densities']),
             'user' => $this->resolver->userPolicy(),
             'toggle' => (array) $this->config['toggle'],
+            'assetMode' => $this->assetMode(),
             'saveUrl' => $this->config['save_url'],
             'storageKey' => (string) $this->config['storage_key'],
         ];
+    }
+
+    private function inlineStyles(ThemeAppearance $appearance): string
+    {
+        [$theme, $entry] = $this->resolvedTheme($appearance);
+        $lines = [
+            '<style data-prefab-core>'
+            . $this->safeStyle($this->assetRenderer->coreCss())
+            . '</style>',
+        ];
+
+        if ($this->adminComponentsEnabled()) {
+            $lines[] = '<style data-prefab-admin>'
+                . $this->safeStyle($this->assetRenderer->adminCss())
+                . '</style>';
+        }
+
+        if ($theme->base !== null) {
+            $lines[] = '<style data-prefab-theme-base>'
+                . $this->safeStyle($this->assetRenderer->themeCss($theme, $theme->base))
+                . '</style>';
+        }
+
+        foreach (['light', 'dark'] as $mode) {
+            $file = $theme->modeFile($mode);
+
+            if ($file === null || !in_array($mode, $entry['modes'], true)) {
+                continue;
+            }
+
+            $media = match ($appearance->mode) {
+                'system' => "(prefers-color-scheme: {$mode})",
+                $mode => 'all',
+                default => 'not all',
+            };
+
+            $lines[] = sprintf(
+                '<style media="%s" data-prefab-theme-mode="%s">%s</style>',
+                $this->escape($media),
+                $this->escape($mode),
+                $this->safeStyle($this->assetRenderer->themeCss($theme, $file)),
+            );
+        }
+
+        foreach ($entry['modes'] as $mode) {
+            if (in_array($mode, ['light', 'dark'], true)) {
+                continue;
+            }
+
+            $file = $theme->modeFile($mode);
+
+            if ($file === null || $appearance->mode !== $mode) {
+                continue;
+            }
+
+            $lines[] = sprintf(
+                '<style data-prefab-theme-mode="%s">%s</style>',
+                $this->escape($mode),
+                $this->safeStyle($this->assetRenderer->themeCss($theme, $file)),
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function publishedStyles(ThemeAppearance $appearance): string
+    {
+        [$theme, $entry] = $this->resolvedTheme($appearance);
+        $lines = [
+            '<link rel="stylesheet" href="' . $this->escape($this->asset('/core.css')) . '" data-prefab-core>',
+        ];
+
+        if ($this->adminComponentsEnabled()) {
+            $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->asset('/admin.css')) . '" data-prefab-admin>';
+        }
+
+        if ($theme->base !== null) {
+            $lines[] = '<link rel="stylesheet" href="' . $this->escape($this->themeAsset($theme, $theme->base)) . '" data-prefab-theme-base>';
+        }
+
+        foreach (['light', 'dark'] as $mode) {
+            $file = $theme->modeFile($mode);
+
+            if ($file === null || !in_array($mode, $entry['modes'], true)) {
+                continue;
+            }
+
+            $media = match ($appearance->mode) {
+                'system' => "(prefers-color-scheme: {$mode})",
+                $mode => 'all',
+                default => 'not all',
+            };
+
+            $lines[] = sprintf(
+                '<link rel="stylesheet" href="%s" media="%s" data-prefab-theme-mode="%s">',
+                $this->escape($this->themeAsset($theme, $file)),
+                $this->escape($media),
+                $this->escape($mode),
+            );
+        }
+
+        foreach ($entry['modes'] as $mode) {
+            if (in_array($mode, ['light', 'dark'], true)) {
+                continue;
+            }
+
+            $file = $theme->modeFile($mode);
+
+            if ($file === null || $appearance->mode !== $mode) {
+                continue;
+            }
+
+            $lines[] = sprintf(
+                '<link rel="stylesheet" href="%s" data-prefab-theme-mode="%s">',
+                $this->escape($this->themeAsset($theme, $file)),
+                $this->escape($mode),
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /** @return array{0: ThemeDefinition, 1: array} */
+    private function resolvedTheme(ThemeAppearance $appearance): array
+    {
+        $entry = $this->resolver->enabledThemes()[$appearance->theme] ?? null;
+
+        if (!$entry) {
+            throw new RuntimeException("Theme is not enabled: {$appearance->theme}");
+        }
+
+        return [$entry['theme'], $entry];
+    }
+
+    private function assetMode(): string
+    {
+        return strtolower((string) $this->config['asset_mode']) === 'published'
+            ? 'published'
+            : 'inline';
     }
 
     private function adminComponentsEnabled(): bool
@@ -365,6 +479,16 @@ final class ThemeManager
         );
     }
 
+    private function safeStyle(string $css): string
+    {
+        return preg_replace('~</style~i', '<\\/style', $css) ?? $css;
+    }
+
+    private function safeScript(string $script): string
+    {
+        return preg_replace('~</script~i', '<\\/script', $script) ?? $script;
+    }
+
     private static function defaults(): array
     {
         return [
@@ -386,6 +510,8 @@ final class ThemeManager
                 'enabled' => false,
                 'position' => 'bottom-right',
             ],
+            'asset_mode' => 'inline',
+            'themes_path' => null,
             'public_path' => null,
             'asset_url' => '/assets/prefab-theme',
             'save_url' => null,
