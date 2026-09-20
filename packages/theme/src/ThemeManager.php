@@ -60,12 +60,17 @@ final class ThemeManager
 
     public function attributes(ThemeAppearance $appearance): string
     {
-        return sprintf(
-            'data-theme="%s" data-mode="%s" data-density="%s"',
-            $this->escape($appearance->theme),
-            $this->escape($appearance->mode),
-            $this->escape($appearance->density),
-        );
+        $attributes = [
+            'data-theme="' . $this->escape($appearance->theme) . '"',
+            'data-mode="' . $this->escape($appearance->mode) . '"',
+            'data-density="' . $this->escape($appearance->density) . '"',
+        ];
+
+        if (in_array($appearance->mode, ['light', 'dark'], true)) {
+            $attributes[] = 'data-bs-theme="' . $this->escape($appearance->mode) . '"';
+        }
+
+        return implode(' ', $attributes);
     }
 
     public function styles(ThemeAppearance $appearance): string
