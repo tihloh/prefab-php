@@ -119,7 +119,12 @@ final class ThemeDefinition
         $file = trim(str_replace('\\', '/', $file));
         $parts = explode('/', $file);
 
-        if ($file === '' || str_starts_with($file, '/') || in_array('..', $parts, true)) {
+        if (
+            $file === ''
+            || str_starts_with($file, '/')
+            || in_array('..', $parts, true)
+            || !preg_match('#^[A-Za-z0-9._/-]+$#', $file)
+        ) {
             throw new InvalidArgumentException("Unsafe theme file path: {$file}");
         }
 
