@@ -321,6 +321,7 @@ Short code, but no hidden business policy.
 | Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
 | File storage | [Files](packages/files/README.md) | Filesystem/storage operations |
 | Image inspection/resize/crop/conversion | [Image](packages/image/README.md) | Image processing and delivery |
+| Bootstrap theming / light-dark-user appearance | [Theme](packages/theme/README.md) | Theme registry, appearance policy and installable theme assets |
 | Audit/activity history | [Logs](packages/logs/README.md) | Logging |
 | Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
 | Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
