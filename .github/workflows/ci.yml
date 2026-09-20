@@ -146,6 +146,8 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/theme
         run: php -d zend.assertions=1 -d assert.exception=1 tests/run.php
+      - name: Theme JS syntax check
+        run: node --check packages/theme/assets/theme.js
 
   sqlite-integration:
     runs-on: ubuntu-latest
