@@ -26,6 +26,7 @@ Current packages are organized like this:
 | Server-driven reactive UI | `prefab-live` |
 | Bootstrap theming and reusable admin UI | `prefab-theme` |
 | File storage | `prefab-files` |
+| Image inspection and transformation | `prefab-image` |
 | Audit/activity logs | `prefab-logs` |
 | Email/external messages | `prefab-messaging` |
 | Internal user notifications | `prefab-notifications` |
@@ -234,6 +235,7 @@ $info = PrefabRuntime::inspect();
 - [Live](../packages/live/README.md)
 - [Theme](../packages/theme/README.md)
 - [Files](../packages/files/README.md)
+- [Image](../packages/image/README.md)
 - [Logs](../packages/logs/README.md)
 - [Messaging](../packages/messaging/README.md)
 - [Notifications](../packages/notifications/README.md)
