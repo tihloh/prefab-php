@@ -250,7 +250,12 @@ final class ThemeManager
 
             $value = $resolved['value'];
 
-            if (is_array($default) && is_array($value)) {
+            if (
+                is_array($default)
+                && is_array($value)
+                && !array_is_list($default)
+                && !array_is_list($value)
+            ) {
                 $value = array_replace_recursive($default, $value);
             }
 
