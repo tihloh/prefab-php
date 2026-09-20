@@ -1,0 +1,15 @@
+{
+  "id": "default",
+  "name": "Prefab Default",
+  "version": "0.1.0",
+  "author": "Prefab",
+  "description": "Small neutral Bootstrap-compatible fallback theme bundled with Prefab Theme.",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}
