@@ -139,13 +139,50 @@
     };
     mediaDark.addEventListener?.('change', onSystemChange);
 
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        const sidebar = document.querySelector('.pf-sidebar.is-open');
+        if (sidebar) setSidebar(sidebar, false);
+    });
+
+    const sidebarFor = control => {
+        const selector = control?.dataset?.prefabSidebarTarget;
+        if (selector) {
+            try { return document.querySelector(selector); }
+            catch { return null; }
+        }
+        return document.querySelector('.pf-sidebar');
+    };
+
+    const setSidebar = (sidebar, open, control = null) => {
+        if (!sidebar) return;
+        sidebar.classList.toggle('is-open', open);
+        sidebar.dataset.open = open ? 'true' : 'false';
+        if (control) control.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.dispatchEvent(new CustomEvent('prefab:sidebarchange', {
+            detail: { open, sidebar }
+        }));
+    };
+
     document.addEventListener('click', event => {
         const theme = event.target.closest('[data-prefab-theme]');
         const mode = event.target.closest('[data-prefab-mode]');
         const density = event.target.closest('[data-prefab-density]');
+        const sidebarToggle = event.target.closest('[data-prefab-sidebar-toggle]');
+        const sidebarClose = event.target.closest('[data-prefab-sidebar-close]');
+
         if (theme && userAllows('theme')) api.setTheme(theme.dataset.prefabTheme);
         if (mode && userAllows('mode')) api.setMode(mode.dataset.prefabMode);
         if (density && userAllows('density')) api.setDensity(density.dataset.prefabDensity);
+
+        if (sidebarToggle) {
+            const sidebar = sidebarFor(sidebarToggle);
+            setSidebar(sidebar, !sidebar?.classList.contains('is-open'), sidebarToggle);
+        }
+
+        if (sidebarClose) {
+            setSidebar(sidebarFor(sidebarClose), false);
+        }
     });
 
     document.addEventListener('change', event => {
