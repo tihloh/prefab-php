@@ -143,3 +143,46 @@ body {
         animation-iteration-count: 1 !important;
     }
 }
+
+
+.pf-theme-toggle {
+    position: fixed;
+    z-index: 1080;
+    width: 2.75rem;
+    height: 2.75rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--pf-border);
+    border-radius: 50%;
+    background: var(--pf-surface);
+    color: var(--pf-text);
+    box-shadow: var(--pf-shadow);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.pf-theme-toggle:hover {
+    background: var(--pf-surface-alt);
+}
+
+.pf-theme-toggle-bottom-right {
+    right: 1rem;
+    bottom: 1rem;
+}
+
+.pf-theme-toggle-bottom-left {
+    left: 1rem;
+    bottom: 1rem;
+}
+
+.pf-theme-toggle-top-right {
+    right: 1rem;
+    top: 1rem;
+}
+
+.pf-theme-toggle-top-left {
+    left: 1rem;
+    top: 1rem;
+}

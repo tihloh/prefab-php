@@ -16,6 +16,7 @@ final class ThemeManager
     private array $localConfig;
     private array $config = [];
     private array $sources = [];
+    private ?ThemeAppearance $appearance = null;
 
     public function __construct(array $config = [], ?ThemeRegistry $registry = null)
     {
@@ -52,6 +53,17 @@ final class ThemeManager
         );
     }
 
+    public function apply(array $userPreferences = []): self
+    {
+        $this->appearance = $this->resolve($userPreferences);
+        return $this;
+    }
+
+    public function appearance(): ThemeAppearance
+    {
+        return $this->appearance ??= $this->resolve();
+    }
+
     /** @return array<string, ThemeDefinition> */
     public function installed(): array
     {
@@ -63,8 +75,9 @@ final class ThemeManager
         return $this->resolver->enabledThemes();
     }
 
-    public function attributes(ThemeAppearance $appearance): string
+    public function attributes(?ThemeAppearance $appearance = null): string
     {
+        $appearance ??= $this->appearance();
         $attributes = [
             'data-theme="' . $this->escape($appearance->theme) . '"',
             'data-mode="' . $this->escape($appearance->mode) . '"',
@@ -78,8 +91,9 @@ final class ThemeManager
         return implode(' ', $attributes);
     }
 
-    public function styles(ThemeAppearance $appearance): string
+    public function styles(?ThemeAppearance $appearance = null): string
     {
+        $appearance ??= $this->appearance();
         $enabled = $this->resolver->enabledThemes();
         $entry = $enabled[$appearance->theme] ?? null;
 
@@ -143,8 +157,9 @@ final class ThemeManager
         return implode("\n", $lines);
     }
 
-    public function scripts(ThemeAppearance $appearance): string
+    public function scripts(?ThemeAppearance $appearance = null): string
     {
+        $appearance ??= $this->appearance();
         $config = $this->clientConfig($appearance);
         $json = json_encode(
             $config,
@@ -275,6 +290,7 @@ final class ThemeManager
         }
 
         $this->resolver = new ThemeResolver($this->registry, $this->config);
+        $this->appearance = null;
     }
 
     private function clientConfig(ThemeAppearance $appearance): array
@@ -308,7 +324,9 @@ final class ThemeManager
             'themes' => $themes,
             'densities' => array_values((array) $this->config['densities']),
             'user' => $this->resolver->userPolicy(),
+            'toggle' => (array) $this->config['toggle'],
             'saveUrl' => $this->config['save_url'],
+            'storageKey' => (string) $this->config['storage_key'],
         ];
     }
 
@@ -364,9 +382,14 @@ final class ThemeManager
             'components' => [
                 'admin' => false,
             ],
+            'toggle' => [
+                'enabled' => false,
+                'position' => 'bottom-right',
+            ],
             'public_path' => null,
             'asset_url' => '/assets/prefab-theme',
             'save_url' => null,
+            'storage_key' => 'prefab.theme',
         ];
     }
 }

@@ -121,14 +121,14 @@ $manager = new ThemeManager([
     'themes' => ['default'],
 ]);
 
-$resolved = $manager->resolve();
+$manager->apply();
 
 check(
-    $resolved->mode === 'dark',
+    $manager->appearance()->mode === 'dark',
     'PrefabConfig module mode should configure Theme.',
 );
 check(
-    $resolved->density === 'compact',
+    $manager->appearance()->density === 'compact',
     'Direct ThemeManager configuration should override shared configuration.',
 );
 check(
@@ -150,7 +150,7 @@ check(
     'Default theme should publish.',
 );
 
-$styles = $manager->styles($resolved);
+$styles = $manager->styles();
 check(
     str_contains($styles, 'data-prefab-admin'),
     'Admin component stylesheet should load when enabled.',
@@ -160,12 +160,47 @@ check(
     'Resolved dark mode should load the dark stylesheet.',
 );
 check(
-    str_contains($manager->attributes($resolved), 'data-bs-theme="dark"'),
+    str_contains($manager->attributes(), 'data-bs-theme="dark"'),
     'Explicit dark mode should synchronize Bootstrap color mode.',
 );
 check(
-    str_contains($manager->scripts($resolved), 'prefab-theme-config'),
+    str_contains($manager->scripts(), 'prefab-theme-config'),
     'Theme scripts should include client configuration.',
+);
+check(
+    str_contains($manager->scripts(), '"storageKey":"prefab.theme"'),
+    'Theme scripts should expose automatic persistence configuration.',
+);
+check(
+    str_contains($manager->scripts(), '"toggle":{"enabled":false'),
+    'Theme scripts should expose floating toggle configuration.',
+);
+
+$runtime = file_get_contents(__DIR__ . '/../assets/theme.js') ?: '';
+check(
+    str_contains($runtime, '[pf\\\\:theme]'),
+    'Theme runtime should support pf:theme.',
+);
+check(
+    str_contains($runtime, '[pf\\\\:theme-mode]'),
+    'Theme runtime should support pf:theme-mode.',
+);
+check(
+    str_contains($runtime, '[pf\\\\:theme-density]'),
+    'Theme runtime should support pf:theme-density.',
+);
+check(
+    !str_contains($runtime, 'data-prefab-mode'),
+    'Legacy generic Theme data controls should not own the public directive API.',
+);
+
+$manager->apply([
+    'mode' => 'light',
+    'density' => 'comfortable',
+]);
+check(
+    str_contains($manager->attributes(), 'data-bs-theme="light"'),
+    'apply() should update the request appearance once for later rendering.',
 );
 
 $systemManager = new ThemeManager([
@@ -176,14 +211,13 @@ $systemManager = new ThemeManager([
     'themes' => ['default'],
 ]);
 
-$system = $systemManager->resolve();
 check(
-    $system->mode === 'system',
+    $systemManager->appearance()->mode === 'system',
     'System mode should be allowed when light and dark exist.',
 );
 check(
     str_contains(
-        $systemManager->styles($system),
+        $systemManager->styles(),
         'prefers-color-scheme: dark',
     ),
     'System mode should render the dark media stylesheet.',
