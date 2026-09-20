@@ -7,6 +7,8 @@ require __DIR__ . '/../vendor/autoload.php';
 use RuntimeException;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
+use Tihloh\Prefab\Theme\ThemeAssetRenderer;
+use Tihloh\Prefab\Theme\ThemeDefinition;
 use Tihloh\Prefab\Theme\ThemeManager;
 use Tihloh\Prefab\Theme\ThemeRegistry;
 use Tihloh\Prefab\Theme\ThemeResolver;
@@ -97,6 +99,31 @@ check(
 $public = sys_get_temp_dir()
     . '/prefab-theme-test-'
     . bin2hex(random_bytes(4));
+
+$assetThemePath = $public . '/asset-theme';
+mkdir($assetThemePath, 0775, true);
+file_put_contents($assetThemePath . '/theme.json', json_encode([
+    'id' => 'asset-test',
+    'name' => 'Asset Test',
+    'base' => 'base.css',
+    'modes' => ['light' => 'light.css'],
+], JSON_THROW_ON_ERROR));
+file_put_contents($assetThemePath . '/icon.png', "\x89PNG\r\n\x1A\n");
+file_put_contents(
+    $assetThemePath . '/base.css',
+    '.asset { background-image: url("icon.png"); }',
+);
+file_put_contents($assetThemePath . '/light.css', ':root { --pf-bg: #fff; }');
+
+$assetTheme = ThemeDefinition::fromDirectory($assetThemePath);
+$assetRenderer = new ThemeAssetRenderer(dirname(__DIR__));
+check(
+    str_contains(
+        $assetRenderer->themeCss($assetTheme, 'base.css'),
+        'data:image/png;base64,',
+    ),
+    'Inline theme CSS should embed safe local image/font references.',
+);
 
 PrefabConfig::set([
     'modules' => [
