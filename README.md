@@ -22,6 +22,8 @@ Use one package by itself, or combine compatible packages and let Prefab handle 
 ```text
 Need routing?       Install Routes.
 Need validation?    Add Input.
+Need reactive UI?   Add Live.
+Need app theming?    Add Theme.
 Need login?         Add Auth.
 Already have users? Add Users and map your existing table.
 Need permissions?   Add Permissions.
@@ -319,9 +321,10 @@ Short code, but no hidden business policy.
 | Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
 | HTTP routing | [Routes](packages/routes/README.md) | Request routing |
 | Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
+| Server-driven reactive UI | [Live](packages/live/README.md) | Reactive PHP components and browser synchronization |
 | File storage | [Files](packages/files/README.md) | Filesystem/storage operations |
 | Image inspection/resize/crop/conversion | [Image](packages/image/README.md) | Image processing and delivery |
-| Bootstrap theming / light-dark-user appearance | [Theme](packages/theme/README.md) | Theme registry, appearance policy and installable theme assets |
+| Bootstrap theming/admin UI | [Theme](packages/theme/README.md) | Theme engine, appearance policy and reusable admin components |
 | Audit/activity history | [Logs](packages/logs/README.md) | Logging |
 | Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
 | Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
