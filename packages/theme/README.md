@@ -34,8 +34,6 @@ Prefab Core is installed transitively. Bootstrap stays an application dependency
 use Tihloh\Prefab\Theme\ThemeManager;
 
 $themes = new ThemeManager([
-    'public_path' => __DIR__ . '/public/assets/prefab-theme',
-    'asset_url' => '/assets/prefab-theme',
     'default' => 'default',
     'mode' => 'system',
     'density' => 'comfortable',
@@ -75,22 +73,40 @@ PrefabConfig::set([
     ],
 ]);
 
-$themes = new ThemeManager([
-    'public_path' => __DIR__ . '/public/assets/prefab-theme',
-]);
+$themes = new ThemeManager();
 ```
 
 Direct `ThemeManager` configuration wins over PrefabConfig. Theme registers itself as the `theme` module and provides the `theme_manager` capability through PrefabRuntime.
 
-## Publish assets
+## Assets
 
-Run this during installation or deployment, not on every request:
+Normal usage does **not** require an asset publishing step. Prefab Theme defaults to inline assets:
+
+```text
+Prefab Theme package CSS/JS
+        ↓
+styles() / scripts()
+        ↓
+rendered directly into the page
+```
+
+The active theme CSS and runtime are rendered directly, and enabled themes are made available to the browser runtime for instant switching. Relative images/fonts inside installed theme CSS are embedded as data URLs when they can be resolved safely inside that theme directory.
+
+### Optional static publishing
+
+For deployments that prefer static files, CDNs or direct Nginx/Apache asset serving, publishing remains available as an optimization:
 
 ```php
+$themes = new ThemeManager([
+    'asset_mode' => 'published',
+    'public_path' => __DIR__ . '/public/assets/prefab-theme',
+    'asset_url' => '/assets/prefab-theme',
+]);
+
 $themes->publish();
 ```
 
-This publishes the core CSS/JS and the bundled fallback theme outside `vendor/`, so downloaded themes are not removed by Composer updates.
+In `published` mode, `styles()` and `scripts()` emit ordinary asset URLs instead of inline CSS/JS. Calling `publish()` is therefore only necessary when the application explicitly selects `asset_mode => 'published'`.
 
 ## Render
 
@@ -352,6 +368,14 @@ The theme CSS defines semantic Prefab tokens such as `--pf-bg`, `--pf-surface`, 
 
 ## Install a downloaded theme
 
+Downloaded themes should live in application storage rather than `vendor/` or the public web root. Configure that location only when theme installation is needed:
+
+```php
+$themes = new ThemeManager([
+    'themes_path' => __DIR__ . '/storage/prefab/themes',
+]);
+```
+
 ZIP installation requires PHP `ext-zip`:
 
 ```php
@@ -392,6 +416,8 @@ This reports effective appearance, installed themes, application-enabled themes,
 - One bundled fallback theme
 - External theme discovery
 - ZIP theme installation outside `vendor/`
+- Inline assets by default; no mandatory publish step
+- Optional static/CDN publishing mode
 - Prefab Core configuration/runtime integration
 - Optional reusable admin application components
 
