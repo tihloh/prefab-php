@@ -1,0 +1,261 @@
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use RuntimeException;
+use Tihloh\Prefab\PrefabConfig;
+use Tihloh\Prefab\PrefabRuntime;
+use Tihloh\Prefab\Theme\ThemeManager;
+use Tihloh\Prefab\Theme\ThemeRegistry;
+use Tihloh\Prefab\Theme\ThemeResolver;
+use ZipArchive;
+
+function check(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
+    }
+}
+
+function removeTree(string $directory): void
+{
+    if (!is_dir($directory)) {
+        return;
+    }
+
+    foreach (scandir($directory) ?: [] as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        $path = $directory . '/' . $entry;
+        is_dir($path) ? removeTree($path) : unlink($path);
+    }
+
+    rmdir($directory);
+}
+
+PrefabConfig::reset();
+PrefabRuntime::reset();
+
+$registry = new ThemeRegistry([__DIR__ . '/../themes']);
+check($registry->has('default'), 'Default theme must be discovered.');
+check(
+    $registry->get('default')?->supportsMode('dark') === true,
+    'Default theme must support dark mode.',
+);
+
+$resolver = new ThemeResolver($registry, [
+    'default' => 'default',
+    'mode' => 'light',
+    'themes' => [
+        'default' => ['modes' => ['light', 'dark']],
+    ],
+    'user' => [
+        'enabled' => true,
+        'theme' => true,
+        'mode' => true,
+        'density' => true,
+    ],
+]);
+
+$appearance = $resolver->resolve([
+    'mode' => 'dark',
+    'density' => 'compact',
+]);
+
+check(
+    $appearance->theme === 'default',
+    'Application default theme should be used.',
+);
+check(
+    $appearance->mode === 'dark',
+    'Allowed user mode should override application mode.',
+);
+check(
+    $appearance->density === 'compact',
+    'Allowed user density should override application density.',
+);
+check(
+    $appearance->source['mode'] === 'user',
+    'Resolver should report user mode source.',
+);
+
+$locked = new ThemeResolver($registry, [
+    'default' => 'default',
+    'mode' => 'light',
+    'user' => ['enabled' => false],
+]);
+
+check(
+    $locked->resolve(['mode' => 'dark'])->mode === 'light',
+    'Disabled user customization must be ignored.',
+);
+
+$public = sys_get_temp_dir()
+    . '/prefab-theme-test-'
+    . bin2hex(random_bytes(4));
+
+PrefabConfig::set([
+    'modules' => [
+        'theme' => [
+            'mode' => 'dark',
+            'components' => [
+                'admin' => true,
+            ],
+            'user' => [
+                'enabled' => true,
+                'mode' => true,
+            ],
+        ],
+    ],
+]);
+
+$manager = new ThemeManager([
+    'public_path' => $public,
+    'asset_url' => '/assets/prefab-theme',
+    'default' => 'default',
+    'density' => 'compact',
+    'themes' => ['default'],
+]);
+
+$resolved = $manager->resolve();
+
+check(
+    $resolved->mode === 'dark',
+    'PrefabConfig module mode should configure Theme.',
+);
+check(
+    $resolved->density === 'compact',
+    'Direct ThemeManager configuration should override shared configuration.',
+);
+check(
+    PrefabRuntime::resolve('theme_manager') === $manager,
+    'ThemeManager should register the theme_manager Prefab capability.',
+);
+check(
+    PrefabRuntime::get('theme') === $manager,
+    'ThemeManager should register itself as the theme module.',
+);
+
+$manager->publish();
+
+check(is_file($public . '/core.css'), 'Core CSS should publish.');
+check(is_file($public . '/admin.css'), 'Admin component CSS should publish.');
+check(is_file($public . '/theme.js'), 'Theme JS should publish.');
+check(
+    is_file($public . '/themes/default/theme.json'),
+    'Default theme should publish.',
+);
+
+$styles = $manager->styles($resolved);
+check(
+    str_contains($styles, 'data-prefab-admin'),
+    'Admin component stylesheet should load when enabled.',
+);
+check(
+    str_contains($styles, 'dark.css'),
+    'Resolved dark mode should load the dark stylesheet.',
+);
+check(
+    str_contains($manager->attributes($resolved), 'data-bs-theme="dark"'),
+    'Explicit dark mode should synchronize Bootstrap color mode.',
+);
+check(
+    str_contains($manager->scripts($resolved), 'prefab-theme-config'),
+    'Theme scripts should include client configuration.',
+);
+
+$systemManager = new ThemeManager([
+    'public_path' => $public,
+    'asset_url' => '/assets/prefab-theme',
+    'default' => 'default',
+    'mode' => 'system',
+    'themes' => ['default'],
+]);
+
+$system = $systemManager->resolve();
+check(
+    $system->mode === 'system',
+    'System mode should be allowed when light and dark exist.',
+);
+check(
+    str_contains(
+        $systemManager->styles($system),
+        'prefers-color-scheme: dark',
+    ),
+    'System mode should render the dark media stylesheet.',
+);
+
+if (class_exists(ZipArchive::class)) {
+    $archive = $public . '/sample-theme.zip';
+    $zip = new ZipArchive();
+
+    check(
+        $zip->open($archive, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true,
+        'Theme test ZIP should open.',
+    );
+
+    $zip->addFromString('theme.json', json_encode([
+        'id' => 'sample',
+        'name' => 'Sample',
+        'version' => '1.0.0',
+        'base' => 'base.css',
+        'modes' => [
+            'light' => 'light.css',
+            'dark' => 'dark.css',
+        ],
+    ], JSON_THROW_ON_ERROR));
+    $zip->addFromString('base.css', ':root { --pf-radius: 6px; }');
+    $zip->addFromString('light.css', ':root { --pf-bg: #fff; }');
+    $zip->addFromString('dark.css', ':root { --pf-bg: #111; }');
+    $zip->close();
+
+    $installed = $manager->installer()->installZip($archive);
+    check($installed->id === 'sample', 'Theme ZIP should install.');
+    $manager->refresh();
+    check(
+        isset($manager->installed()['sample']),
+        'Installed theme should be discoverable after refresh.',
+    );
+
+    $unsafe = $public . '/unsafe-theme.zip';
+    $zip = new ZipArchive();
+    check(
+        $zip->open($unsafe, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true,
+        'Unsafe theme test ZIP should open.',
+    );
+    $zip->addFromString('theme.json', json_encode([
+        'id' => 'unsafe',
+        'name' => 'Unsafe',
+        'modes' => ['light' => 'light.css'],
+    ], JSON_THROW_ON_ERROR));
+    $zip->addFromString('light.css', ':root {}');
+    $zip->addFromString('payload.php', '<?php echo "unsafe";');
+    $zip->close();
+
+    $rejected = false;
+
+    try {
+        $manager->installer()->installZip($unsafe);
+    } catch (RuntimeException) {
+        $rejected = true;
+    }
+
+    check(
+        $rejected,
+        'Theme installer should reject server-side executable files.',
+    );
+}
+
+$explain = $manager->explain();
+check(
+    isset($explain['runtime']['mode']),
+    'Theme diagnostics should include Prefab runtime resolution data.',
+);
+
+removeTree($public);
+
+echo "Prefab Theme tests passed.\n";

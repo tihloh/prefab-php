@@ -1,0 +1,38 @@
+{
+  "name": "tihloh/prefab-theme",
+  "description": "Framework-independent Bootstrap theme management for Prefab PHP with installable themes and application/user appearance policies.",
+  "keywords": [
+    "php",
+    "bootstrap",
+    "theme",
+    "themes",
+    "dark-mode",
+    "prefab",
+    "modular",
+    "framework-independent"
+  ],
+  "homepage": "https://github.com/tihloh/prefab-php",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Christian Bustamante"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/tihloh/prefab-php/issues",
+    "source": "https://github.com/tihloh/prefab-php"
+  },
+  "require": {
+    "php": ">=8.1",
+    "tihloh/prefab-core": "^0.4 || ^0.5"
+  },
+  "suggest": {
+    "ext-zip": "Required only when installing theme ZIP archives."
+  },
+  "autoload": {
+    "psr-4": {
+      "Tihloh\\Prefab\\Theme\\": "src/"
+    }
+  }
+}
