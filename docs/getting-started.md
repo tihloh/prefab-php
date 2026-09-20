@@ -23,6 +23,8 @@ Current packages are organized like this:
 | Roles/groups/permissions | `prefab-permissions` |
 | HTTP routes | `prefab-routes` |
 | Request input, validation and uploads | `prefab-input` |
+| Server-driven reactive UI | `prefab-live` |
+| Bootstrap theming and reusable admin UI | `prefab-theme` |
 | File storage | `prefab-files` |
 | Audit/activity logs | `prefab-logs` |
 | Email/external messages | `prefab-messaging` |
@@ -88,6 +90,10 @@ Routes + Input
 Routes + Input + Auth
   ↓
 Routes + Input + Auth + Permissions
+  ↓
+Add Live when screens need server-driven interactivity
+  ↓
+Add Theme when the application needs shared appearance/admin UI
 ```
 
 All of those feature packages share the same Core infrastructure instead of carrying duplicated runtime/database bootstrap files.
@@ -225,6 +231,8 @@ $info = PrefabRuntime::inspect();
 - [Permissions](../packages/permissions/README.md)
 - [Routes](../packages/routes/README.md)
 - [Input](../packages/input/README.md)
+- [Live](../packages/live/README.md)
+- [Theme](../packages/theme/README.md)
 - [Files](../packages/files/README.md)
 - [Logs](../packages/logs/README.md)
 - [Messaging](../packages/messaging/README.md)
