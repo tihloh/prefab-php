@@ -176,6 +176,24 @@ check(
     'Theme scripts should expose floating toggle configuration.',
 );
 
+$runtime = file_get_contents(__DIR__ . '/../assets/theme.js') ?: '';
+check(
+    str_contains($runtime, '[pf\\\\:theme]'),
+    'Theme runtime should support pf:theme.',
+);
+check(
+    str_contains($runtime, '[pf\\\\:theme-mode]'),
+    'Theme runtime should support pf:theme-mode.',
+);
+check(
+    str_contains($runtime, '[pf\\\\:theme-density]'),
+    'Theme runtime should support pf:theme-density.',
+);
+check(
+    !str_contains($runtime, 'data-prefab-mode'),
+    'Legacy generic Theme data controls should not own the public directive API.',
+);
+
 $manager->apply([
     'mode' => 'light',
     'density' => 'comfortable',
