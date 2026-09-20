@@ -10,7 +10,7 @@ use ZipArchive;
 final class ThemeInstaller
 {
     private const ALLOWED_EXTENSIONS = [
-        'json', 'css', 'png', 'jpg', 'jpeg', 'webp', 'svg', 'ico', 'woff2',
+        'json', 'css', 'png', 'jpg', 'jpeg', 'webp', 'ico', 'woff2',
     ];
 
     public function __construct(
@@ -191,6 +191,7 @@ final class ThemeInstaller
             || str_starts_with($normalized, '/')
             || str_contains($normalized, "\0")
             || in_array('..', $parts, true)
+            || !preg_match('#^[A-Za-z0-9._/-]+$#', $normalized)
         ) {
             throw new RuntimeException("Unsafe path in theme archive: {$name}");
         }
