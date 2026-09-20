@@ -10,7 +10,7 @@ final class ThemePublisher
 {
     public function __construct(private readonly string $packageRoot) {}
 
-    public function publish(string $publicPath, bool $overwrite = false): array
+    public function publish(string $publicPath, bool $overwrite = true): array
     {
         $publicPath = rtrim($publicPath, DIRECTORY_SEPARATOR);
         $written = [];
