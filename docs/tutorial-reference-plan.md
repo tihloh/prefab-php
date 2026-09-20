@@ -19,7 +19,11 @@ It must not assume prior Laravel/framework experience.
 
 ## Reference coverage
 
-The page should document Routes, Database, Users and simple Groups, Input, Auth, Permissions, Logs, Files, Notifications, Messaging, shared Prefab configuration, mandatory session isolation, auto-wiring, troubleshooting and production deployment.
+The page should document Routes, Database, Users and simple Groups, Input, Auth, Permissions, Logs, Files, Live, Theme, Notifications, Messaging, shared Prefab configuration, mandatory session isolation, auto-wiring, troubleshooting and production deployment.
+
+Live coverage should introduce server-driven components, public state, `#[Action]`, `#[Locked]`, `pf:model`, `pf:click`, `pf:submit`, signed snapshots, the Live endpoint and the security boundary without assuming JavaScript-framework experience.
+
+Theme coverage should introduce application theme policy, light/dark/system modes, density, user preference policy, semantic Prefab tokens, normal Bootstrap markup, optional admin components, inline assets by default and optional published assets.
 
 Examples should show the developer-facing API. Internal setup methods should not be shown unless a developer actually needs to call them.
 
