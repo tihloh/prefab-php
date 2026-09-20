@@ -17,6 +17,7 @@ final class ThemePublisher
 
         $files = [
             $this->packageRoot . '/assets/core.css' => $publicPath . '/core.css',
+            $this->packageRoot . '/assets/admin.css' => $publicPath . '/admin.css',
             $this->packageRoot . '/assets/theme.js' => $publicPath . '/theme.js',
         ];
 
