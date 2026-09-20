@@ -1,6 +1,6 @@
 # UI Recipes
 
-Tihloh Prefab PHP is headless-first. Prefabs provide public APIs, data, metadata, relationships, and operations; the consuming project owns presentation.
+Tihloh Prefab PHP remains application-controlled at the presentation layer. Most feature modules provide public APIs, data, metadata, relationships and operations; the consuming project owns presentation. Prefab Theme provides an optional shared Bootstrap appearance/admin layer, while Prefab Live provides optional server-driven interactivity. Neither requires business modules to own application pages.
 
 Optional UI examples live under each package's `examples/` directory. They are copyable recipes, not runtime-rendered UI and not required dependencies.
 
@@ -21,3 +21,18 @@ Optional UI examples live under each package's `examples/` directory. They are c
 - `packages/logs/examples/bootstrap/log-list.php`
 
 The core modules remain usable without any UI recipe.
+
+
+## Live and Theme
+
+Prefab Theme and Prefab Live complement UI recipes without replacing them:
+
+```text
+Feature module API
+      ↓
+application/template
+      ├── Theme → shared appearance and optional admin structures
+      └── Live  → optional server-driven component interactivity
+```
+
+A copied Users, Permissions or Logs recipe may use ordinary Bootstrap only, add Theme for shared appearance, add Live for reactive behavior, or use both. The underlying business module remains usable without either UI package.
