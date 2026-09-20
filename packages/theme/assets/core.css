@@ -26,6 +26,8 @@
     --bs-border-color: var(--pf-border);
     --bs-secondary-bg: var(--pf-surface-alt);
     --bs-primary: var(--pf-primary);
+    --bs-link-color: var(--pf-primary);
+    --bs-link-hover-color: color-mix(in srgb, var(--pf-primary) 82%, #000);
     --bs-border-radius: var(--pf-radius);
     --bs-border-radius-sm: var(--pf-radius-sm);
     --bs-border-radius-lg: var(--pf-radius-lg);
@@ -91,6 +93,23 @@ body {
     --bs-btn-bg: var(--pf-primary);
     --bs-btn-border-color: var(--pf-primary);
     --bs-btn-color: var(--pf-primary-contrast);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--pf-primary) 88%, #000);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--pf-primary) 84%, #000);
+    --bs-btn-active-bg: color-mix(in srgb, var(--pf-primary) 78%, #000);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--pf-primary) 74%, #000);
+    --bs-btn-disabled-bg: var(--pf-primary);
+    --bs-btn-disabled-border-color: var(--pf-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--pf-primary);
+    --bs-btn-border-color: var(--pf-primary);
+    --bs-btn-hover-bg: var(--pf-primary);
+    --bs-btn-hover-border-color: var(--pf-primary);
+    --bs-btn-hover-color: var(--pf-primary-contrast);
+    --bs-btn-active-bg: var(--pf-primary);
+    --bs-btn-active-border-color: var(--pf-primary);
+    --bs-btn-active-color: var(--pf-primary-contrast);
 }
 
 .text-body-secondary,
