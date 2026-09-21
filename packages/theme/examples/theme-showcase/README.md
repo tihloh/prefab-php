@@ -61,3 +61,16 @@ themes/
 ```
 
 Each theme is a normal Prefab Theme directory with `theme.json`, `base.css`, `light.css` and `dark.css`. They are intentionally kept in the showcase instead of the package's built-in `themes/` directory, so the Theme engine itself still ships only the `default` fallback theme.
+
+## Visual identities
+
+The showcase presets intentionally change more than color:
+
+- **Windows 11** — floating acrylic-like chrome, rounded surfaces, Mica-style background treatment and inset active navigation.
+- **VS Code** — compact square controls, editor-like navigation, dense tables, monospace metadata and flat panels.
+- **Minimal** — editorial spacing, borderless/flat surfaces, underline navigation, restrained controls and wide whitespace.
+- **Ubuntu** — dark aubergine navigation rail, orange active states, strong headers and angular status/timeline details.
+- **macOS** — floating translucent window treatment, glass surfaces, rounded controls and desktop-style window dots.
+- **Android** — Material-inspired tonal surfaces, large rounded cards, pill navigation/buttons, filled controls and larger touch targets.
+
+All of these differences are implemented by theme CSS over the same Bootstrap + Prefab markup.
