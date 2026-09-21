@@ -37,6 +37,16 @@ $themes = new ThemeManager([
     'default' => 'default',
     'mode' => 'system',
     'density' => 'comfortable',
+    'accent' => null,
+    'accents' => [
+        'blue' => '#0d6efd',
+        'purple' => '#6f42c1',
+        'green' => '#198754',
+        'teal' => '#0f766e',
+        'orange' => '#fd7e14',
+        'red' => '#dc3545',
+    ],
+    'custom_accent' => true,
     'themes' => [
         'default' => ['modes' => ['light', 'dark']],
     ],
@@ -45,6 +55,7 @@ $themes = new ThemeManager([
         'theme' => false,
         'mode' => true,
         'density' => true,
+        'accent' => true,
     ],
     'components' => [
         'admin' => true,
@@ -158,6 +169,7 @@ $userAppearance = [
     'theme' => null,
     'mode' => 'dark',
     'density' => 'compact',
+    'accent' => 'purple',
 ];
 
 $themes->apply($userAppearance);
@@ -273,6 +285,9 @@ Prefab Theme exposes `window.PrefabTheme`:
 PrefabTheme.setTheme('default');
 PrefabTheme.setMode('dark');
 PrefabTheme.setDensity('compact');
+PrefabTheme.setAccent('purple');
+PrefabTheme.setAccent('#7c3aed');
+PrefabTheme.resetAccent();
 PrefabTheme.toggleMode();
 PrefabTheme.toggleDensity();
 PrefabTheme.get();
@@ -292,6 +307,11 @@ User-facing controls can be added to any normal HTML or Bootstrap component with
 <button pf:theme-density="comfortable">Comfortable</button>
 <button pf:theme-density="compact">Compact</button>
 <button pf:theme-density="toggle">Toggle density</button>
+
+<button pf:theme-accent="blue">Blue</button>
+<button pf:theme-accent="purple">Purple</button>
+<button pf:theme-accent="default">Theme default</button>
+<input type="color" pf:theme-accent>
 ```
 
 Select controls are also supported:
@@ -304,7 +324,32 @@ Select controls are also supported:
 </select>
 ```
 
-The global `pf:mode` attribute remains unclaimed. Theme owns only `pf:theme`, `pf:theme-mode` and `pf:theme-density`.
+The global `pf:mode` attribute remains unclaimed. Theme owns `pf:theme`, `pf:theme-mode`, `pf:theme-density` and `pf:theme-accent`.
+
+### Accent colors
+
+Accent customization overrides the semantic `--pf-primary` color while keeping the active theme's layout, surfaces and mode palette intact. Presets are application-configurable:
+
+```php
+'accent' => null,
+'accents' => [
+    'blue' => '#0d6efd',
+    'purple' => '#6f42c1',
+    'green' => '#198754',
+],
+'custom_accent' => true,
+```
+
+A null/default accent inherits the selected theme's own primary color. Named presets use the configured palette. When `custom_accent` is enabled, user controls and `PrefabTheme.setAccent()` may also use `#RRGGBB` or `#RGB` values. Prefab Theme automatically selects a readable primary contrast color.
+
+Applications can disable user accent changes independently:
+
+```php
+'user' => [
+    'enabled' => true,
+    'accent' => false,
+],
+```
 
 These controls respect the developer's user policy. A user-triggered change applies immediately and persists by default.
 
@@ -314,13 +359,14 @@ When the application provides a persistence endpoint:
 'save_url' => '/account/appearance',
 ```
 
-the browser runtime POSTs the current theme, mode and density after a change. If the endpoint is unavailable or not configured, Prefab Theme falls back to `localStorage`.
+the browser runtime POSTs the current theme, mode, density and accent after a change. If the endpoint is unavailable or not configured, Prefab Theme falls back to `localStorage`.
 
 Temporary previews can use the JavaScript API with persistence disabled:
 
 ```js
 PrefabTheme.setTheme('win11', false);
 PrefabTheme.setMode('dark', false);
+PrefabTheme.setAccent('teal', false);
 ```
 
 ## Floating mode toggle
@@ -425,8 +471,8 @@ This reports effective appearance, installed themes, application-enabled themes,
 ## Initial scope
 
 - Bootstrap theme layer and semantic tokens
-- Application theme/mode/density policy
-- Optional user-level theme/mode/density
+- Application theme/mode/density/accent policy
+- Optional user-level theme/mode/density/accent
 - Light / Dark / System
 - Dynamic browser switching
 - One bundled fallback theme
