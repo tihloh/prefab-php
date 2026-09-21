@@ -1,33 +1,167 @@
 :root {
-    --pf-radius-sm: .15rem;
-    --pf-radius: .2rem;
-    --pf-radius-lg: .25rem;
+    --pf-radius-sm: 0;
+    --pf-radius: 0;
+    --pf-radius-lg: 0;
     --pf-shadow-sm: none;
-    --pf-shadow: 0 6px 20px rgb(0 0 0 / .22);
-    --pf-transition: 90ms ease;
+    --pf-shadow: 0 8px 24px rgb(0 0 0 / .28);
+    --pf-transition: 80ms linear;
+    --pf-topbar-height: 36px;
+    --pf-sidebar-width: 226px;
+    --pf-page-gap: 1rem;
+    --pf-page-padding: 1rem;
+    --pf-panel-padding: .75rem;
 }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
 }
 
-.pf-sidebar,
-.pf-topbar,
-.pf-panel,
-.pf-data-panel,
-.pf-stat,
-.pf-record-header,
-.pf-settings-section {
+.pf-topbar {
+    min-height: 36px;
+    padding: .25rem .65rem;
+    border-bottom: 1px solid var(--pf-border);
     box-shadow: none;
 }
 
+.pf-sidebar {
+    width: var(--pf-sidebar-width);
+    flex-basis: var(--pf-sidebar-width);
+    border-right: 1px solid var(--pf-border);
+    box-shadow: none;
+}
+
+.pf-sidebar-header {
+    min-height: 36px;
+    padding: .4rem .65rem;
+}
+
+.pf-sidebar-body {
+    padding: .35rem 0;
+}
+
+.pf-nav {
+    gap: 0;
+}
+
+.pf-nav-section {
+    margin: .85rem .75rem .25rem;
+    font-size: .68rem;
+    letter-spacing: .06em;
+}
+
 .pf-nav-link {
+    min-height: 28px;
+    padding: .28rem .75rem;
     border-radius: 0;
+    font-size: .82rem;
+}
+
+.pf-nav-link:hover {
+    background: color-mix(in srgb, var(--pf-surface-alt) 86%, var(--pf-text) 4%);
 }
 
 .pf-nav-link.active,
 .pf-nav-link[aria-current="page"] {
     border-left: 2px solid var(--pf-primary);
+    padding-left: calc(.75rem - 2px);
+    background: var(--pf-surface-alt);
+    color: var(--pf-text);
+}
+
+.pf-page-title,
+.pf-record-title {
+    font-weight: 500;
+}
+
+.pf-page-subtitle,
+.pf-record-id,
+.pf-stat-label,
+.pf-timeline-meta,
+.pf-setting-help {
+    font-family: "Cascadia Code", "Consolas", monospace;
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card,
+.modal-content,
+.dropdown-menu,
+.offcanvas {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.pf-toolbar {
+    padding: .45rem;
+}
+
+.pf-panel-header,
+.pf-settings-title,
+.card-header {
+    background: var(--pf-surface-alt);
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+}
+
+.pf-stat {
+    border-left: 2px solid var(--pf-primary);
+    padding: .75rem;
+}
+
+.pf-stat-value {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 1.45rem;
+    font-weight: 500;
+}
+
+.pf-data-panel .table thead th {
+    background: var(--pf-surface-alt);
+    font-size: .72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.pf-data-panel .table > :not(caption) > * > * {
+    padding-top: .4rem;
+    padding-bottom: .4rem;
+}
+
+.btn,
+.form-control,
+.form-select,
+.input-group-text {
+    min-height: 30px;
+    border-radius: 0;
+    font-size: .82rem;
+}
+
+.btn {
+    padding-top: .25rem;
+    padding-bottom: .25rem;
+}
+
+.pf-status {
+    border-radius: 0;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-weight: 500;
+}
+
+.pf-status::before {
+    border-radius: 0;
+}
+
+.pf-timeline-item::after {
+    border-radius: 0;
+    width: .55rem;
+    height: .55rem;
+    left: .1rem;
 }
 
 code,
