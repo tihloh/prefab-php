@@ -1,0 +1,140 @@
+:root {
+    --pf-radius-sm: .6rem;
+    --pf-radius: .9rem;
+    --pf-radius-lg: 1.3rem;
+    --pf-shadow-sm: 0 8px 24px rgb(0 0 0 / .09);
+    --pf-shadow: 0 24px 70px rgb(0 0 0 / .18);
+    --pf-transition: 160ms ease;
+    --pf-topbar-height: 68px;
+    --pf-sidebar-width: 272px;
+    --pf-page-gap: 1.5rem;
+    --pf-page-padding: 1.5rem;
+    --pf-panel-padding: 1.15rem;
+}
+
+body {
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    background:
+        radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--pf-primary) 24%, transparent), transparent 28rem),
+        radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--pf-info) 18%, transparent), transparent 24rem),
+        radial-gradient(circle at 58% 88%, color-mix(in srgb, var(--pf-success) 13%, transparent), transparent 26rem),
+        var(--pf-bg);
+    background-attachment: fixed;
+}
+
+.pf-shell {
+    background: transparent;
+}
+
+.pf-sidebar {
+    margin: 1rem 0 1rem 1rem;
+    min-height: calc(100dvh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    border: 1px solid color-mix(in srgb, var(--pf-border) 62%, transparent);
+    border-radius: 1.4rem;
+    background: color-mix(in srgb, var(--pf-surface) 68%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+    backdrop-filter: blur(28px) saturate(150%);
+}
+
+.pf-workspace {
+    padding: 1rem;
+}
+
+.pf-topbar {
+    border: 1px solid color-mix(in srgb, var(--pf-border) 62%, transparent);
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--pf-surface) 62%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+    backdrop-filter: blur(28px) saturate(150%);
+}
+
+.pf-main {
+    margin-top: 1rem;
+}
+
+.pf-nav-link {
+    border-radius: .85rem;
+}
+
+.pf-nav-link:hover {
+    background: color-mix(in srgb, var(--pf-surface-alt) 64%, transparent);
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: color-mix(in srgb, var(--pf-primary) 18%, var(--pf-surface) 82%);
+    box-shadow: inset 0 1px rgb(255 255 255 / .10);
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card,
+.modal-content,
+.dropdown-menu,
+.offcanvas {
+    border-color: color-mix(in srgb, var(--pf-border) 62%, transparent);
+    background: color-mix(in srgb, var(--pf-surface) 66%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+    backdrop-filter: blur(24px) saturate(145%);
+}
+
+.pf-stat {
+    position: relative;
+    overflow: hidden;
+}
+
+.pf-stat::after {
+    content: "";
+    position: absolute;
+    right: -2rem;
+    bottom: -2rem;
+    width: 7rem;
+    height: 7rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--pf-primary) 12%, transparent);
+    filter: blur(3px);
+}
+
+.pf-stat-value {
+    position: relative;
+    z-index: 1;
+}
+
+.btn,
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: .8rem;
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    background: color-mix(in srgb, var(--pf-surface) 72%, transparent);
+    backdrop-filter: blur(12px);
+}
+
+.pf-data-panel .table tbody tr:hover {
+    background: color-mix(in srgb, var(--pf-primary) 7%, transparent);
+}
+
+.pf-status {
+    border-color: color-mix(in srgb, var(--pf-status-color) 28%, transparent);
+    background: color-mix(in srgb, var(--pf-status-color) 11%, transparent);
+    backdrop-filter: blur(8px);
+}
+
+@media (max-width: 991.98px) {
+    .pf-workspace { padding: .5rem; }
+    .pf-sidebar {
+        min-height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        border-radius: 0 1.4rem 1.4rem 0;
+    }
+}
