@@ -157,10 +157,10 @@ jobs:
         with:
           php-version: '8.1'
           tools: composer:v2
-      - working-directory: examples/theme-showcase
+      - working-directory: packages/theme/examples/theme-showcase
         run: composer update --no-interaction --prefer-dist --no-progress
-      - run: php -l examples/theme-showcase/index.php
-      - working-directory: examples/theme-showcase
+      - run: php -l packages/theme/examples/theme-showcase/index.php
+      - working-directory: packages/theme/examples/theme-showcase
         run: php index.php > /tmp/theme-showcase.html
       - run: |
           grep -q 'pf-shell' /tmp/theme-showcase.html
