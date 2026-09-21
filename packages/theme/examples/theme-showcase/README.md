@@ -8,6 +8,7 @@ It demonstrates:
 - `pf:theme`, `pf:theme-mode` and `pf:theme-density`
 - Light / Dark / System
 - Comfortable / Compact density
+- Preset accent colors plus a custom color picker
 - User preference persistence through the Theme browser runtime
 - Optional floating mode toggle
 - Bundled `default` fallback plus platform-inspired and product-oriented demo themes
@@ -48,7 +49,7 @@ Open:
 http://127.0.0.1:8080
 ```
 
-Bootstrap is loaded from jsDelivr. The demo enables user theme, mode and density changes. With no `save_url`, appearance changes persist in browser `localStorage`.
+Bootstrap is loaded from jsDelivr. The demo enables user theme, mode, density and accent changes. With no `save_url`, appearance changes persist in browser `localStorage`.
 
 The optional demo themes live under:
 
@@ -96,3 +97,7 @@ These presets are intended to feel like complete admin product families rather t
 - **Developer** — terminal-inspired navigation, monospace metadata, compact tables and console-like controls.
 
 They remain normal Prefab themes: the same application markup can switch between all of them.
+
+## Accent testing
+
+Use the Appearance section or topbar Appearance menu to switch between the theme's own accent and the preset accent palette. The custom color input accepts any browser color-picker value. Accent changes update the semantic `--pf-primary` token, so primary buttons, links, active navigation and other Prefab/Bootstrap primary treatments follow the selected color without changing the theme's structural identity.
