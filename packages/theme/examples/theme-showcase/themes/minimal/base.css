@@ -1,14 +1,96 @@
 :root {
-    --pf-radius-sm: .15rem;
-    --pf-radius: .2rem;
-    --pf-radius-lg: .25rem;
+    --pf-radius-sm: 0;
+    --pf-radius: 0;
+    --pf-radius-lg: 0;
     --pf-shadow-sm: none;
     --pf-shadow: none;
     --pf-transition: 100ms ease;
+    --pf-topbar-height: 64px;
+    --pf-sidebar-width: 205px;
+    --pf-page-gap: 2rem;
+    --pf-page-padding: 2.5rem;
+    --pf-panel-padding: 1.25rem;
 }
 
 body {
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -.01em;
+}
+
+.pf-shell {
+    background: var(--pf-bg);
+}
+
+.pf-sidebar {
+    background: transparent;
+    border-right: 0;
+    padding: 1rem .5rem;
+}
+
+.pf-sidebar-header {
+    border-bottom: 0;
+    padding-inline: .75rem;
+}
+
+.pf-sidebar-body {
+    padding: 1rem .25rem;
+}
+
+.pf-nav-section {
+    margin-top: 1.35rem;
+    color: var(--pf-text);
+    font-size: .67rem;
+    letter-spacing: .12em;
+}
+
+.pf-nav-link {
+    min-height: 34px;
+    padding: .35rem .5rem;
+    border-radius: 0;
+    color: var(--pf-text-muted);
+}
+
+.pf-nav-link:hover {
+    background: transparent;
+    color: var(--pf-text);
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: transparent;
+    color: var(--pf-text);
+    font-weight: 700;
+    box-shadow: inset 0 -1px var(--pf-text);
+}
+
+.pf-topbar {
+    background: transparent;
+    border-bottom: 0;
+    padding-inline: 2.5rem;
+}
+
+.pf-page {
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+.pf-page-title {
+    font-size: clamp(1.75rem, 3vw, 2.6rem);
+    font-weight: 600;
+    letter-spacing: -.04em;
+}
+
+.pf-page-subtitle {
+    max-width: 44rem;
+    line-height: 1.65;
+}
+
+.pf-toolbar {
+    padding: 0 0 1rem;
+    border: 0;
+    border-bottom: 1px solid var(--pf-border);
+    background: transparent;
+    border-radius: 0;
 }
 
 .pf-panel,
@@ -17,18 +99,108 @@ body {
 .pf-record-header,
 .pf-settings-section,
 .card {
+    border: 0;
+    border-top: 1px solid var(--pf-border);
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
 }
 
-.pf-topbar {
-    background: var(--pf-bg);
+.pf-panel {
+    padding-inline: 0;
 }
 
-.pf-sidebar {
-    background: var(--pf-bg);
+.pf-panel-header {
+    margin-inline: 0;
+    padding-inline: 0;
+    background: transparent;
 }
 
-.pf-nav-link.active,
-.pf-nav-link[aria-current="page"] {
-    font-weight: 700;
+.pf-panel-footer {
+    margin-inline: 0;
+    padding-inline: 0;
+}
+
+.pf-stats {
+    gap: 1.5rem;
+}
+
+.pf-stat {
+    padding: 1rem 0 0;
+}
+
+.pf-stat-value {
+    font-size: 2.15rem;
+    font-weight: 500;
+    letter-spacing: -.04em;
+}
+
+.pf-record-header {
+    padding: 1.25rem 0;
+}
+
+.pf-settings-section {
+    overflow: visible;
+}
+
+.pf-settings-title,
+.pf-setting-row {
+    padding-inline: 0;
+}
+
+.pf-data-footer {
+    padding-inline: 0;
+}
+
+.table > :not(caption) > * > * {
+    padding-left: 0;
+    padding-right: 1.25rem;
+}
+
+.btn {
+    border-radius: 0;
+    font-weight: 600;
+}
+
+.btn-primary {
+    border-color: var(--pf-text);
+    background: var(--pf-text);
+    color: var(--pf-bg);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    padding-left: 0;
+    background: transparent;
+}
+
+.form-control:focus,
+.form-select:focus {
+    box-shadow: none;
+    border-color: var(--pf-text);
+}
+
+.pf-status {
+    border: 0;
+    border-bottom: 1px solid currentColor;
+    border-radius: 0;
+    background: transparent;
+    padding-inline: 0;
+}
+
+.pf-status::before {
+    display: none;
+}
+
+@media (max-width: 991.98px) {
+    .pf-sidebar {
+        background: var(--pf-bg);
+        border-right: 1px solid var(--pf-border);
+        padding: 0;
+    }
+    .pf-topbar { padding-inline: 1rem; }
+    .pf-page { padding: 1.5rem 1rem; }
 }

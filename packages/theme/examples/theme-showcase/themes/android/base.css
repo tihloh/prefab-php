@@ -1,25 +1,86 @@
 :root {
-    --pf-radius-sm: .55rem;
-    --pf-radius: .8rem;
-    --pf-radius-lg: 1.1rem;
-    --pf-shadow-sm: 0 1px 3px rgb(0 0 0 / .10);
-    --pf-shadow: 0 8px 24px rgb(0 0 0 / .14);
+    --pf-radius-sm: .65rem;
+    --pf-radius: 1rem;
+    --pf-radius-lg: 1.35rem;
+    --pf-shadow-sm: 0 1px 2px rgb(0 0 0 / .08);
+    --pf-shadow: 0 10px 28px rgb(0 0 0 / .15);
     --pf-transition: 160ms ease;
+    --pf-topbar-height: 72px;
+    --pf-sidebar-width: 286px;
+    --pf-page-gap: 1.5rem;
+    --pf-page-padding: 1.5rem;
+    --pf-panel-padding: 1.25rem;
 }
 
 body {
     font-family: Roboto, "Noto Sans", system-ui, sans-serif;
 }
 
-.btn {
-    border-radius: 999px;
-    font-weight: 600;
+.pf-sidebar {
+    background: var(--pf-surface-alt);
+    border-right: 0;
+    padding: .5rem;
 }
 
-.form-control,
-.form-select,
-.input-group-text {
-    border-radius: .8rem;
+.pf-sidebar-header {
+    min-height: 64px;
+    border-bottom: 0;
+    padding-inline: 1rem;
+}
+
+.pf-sidebar-body {
+    padding: .5rem;
+}
+
+.pf-nav {
+    gap: .3rem;
+}
+
+.pf-nav-section {
+    margin: 1.15rem .9rem .4rem;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .72rem;
+}
+
+.pf-nav-link {
+    min-height: 48px;
+    padding: .65rem 1rem;
+    border-radius: 999px;
+    font-weight: 500;
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: color-mix(in srgb, var(--pf-primary) 18%, var(--pf-surface-alt));
+    color: var(--pf-text);
+    font-weight: 700;
+}
+
+.pf-nav-counter {
+    min-width: 1.75rem;
+    padding: .2rem .5rem;
+    background: color-mix(in srgb, var(--pf-primary) 14%, var(--pf-surface));
+}
+
+.pf-topbar {
+    min-height: 72px;
+    border-bottom: 0;
+    background: var(--pf-bg);
+    padding-inline: 1.5rem;
+}
+
+.pf-page-title {
+    font-size: clamp(1.65rem, 2.5vw, 2.2rem);
+    font-weight: 500;
+    letter-spacing: -.025em;
+}
+
+.pf-toolbar {
+    border: 0;
+    border-radius: 1.35rem;
+    background: var(--pf-surface-alt);
+    padding: 1rem;
 }
 
 .pf-panel,
@@ -28,10 +89,117 @@ body {
 .pf-record-header,
 .pf-settings-section,
 .card {
-    border-radius: 1rem;
+    border: 0;
+    border-radius: 1.35rem;
+    background: var(--pf-surface);
+    box-shadow: none;
 }
 
-.pf-nav-link.active,
-.pf-nav-link[aria-current="page"] {
+.pf-panel-header,
+.pf-settings-title,
+.card-header {
+    border-bottom: 0;
+    font-weight: 700;
+}
+
+.pf-stat {
+    padding: 1.35rem;
+    background: color-mix(in srgb, var(--pf-primary) 8%, var(--pf-surface));
+}
+
+.pf-stat-value {
+    font-size: 2rem;
+    font-weight: 500;
+}
+
+.btn {
+    min-height: 40px;
     border-radius: 999px;
+    padding-inline: 1.1rem;
+    font-weight: 700;
+    letter-spacing: .01em;
+}
+
+.btn-primary {
+    box-shadow: 0 2px 5px rgb(0 0 0 / .12);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    min-height: 52px;
+    border: 1px solid transparent;
+    border-radius: .9rem;
+    background: var(--pf-surface-alt);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--pf-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--pf-primary) 14%, transparent);
+}
+
+.pf-status {
+    min-height: 1.85rem;
+    padding-inline: .75rem;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pf-status-color) 16%, var(--pf-surface));
+}
+
+.pf-status::before {
+    width: .4rem;
+    height: .4rem;
+}
+
+.pf-record-header {
+    padding: 1.35rem;
+}
+
+.pf-details {
+    gap: 1.25rem;
+}
+
+.pf-detail {
+    padding: .85rem;
+    border-radius: 1rem;
+    background: var(--pf-surface-alt);
+}
+
+.pf-data-panel {
+    overflow: hidden;
+}
+
+.pf-data-panel .table thead th {
+    border-bottom: 0;
+    background: var(--pf-surface-alt);
+}
+
+.pf-data-panel .table tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+.pf-settings-section {
+    background: var(--pf-surface-alt);
+}
+
+.pf-setting-row {
+    margin: .4rem;
+    border: 0 !important;
+    border-radius: 1rem;
+    background: var(--pf-surface);
+}
+
+.pf-timeline-item::after {
+    width: .9rem;
+    height: .9rem;
+    left: -.05rem;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--pf-primary) 12%, var(--pf-surface));
+}
+
+.pf-theme-toggle {
+    width: 3.5rem;
+    height: 3.5rem;
+    border: 0;
+    box-shadow: var(--pf-shadow);
 }
