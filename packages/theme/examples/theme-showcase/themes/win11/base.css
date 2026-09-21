@@ -1,35 +1,79 @@
 :root {
-    --pf-radius-sm: .35rem;
-    --pf-radius: .5rem;
-    --pf-radius-lg: .75rem;
-    --pf-shadow-sm: 0 2px 8px rgb(0 0 0 / .08);
-    --pf-shadow: 0 8px 28px rgb(0 0 0 / .14);
+    --pf-radius-sm: .4rem;
+    --pf-radius: .55rem;
+    --pf-radius-lg: .8rem;
+    --pf-shadow-sm: 0 2px 8px rgb(0 0 0 / .07);
+    --pf-shadow: 0 16px 40px rgb(0 0 0 / .16);
     --pf-transition: 140ms ease;
+    --pf-topbar-height: 58px;
+    --pf-sidebar-width: 276px;
+    --pf-page-gap: 1.25rem;
+    --pf-page-padding: 1.25rem;
+    --pf-panel-padding: 1.05rem;
 }
 
 body {
     font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    background:
+        radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--pf-primary) 9%, transparent), transparent 28rem),
+        var(--pf-bg);
 }
 
-.btn,
-.form-control,
-.form-select,
-.input-group-text,
-.dropdown-menu,
-.card,
-.modal-content,
-.offcanvas {
-    backdrop-filter: saturate(140%);
+.pf-shell {
+    background: transparent;
 }
 
-.pf-sidebar,
+.pf-sidebar {
+    min-height: calc(100dvh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+    margin: .75rem 0 .75rem .75rem;
+    border: 1px solid color-mix(in srgb, var(--pf-border) 75%, transparent);
+    border-radius: .9rem;
+    background: color-mix(in srgb, var(--pf-surface) 88%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+    backdrop-filter: blur(24px) saturate(135%);
+}
+
+.pf-workspace {
+    padding: .75rem;
+}
+
 .pf-topbar {
-    backdrop-filter: blur(18px) saturate(130%);
+    min-height: var(--pf-topbar-height);
+    border: 1px solid color-mix(in srgb, var(--pf-border) 72%, transparent);
+    border-radius: .8rem;
+    background: color-mix(in srgb, var(--pf-surface) 84%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+    backdrop-filter: blur(24px) saturate(145%);
+}
+
+.pf-main {
+    margin-top: .75rem;
+    border: 1px solid color-mix(in srgb, var(--pf-border) 68%, transparent);
+    border-radius: .9rem;
+    background: color-mix(in srgb, var(--pf-bg) 92%, var(--pf-surface));
+    overflow: hidden;
+}
+
+.pf-sidebar-header {
+    border-bottom-color: color-mix(in srgb, var(--pf-border) 65%, transparent);
+}
+
+.pf-nav {
+    gap: .2rem;
+}
+
+.pf-nav-link {
+    min-height: 40px;
+    border-radius: .45rem;
+    padding-inline: .8rem;
 }
 
 .pf-nav-link.active,
 .pf-nav-link[aria-current="page"] {
     position: relative;
+    background: color-mix(in srgb, var(--pf-primary) 11%, var(--pf-surface));
+    color: var(--pf-text);
 }
 
 .pf-nav-link.active::before,
@@ -37,9 +81,77 @@ body {
     content: "";
     position: absolute;
     left: .15rem;
-    top: 25%;
+    top: 24%;
     width: 3px;
-    height: 50%;
+    height: 52%;
     border-radius: 999px;
     background: var(--pf-primary);
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card,
+.modal-content,
+.dropdown-menu,
+.offcanvas {
+    background: color-mix(in srgb, var(--pf-surface) 92%, transparent);
+    border-color: color-mix(in srgb, var(--pf-border) 78%, transparent);
+    box-shadow:
+        inset 0 1px rgb(255 255 255 / .05),
+        var(--pf-shadow-sm);
+    backdrop-filter: blur(18px) saturate(125%);
+}
+
+.pf-stat {
+    position: relative;
+    overflow: hidden;
+}
+
+.pf-stat::after {
+    content: "";
+    position: absolute;
+    right: -1rem;
+    bottom: -2rem;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--pf-primary) 10%, transparent);
+}
+
+.btn {
+    border-radius: .45rem;
+}
+
+.btn-primary {
+    box-shadow: inset 0 1px rgb(255 255 255 / .16);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: .45rem;
+    background: color-mix(in srgb, var(--pf-surface) 88%, transparent);
+}
+
+.table > :not(caption) > * > * {
+    border-bottom-color: color-mix(in srgb, var(--pf-border) 65%, transparent);
+}
+
+.pf-theme-toggle {
+    border-radius: .75rem;
+}
+
+@media (max-width: 991.98px) {
+    .pf-workspace { padding: .5rem; }
+    .pf-sidebar {
+        min-height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        border-radius: 0 .9rem .9rem 0;
+    }
+    .pf-main { margin-top: .5rem; }
 }
