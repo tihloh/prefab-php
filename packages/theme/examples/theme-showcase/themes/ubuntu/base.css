@@ -3,19 +3,130 @@
     --pf-radius: .45rem;
     --pf-radius-lg: .65rem;
     --pf-shadow-sm: 0 1px 3px rgb(0 0 0 / .10);
-    --pf-shadow: 0 8px 24px rgb(0 0 0 / .16);
+    --pf-shadow: 0 10px 28px rgb(0 0 0 / .18);
     --pf-transition: 120ms ease;
+    --pf-topbar-height: 54px;
+    --pf-sidebar-width: 250px;
+    --pf-page-gap: 1.25rem;
+    --pf-page-padding: 1.35rem;
+    --pf-panel-padding: 1rem;
 }
 
 body {
     font-family: Ubuntu, "Noto Sans", system-ui, sans-serif;
 }
 
-.pf-nav-link.active,
-.pf-nav-link[aria-current="page"] {
-    border-left: 3px solid var(--pf-primary);
+.pf-sidebar {
+    background: #2c001e;
+    color: #f7edf4;
+    border-right: 0;
+    box-shadow: 4px 0 18px rgb(0 0 0 / .18);
+}
+
+.pf-sidebar-header {
+    border-bottom-color: rgb(255 255 255 / .10);
+    color: #ffffff;
+}
+
+.pf-sidebar .pf-nav-section {
+    color: #c9a9bd;
+}
+
+.pf-sidebar .pf-nav-link {
+    color: #f2e8ee;
+    border-radius: .35rem;
+}
+
+.pf-sidebar .pf-nav-link:hover {
+    background: rgb(255 255 255 / .08);
+    color: #ffffff;
+}
+
+.pf-sidebar .pf-nav-link.active,
+.pf-sidebar .pf-nav-link[aria-current="page"] {
+    background: #e95420;
+    color: #ffffff;
+    border-left: 0;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08);
+}
+
+.pf-sidebar .pf-nav-counter {
+    background: rgb(255 255 255 / .12);
+    color: #ffffff;
+}
+
+.pf-topbar {
+    border-bottom: 0;
+    box-shadow: 0 1px 0 var(--pf-border), var(--pf-shadow-sm);
+}
+
+.pf-page-title {
+    font-weight: 700;
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section {
+    border-color: color-mix(in srgb, var(--pf-border) 80%, transparent);
+}
+
+.pf-panel-header,
+.pf-settings-title,
+.card-header {
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--pf-primary) 10%, var(--pf-surface)), transparent 72%);
+}
+
+.pf-stat {
+    position: relative;
+    padding-top: 1.15rem;
+    overflow: hidden;
+}
+
+.pf-stat::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--pf-primary);
+}
+
+.pf-stat-value {
+    font-weight: 700;
+}
+
+.btn {
+    border-radius: .35rem;
 }
 
 .btn-primary {
-    font-weight: 600;
+    font-weight: 700;
+    box-shadow: inset 0 1px rgb(255 255 255 / .12);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: .35rem;
+}
+
+.pf-status {
+    border-radius: .35rem;
+}
+
+.pf-status::before {
+    border-radius: .1rem;
+}
+
+.table thead th {
+    background: color-mix(in srgb, var(--pf-primary) 6%, var(--pf-surface));
+    font-weight: 700;
+}
+
+.pf-timeline-item::after {
+    border-radius: .15rem;
+    transform: rotate(45deg);
 }
