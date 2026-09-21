@@ -1,0 +1,15 @@
+{
+  "id": "android",
+  "name": "Android",
+  "version": "1.0.0",
+  "description": "An Android Material-inspired adaptive theme for Prefab Theme.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

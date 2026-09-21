@@ -1,0 +1,15 @@
+{
+  "id": "ubuntu",
+  "name": "Ubuntu",
+  "version": "1.0.0",
+  "description": "An Ubuntu-inspired warm desktop theme for Prefab Theme.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

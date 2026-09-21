@@ -1,0 +1,21 @@
+:root {
+    --pf-radius-sm: .3rem;
+    --pf-radius: .45rem;
+    --pf-radius-lg: .65rem;
+    --pf-shadow-sm: 0 1px 3px rgb(0 0 0 / .10);
+    --pf-shadow: 0 8px 24px rgb(0 0 0 / .16);
+    --pf-transition: 120ms ease;
+}
+
+body {
+    font-family: Ubuntu, "Noto Sans", system-ui, sans-serif;
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    border-left: 3px solid var(--pf-primary);
+}
+
+.btn-primary {
+    font-weight: 600;
+}

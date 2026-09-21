@@ -169,6 +169,9 @@ jobs:
           grep -q 'Windows 11' /tmp/theme-showcase.html
           grep -q 'VS Code' /tmp/theme-showcase.html
           grep -q 'Minimal' /tmp/theme-showcase.html
+          grep -q 'Ubuntu' /tmp/theme-showcase.html
+          grep -q 'macOS' /tmp/theme-showcase.html
+          grep -q 'Android' /tmp/theme-showcase.html
 
   sqlite-integration:
     runs-on: ubuntu-latest

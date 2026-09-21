@@ -1,0 +1,37 @@
+:root {
+    --pf-radius-sm: .55rem;
+    --pf-radius: .8rem;
+    --pf-radius-lg: 1.1rem;
+    --pf-shadow-sm: 0 1px 3px rgb(0 0 0 / .10);
+    --pf-shadow: 0 8px 24px rgb(0 0 0 / .14);
+    --pf-transition: 160ms ease;
+}
+
+body {
+    font-family: Roboto, "Noto Sans", system-ui, sans-serif;
+}
+
+.btn {
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: .8rem;
+}
+
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card {
+    border-radius: 1rem;
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    border-radius: 999px;
+}

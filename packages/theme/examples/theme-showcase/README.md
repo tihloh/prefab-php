@@ -10,7 +10,7 @@ It demonstrates:
 - Comfortable / Compact density
 - User preference persistence through the Theme browser runtime
 - Optional floating mode toggle
-- Bundled `default` fallback plus `showcase`, `win11`, `vscode` and `minimal` demo themes
+- Bundled `default` fallback plus `showcase`, `win11`, `vscode`, `minimal`, `ubuntu`, `macos` and `android` demo themes
 - Responsive `pf-shell`, sidebar and topbar
 - Page headers and actions
 - Toolbars

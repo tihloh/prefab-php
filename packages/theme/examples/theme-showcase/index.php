@@ -17,6 +17,9 @@ $themes = new ThemeManager([
         'win11' => ['modes' => ['light', 'dark']],
         'vscode' => ['modes' => ['light', 'dark']],
         'minimal' => ['modes' => ['light', 'dark']],
+        'ubuntu' => ['modes' => ['light', 'dark']],
+        'macos' => ['modes' => ['light', 'dark']],
+        'android' => ['modes' => ['light', 'dark']],
     ],
     'user' => [
         'enabled' => true,
