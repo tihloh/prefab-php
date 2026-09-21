@@ -1,0 +1,29 @@
+{
+  "name": "tihloh/prefab-theme-showcase",
+  "type": "project",
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../../../core",
+      "options": {
+        "symlink": true,
+        "versions": {
+          "tihloh/prefab-core": "0.5.2"
+        }
+      }
+    },
+    {
+      "type": "path",
+      "url": "../..",
+      "options": {
+        "symlink": true
+      }
+    }
+  ],
+  "require": {
+    "php": ">=8.1",
+    "tihloh/prefab-theme": "@dev"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
