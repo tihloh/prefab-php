@@ -1,0 +1,45 @@
+:root {
+    --pf-radius-sm: .35rem;
+    --pf-radius: .5rem;
+    --pf-radius-lg: .75rem;
+    --pf-shadow-sm: 0 2px 8px rgb(0 0 0 / .08);
+    --pf-shadow: 0 8px 28px rgb(0 0 0 / .14);
+    --pf-transition: 140ms ease;
+}
+
+body {
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+.btn,
+.form-control,
+.form-select,
+.input-group-text,
+.dropdown-menu,
+.card,
+.modal-content,
+.offcanvas {
+    backdrop-filter: saturate(140%);
+}
+
+.pf-sidebar,
+.pf-topbar {
+    backdrop-filter: blur(18px) saturate(130%);
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    position: relative;
+}
+
+.pf-nav-link.active::before,
+.pf-nav-link[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: .15rem;
+    top: 25%;
+    width: 3px;
+    height: 50%;
+    border-radius: 999px;
+    background: var(--pf-primary);
+}
