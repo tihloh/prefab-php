@@ -48,7 +48,7 @@ Open:
 http://127.0.0.1:8080
 ```
 
-Bootstrap is loaded from jsDelivr. The demo enables user theme, mode and density changes. With no `save_url`, appearance changes persist in browser `localStorage`.
+Bootstrap is loaded from jsDelivr. The demo uses the local Theme package and resolves Prefab Core from its GitHub repository, so no sibling `prefab-core` clone is required. The demo enables user theme, mode and density changes. With no `save_url`, appearance changes persist in browser `localStorage`.
 
 The custom sample theme lives in:
 
