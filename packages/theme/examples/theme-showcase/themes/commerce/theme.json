@@ -1,0 +1,15 @@
+{
+  "id": "commerce",
+  "name": "Commerce",
+  "version": "1.0.0",
+  "description": "A retail and inventory dashboard theme with merchandising-oriented cards and data surfaces.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}
