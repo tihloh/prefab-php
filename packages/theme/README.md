@@ -398,6 +398,22 @@ $themes->refresh();
 
 The installer rejects executable/server-side files and unsafe archive paths. The built-in `default` theme cannot be replaced or removed by a downloaded archive.
 
+## Interactive showcase
+
+A runnable gallery of all current Theme/admin objects and Bootstrap integration is available at:
+
+```text
+examples/theme-showcase
+```
+
+Run it with:
+
+```bash
+cd examples/theme-showcase
+composer update
+php -S 127.0.0.1:8080
+```
+
 ## Diagnostics
 
 ```php

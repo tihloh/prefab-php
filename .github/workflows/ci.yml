@@ -149,6 +149,24 @@ jobs:
       - name: Theme JS syntax check
         run: node --check packages/theme/assets/theme.js
 
+  theme-showcase-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+      - working-directory: examples/theme-showcase
+        run: composer update --no-interaction --prefer-dist --no-progress
+      - run: php -l examples/theme-showcase/index.php
+      - working-directory: examples/theme-showcase
+        run: php index.php > /tmp/theme-showcase.html
+      - run: |
+          grep -q 'pf-shell' /tmp/theme-showcase.html
+          grep -q 'pf:theme-mode="toggle"' /tmp/theme-showcase.html
+          grep -q 'Theme & Component Showcase' /tmp/theme-showcase.html
+
   sqlite-integration:
     runs-on: ubuntu-latest
     steps:
