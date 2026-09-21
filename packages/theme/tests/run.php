@@ -60,12 +60,14 @@ $resolver = new ThemeResolver($registry, [
         'theme' => true,
         'mode' => true,
         'density' => true,
+        'accent' => true,
     ],
 ]);
 
 $appearance = $resolver->resolve([
     'mode' => 'dark',
     'density' => 'compact',
+    'accent' => 'purple',
 ]);
 
 check(
@@ -83,6 +85,37 @@ check(
 check(
     $appearance->source['mode'] === 'user',
     'Resolver should report user mode source.',
+);
+check(
+    $appearance->accent === 'purple',
+    'Allowed user accent should override the application accent.',
+);
+check(
+    $appearance->source['accent'] === 'user',
+    'Resolver should report user accent source.',
+);
+check(
+    $resolver->accentColor($appearance->accent) === '#6f42c1',
+    'Named accents should resolve to configured colors.',
+);
+
+$customAccentResolver = new ThemeResolver($registry, [
+    'default' => 'default',
+    'custom_accent' => true,
+    'user' => [
+        'enabled' => true,
+        'accent' => true,
+    ],
+]);
+
+$customAccent = $customAccentResolver->resolve(['accent' => '#abc']);
+check(
+    $customAccent->accent === '#aabbcc',
+    'Allowed custom accent should normalize short hex values.',
+);
+check(
+    $customAccentResolver->accentColor($customAccent->accent) === '#aabbcc',
+    'Custom accent should resolve to its normalized color.',
 );
 
 $locked = new ThemeResolver($registry, [
@@ -144,6 +177,7 @@ $manager = new ThemeManager([
     'themes_path' => $public . '/installed-themes',
     'default' => 'default',
     'density' => 'compact',
+    'accent' => 'purple',
     'themes' => ['default'],
 ]);
 
@@ -188,6 +222,18 @@ check(
     'Explicit dark mode should synchronize Bootstrap color mode.',
 );
 check(
+    str_contains($manager->attributes(), 'data-accent="purple"'),
+    'Resolved accent should be exposed as a root data attribute.',
+);
+check(
+    str_contains($styles, 'data-prefab-accent'),
+    'Resolved accent should render a final accent override.',
+);
+check(
+    str_contains($styles, '--pf-primary:#6f42c1'),
+    'Named accent should override the primary semantic color.',
+);
+check(
     str_contains($manager->scripts(), 'prefab-theme-config'),
     'Theme scripts should include client configuration.',
 );
@@ -202,6 +248,14 @@ check(
 check(
     str_contains($manager->scripts(), '"assetMode":"inline"'),
     'Theme scripts should declare inline asset mode by default.',
+);
+check(
+    str_contains($manager->scripts(), '"purple":"#6f42c1"'),
+    'Theme scripts should expose accent presets.',
+);
+check(
+    str_contains($manager->scripts(), '"customAccent":false'),
+    'Theme scripts should expose custom accent policy.',
 );
 check(
     str_contains($manager->scripts(), 'window.PrefabTheme = api'),
@@ -221,6 +275,14 @@ check(
 check(
     str_contains($runtime, '[pf\\\\:theme-density]'),
     'Theme runtime should support pf:theme-density.',
+);
+check(
+    str_contains($runtime, '[pf\\\\:theme-accent]'),
+    'Theme runtime should support pf:theme-accent.',
+);
+check(
+    str_contains($runtime, 'setAccent(accent, persist = true)'),
+    'Theme runtime should expose setAccent().',
 );
 check(
     !str_contains($runtime, 'data-prefab-mode'),
