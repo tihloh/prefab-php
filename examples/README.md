@@ -29,6 +29,10 @@ The examples demonstrate these rules:
 - `auth-logs-test` — Auth activity is recorded automatically when Logs exists
 - `permissions-logs-test` — permission activity is recorded automatically when Logs exists
 
+## UI / theme showcase
+
+- `theme-showcase` — interactive Prefab Theme gallery covering appearance controls, every current `pf-*` admin object, responsive shell behavior, Bootstrap integration and diagnostics
+
 ## Full integration
 
 - `combined-test` — Users + Auth + Permissions + Logs in one interactive session/in-memory app
