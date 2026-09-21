@@ -1,0 +1,14 @@
+:root {
+    --pf-bg: #f2f4f7;
+    --pf-surface: #ffffff;
+    --pf-surface-alt: #f6f7f9;
+    --pf-text: #202631;
+    --pf-text-muted: #667085;
+    --pf-border: #d8dde6;
+    --pf-primary: #2457a6;
+    --pf-primary-contrast: #ffffff;
+    --pf-success: #287d4b;
+    --pf-warning: #9b6509;
+    --pf-danger: #b73a44;
+    --pf-info: #2b6f9a;
+}
