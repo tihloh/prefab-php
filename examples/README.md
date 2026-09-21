@@ -31,7 +31,7 @@ The examples demonstrate these rules:
 
 ## UI / theme showcase
 
-- `theme-showcase` — interactive Prefab Theme gallery covering appearance controls, every current `pf-*` admin object, responsive shell behavior, Bootstrap integration and diagnostics
+- `../packages/theme/examples/theme-showcase` — interactive Prefab Theme gallery covering appearance controls, every current `pf-*` admin object, responsive shell behavior, Bootstrap integration and diagnostics
 
 ## Full integration
 
