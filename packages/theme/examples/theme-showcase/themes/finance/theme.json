@@ -1,0 +1,15 @@
+{
+  "id": "finance",
+  "name": "Finance",
+  "version": "1.0.0",
+  "description": "A finance and analytics dashboard theme with compact metrics and premium dark surfaces.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}
