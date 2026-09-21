@@ -1,0 +1,127 @@
+:root {
+    --pf-radius-sm: .35rem;
+    --pf-radius: .55rem;
+    --pf-radius-lg: .8rem;
+    --pf-shadow-sm: 0 4px 12px rgb(0 0 0 / .08);
+    --pf-shadow: 0 18px 42px rgb(0 0 0 / .18);
+    --pf-transition: 120ms ease;
+    --pf-topbar-height: 56px;
+    --pf-sidebar-width: 236px;
+    --pf-page-gap: 1.1rem;
+    --pf-page-padding: 1.25rem;
+    --pf-panel-padding: .95rem;
+}
+
+body {
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+.pf-sidebar {
+    border-right: 0;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--pf-primary) 13%, var(--pf-surface)),
+            var(--pf-surface) 32%);
+}
+
+.pf-nav-link {
+    min-height: 36px;
+    border-radius: .45rem;
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: color-mix(in srgb, var(--pf-primary) 15%, var(--pf-surface));
+    box-shadow: inset 3px 0 var(--pf-primary);
+    color: var(--pf-text);
+}
+
+.pf-page-title {
+    font-weight: 650;
+    letter-spacing: -.03em;
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card {
+    border-color: color-mix(in srgb, var(--pf-border) 78%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+}
+
+.pf-stats {
+    gap: .8rem;
+}
+
+.pf-stat {
+    padding: 1rem;
+    background:
+        linear-gradient(145deg, var(--pf-surface), color-mix(in srgb, var(--pf-primary) 5%, var(--pf-surface)));
+}
+
+.pf-stat-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.pf-stat-value {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.85rem;
+    font-weight: 650;
+}
+
+.pf-stat-meta {
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-panel-header,
+.pf-settings-title {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+}
+
+.pf-data-panel .table {
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-data-panel .table thead th {
+    background: color-mix(in srgb, var(--pf-primary) 5%, var(--pf-surface-alt));
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+}
+
+.pf-data-panel .table tbody tr:hover {
+    background: color-mix(in srgb, var(--pf-primary) 5%, transparent);
+}
+
+.btn {
+    border-radius: .45rem;
+    font-weight: 600;
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: .45rem;
+}
+
+.pf-status {
+    border-radius: .35rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-record-id,
+.pf-detail-value,
+.pf-timeline-meta {
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-timeline-item::after {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pf-primary) 10%, var(--pf-surface));
+}
