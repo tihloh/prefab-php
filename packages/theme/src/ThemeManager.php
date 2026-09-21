@@ -444,7 +444,7 @@ final class ThemeManager
         }
 
         return sprintf(
-            '<style data-prefab-accent>:root{--pf-primary:%s;--pf-primary-contrast:%s}</style>',
+            '<style data-prefab-accent>html[data-accent]{--pf-primary:%s;--pf-primary-contrast:%s}</style>',
             $this->escape($color),
             $this->escape($this->accentContrast($color)),
         );

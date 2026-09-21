@@ -234,6 +234,10 @@ check(
     'Named accent should override the primary semantic color.',
 );
 check(
+    str_contains($styles, 'html[data-accent]'),
+    'Accent CSS should outrank theme :root palette declarations.',
+);
+check(
     str_contains($manager->scripts(), 'prefab-theme-config'),
     'Theme scripts should include client configuration.',
 );
@@ -283,6 +287,10 @@ check(
 check(
     str_contains($runtime, 'setAccent(accent, persist = true)'),
     'Theme runtime should expose setAccent().',
+);
+check(
+    str_contains($runtime, 'html[data-accent]'),
+    'Theme runtime should keep accent CSS above theme palette specificity.',
 );
 check(
     !str_contains($runtime, 'data-prefab-mode'),
