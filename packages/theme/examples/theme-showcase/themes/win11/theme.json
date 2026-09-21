@@ -1,0 +1,15 @@
+{
+  "id": "win11",
+  "name": "Windows 11",
+  "version": "1.0.0",
+  "description": "A Fluent-inspired Windows 11 theme for Prefab Theme.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

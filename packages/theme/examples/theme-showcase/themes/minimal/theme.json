@@ -1,0 +1,15 @@
+{
+  "id": "minimal",
+  "name": "Minimal",
+  "version": "1.0.0",
+  "description": "A restrained low-chrome theme with simple surfaces and typography.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

@@ -10,7 +10,7 @@ It demonstrates:
 - Comfortable / Compact density
 - User preference persistence through the Theme browser runtime
 - Optional floating mode toggle
-- Bundled `default` theme plus an external `showcase` theme
+- Bundled `default` fallback plus `showcase`, `win11`, `vscode` and `minimal` demo themes
 - Responsive `pf-shell`, sidebar and topbar
 - Page headers and actions
 - Toolbars
@@ -50,12 +50,14 @@ http://127.0.0.1:8080
 
 Bootstrap is loaded from jsDelivr. The demo enables user theme, mode and density changes. With no `save_url`, appearance changes persist in browser `localStorage`.
 
-The custom sample theme lives in:
+The optional demo themes live under:
 
 ```text
-themes/showcase/
-├── theme.json
-├── base.css
-├── light.css
-└── dark.css
+themes/
+├── showcase/
+├── win11/
+├── vscode/
+└── minimal/
 ```
+
+Each theme is a normal Prefab Theme directory with `theme.json`, `base.css`, `light.css` and `dark.css`. They are intentionally kept in the showcase instead of the package's built-in `themes/` directory, so the Theme engine itself still ships only the `default` fallback theme.
