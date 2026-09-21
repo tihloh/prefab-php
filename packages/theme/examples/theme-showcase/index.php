@@ -20,6 +20,12 @@ $themes = new ThemeManager([
         'ubuntu' => ['modes' => ['light', 'dark']],
         'macos' => ['modes' => ['light', 'dark']],
         'android' => ['modes' => ['light', 'dark']],
+        'glass' => ['modes' => ['light', 'dark']],
+        'enterprise' => ['modes' => ['light', 'dark']],
+        'saas' => ['modes' => ['light', 'dark']],
+        'commerce' => ['modes' => ['light', 'dark']],
+        'finance' => ['modes' => ['light', 'dark']],
+        'developer' => ['modes' => ['light', 'dark']],
     ],
     'user' => [
         'enabled' => true,
