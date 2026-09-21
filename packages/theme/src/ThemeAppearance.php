@@ -11,6 +11,7 @@ final class ThemeAppearance
         public readonly string $theme,
         public readonly string $mode,
         public readonly string $density,
+        public readonly ?string $accent = null,
         public readonly array $source = [],
     ) {}
 
@@ -20,6 +21,7 @@ final class ThemeAppearance
             'theme' => $this->theme,
             'mode' => $this->mode,
             'density' => $this->density,
+            'accent' => $this->accent,
             'source' => $this->source,
         ];
     }
