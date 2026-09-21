@@ -166,6 +166,9 @@ jobs:
           grep -q 'pf-shell' /tmp/theme-showcase.html
           grep -q 'pf:theme-mode="toggle"' /tmp/theme-showcase.html
           grep -q 'Theme & Component Showcase' /tmp/theme-showcase.html
+          grep -q 'Windows 11' /tmp/theme-showcase.html
+          grep -q 'VS Code' /tmp/theme-showcase.html
+          grep -q 'Minimal' /tmp/theme-showcase.html
 
   sqlite-integration:
     runs-on: ubuntu-latest
