@@ -1,0 +1,119 @@
+:root {
+    --pf-radius-sm: .5rem;
+    --pf-radius: .75rem;
+    --pf-radius-lg: 1rem;
+    --pf-shadow-sm: 0 4px 14px rgb(0 0 0 / .06);
+    --pf-shadow: 0 16px 42px rgb(0 0 0 / .14);
+    --pf-transition: 140ms ease;
+    --pf-topbar-height: 64px;
+    --pf-sidebar-width: 260px;
+    --pf-page-gap: 1.5rem;
+    --pf-page-padding: 1.75rem;
+    --pf-panel-padding: 1.2rem;
+}
+
+body {
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+.pf-sidebar {
+    border-right: 0;
+    box-shadow: inset -1px 0 var(--pf-border);
+}
+
+.pf-sidebar-header {
+    border-bottom: 0;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+.pf-nav-link {
+    min-height: 42px;
+    border-radius: .7rem;
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: color-mix(in srgb, var(--pf-primary) 14%, var(--pf-surface));
+    color: var(--pf-primary);
+}
+
+.pf-topbar {
+    border-bottom: 0;
+    background: var(--pf-bg);
+}
+
+.pf-page-title {
+    font-size: clamp(1.65rem, 2.5vw, 2.15rem);
+    font-weight: 750;
+    letter-spacing: -.035em;
+}
+
+.pf-page-subtitle {
+    max-width: 44rem;
+    line-height: 1.6;
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card {
+    border: 1px solid color-mix(in srgb, var(--pf-border) 72%, transparent);
+    box-shadow: var(--pf-shadow-sm);
+}
+
+.pf-stat {
+    padding: 1.25rem;
+}
+
+.pf-stat-label {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.pf-stat-value {
+    font-size: 2rem;
+    font-weight: 750;
+    letter-spacing: -.04em;
+}
+
+.pf-stat-meta {
+    font-weight: 500;
+}
+
+.btn {
+    border-radius: .7rem;
+    font-weight: 650;
+}
+
+.btn-primary {
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--pf-primary) 22%, transparent);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    min-height: 42px;
+    border-radius: .7rem;
+}
+
+.pf-status {
+    padding-inline: .65rem;
+}
+
+.pf-record-header {
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--pf-primary) 7%, var(--pf-surface)), var(--pf-surface));
+}
+
+.pf-data-panel .table tbody tr:hover {
+    background: color-mix(in srgb, var(--pf-primary) 5%, var(--pf-surface));
+}
+
+.pf-empty {
+    min-height: 260px;
+}

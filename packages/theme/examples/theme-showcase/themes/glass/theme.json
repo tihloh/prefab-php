@@ -1,0 +1,15 @@
+{
+  "id": "glass",
+  "name": "Glass",
+  "version": "1.0.0",
+  "description": "A layered glassmorphism dashboard theme with translucent chrome and floating widgets.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "saas",
+  "name": "SaaS",
+  "version": "1.0.0",
+  "description": "A polished SaaS product theme with soft cards, bold metrics and friendly application chrome.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

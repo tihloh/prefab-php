@@ -10,7 +10,7 @@ It demonstrates:
 - Comfortable / Compact density
 - User preference persistence through the Theme browser runtime
 - Optional floating mode toggle
-- Bundled `default` fallback plus `showcase`, `win11`, `vscode`, `minimal`, `ubuntu`, `macos` and `android` demo themes
+- Bundled `default` fallback plus platform-inspired and product-oriented demo themes
 - Responsive `pf-shell`, sidebar and topbar
 - Page headers and actions
 - Toolbars
@@ -57,7 +57,16 @@ themes/
 ├── showcase/
 ├── win11/
 ├── vscode/
-└── minimal/
+├── minimal/
+├── ubuntu/
+├── macos/
+├── android/
+├── glass/
+├── enterprise/
+├── saas/
+├── commerce/
+├── finance/
+└── developer/
 ```
 
 Each theme is a normal Prefab Theme directory with `theme.json`, `base.css`, `light.css` and `dark.css`. They are intentionally kept in the showcase instead of the package's built-in `themes/` directory, so the Theme engine itself still ships only the `default` fallback theme.
@@ -74,3 +83,16 @@ The showcase presets intentionally change more than color:
 - **Android** — Material-inspired tonal surfaces, large rounded cards, pill navigation/buttons, filled controls and larger touch targets.
 
 All of these differences are implemented by theme CSS over the same Bootstrap + Prefab markup.
+
+## Product design system themes
+
+These presets are intended to feel like complete admin product families rather than color skins:
+
+- **Glass** — layered glassmorphism, translucent floating chrome, ambient background gradients and floating widgets.
+- **Enterprise** — dense data-first navigation, compact controls, strong hierarchy, structured tables and operational dashboards.
+- **SaaS** — polished product chrome, soft cards, large metrics, friendly forms and strong primary actions.
+- **Commerce** — merchandising-oriented surfaces, inventory-friendly tables, prominent KPI cards and warm retail styling.
+- **Finance** — compact analytics, tabular-number emphasis, premium metric cards and restrained financial dashboard chrome.
+- **Developer** — terminal-inspired navigation, monospace metadata, compact tables and console-like controls.
+
+They remain normal Prefab themes: the same application markup can switch between all of them.

@@ -172,6 +172,12 @@ jobs:
           grep -q 'Ubuntu' /tmp/theme-showcase.html
           grep -q 'macOS' /tmp/theme-showcase.html
           grep -q 'Android' /tmp/theme-showcase.html
+          grep -q 'Glass' /tmp/theme-showcase.html
+          grep -q 'Enterprise' /tmp/theme-showcase.html
+          grep -q 'SaaS' /tmp/theme-showcase.html
+          grep -q 'Commerce' /tmp/theme-showcase.html
+          grep -q 'Finance' /tmp/theme-showcase.html
+          grep -q 'Developer' /tmp/theme-showcase.html
 
   sqlite-integration:
     runs-on: ubuntu-latest

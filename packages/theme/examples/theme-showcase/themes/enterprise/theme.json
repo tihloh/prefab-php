@@ -1,0 +1,15 @@
+{
+  "id": "enterprise",
+  "name": "Enterprise",
+  "version": "1.0.0",
+  "description": "A structured enterprise operations theme with dense navigation and data-first surfaces.",
+  "author": "Tihloh",
+  "base": "base.css",
+  "modes": {
+    "light": "light.css",
+    "dark": "dark.css"
+  },
+  "supports": {
+    "density": true
+  }
+}

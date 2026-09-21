@@ -1,0 +1,174 @@
+:root {
+    --pf-radius-sm: .15rem;
+    --pf-radius: .25rem;
+    --pf-radius-lg: .35rem;
+    --pf-shadow-sm: none;
+    --pf-shadow: 0 8px 24px rgb(0 0 0 / .25);
+    --pf-transition: 80ms linear;
+    --pf-topbar-height: 42px;
+    --pf-sidebar-width: 228px;
+    --pf-page-gap: 1rem;
+    --pf-page-padding: 1rem;
+    --pf-panel-padding: .8rem;
+}
+
+body {
+    font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+}
+
+.pf-topbar {
+    min-height: 42px;
+    padding: .35rem .65rem;
+    box-shadow: inset 0 -1px var(--pf-border);
+}
+
+.pf-sidebar {
+    box-shadow: inset -1px 0 var(--pf-border);
+}
+
+.pf-sidebar-header {
+    min-height: 42px;
+    padding: .45rem .65rem;
+}
+
+.pf-sidebar-body {
+    padding: .4rem;
+}
+
+.pf-nav {
+    gap: 0;
+}
+
+.pf-nav-section {
+    margin: .9rem .45rem .25rem;
+    font-size: .65rem;
+    letter-spacing: .1em;
+}
+
+.pf-nav-link {
+    min-height: 29px;
+    padding: .25rem .5rem;
+    border-radius: .15rem;
+    font-size: .78rem;
+}
+
+.pf-nav-link::before {
+    content: "›";
+    color: var(--pf-text-muted);
+}
+
+.pf-nav-link.active,
+.pf-nav-link[aria-current="page"] {
+    background: var(--pf-surface-alt);
+    color: var(--pf-primary);
+    box-shadow: inset 2px 0 var(--pf-primary);
+}
+
+.pf-page-title {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-weight: 650;
+}
+
+.pf-page-subtitle {
+    font-size: .78rem;
+}
+
+.pf-toolbar,
+.pf-panel,
+.pf-data-panel,
+.pf-stat,
+.pf-record-header,
+.pf-settings-section,
+.card,
+.modal-content,
+.dropdown-menu,
+.offcanvas {
+    border-radius: .25rem;
+    box-shadow: none;
+}
+
+.pf-panel-header,
+.pf-settings-title,
+.card-header {
+    background: var(--pf-surface-alt);
+    font-size: .7rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.pf-stat {
+    border-left: 2px solid var(--pf-primary);
+    padding: .75rem;
+}
+
+.pf-stat-value {
+    font-size: 1.45rem;
+    font-weight: 500;
+}
+
+.pf-data-panel .table {
+    font-family: inherit;
+    font-size: .76rem;
+}
+
+.pf-data-panel .table thead th {
+    background: var(--pf-surface-alt);
+    font-size: .66rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.pf-data-panel .table > :not(caption) > * > * {
+    padding: .34rem .5rem;
+}
+
+.btn,
+.form-control,
+.form-select,
+.input-group-text {
+    min-height: 30px;
+    border-radius: .2rem;
+    font-family: inherit;
+    font-size: .76rem;
+}
+
+.btn {
+    padding-top: .25rem;
+    padding-bottom: .25rem;
+}
+
+.btn::before {
+    opacity: .8;
+}
+
+.pf-status {
+    min-height: 1.3rem;
+    border-radius: .15rem;
+    font-size: .66rem;
+    font-weight: 500;
+}
+
+.pf-status::before {
+    border-radius: .05rem;
+}
+
+.pf-detail {
+    padding: .5rem;
+    border: 1px dashed var(--pf-border);
+    background: var(--pf-surface-alt);
+}
+
+.pf-timeline-item::after {
+    border-radius: .05rem;
+    width: .55rem;
+    height: .55rem;
+    left: .1rem;
+}
+
+code,
+pre,
+.demo-code {
+    font-family: inherit;
+}
