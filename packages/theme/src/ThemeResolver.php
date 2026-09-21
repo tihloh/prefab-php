@@ -19,12 +19,23 @@ final class ThemeResolver
             'mode' => 'light',
             'density' => 'comfortable',
             'densities' => ['comfortable', 'compact'],
+            'accent' => null,
+            'accents' => [
+                'blue' => '#0d6efd',
+                'purple' => '#6f42c1',
+                'green' => '#198754',
+                'teal' => '#0f766e',
+                'orange' => '#fd7e14',
+                'red' => '#dc3545',
+            ],
+            'custom_accent' => false,
             'themes' => [],
             'user' => [
                 'enabled' => false,
                 'theme' => false,
                 'mode' => false,
                 'density' => false,
+                'accent' => false,
             ],
         ], $config);
     }
@@ -43,6 +54,7 @@ final class ThemeResolver
             'theme' => 'application',
             'mode' => 'application',
             'density' => 'application',
+            'accent' => 'application',
         ];
 
         if ($this->userAllows('theme')) {
@@ -81,7 +93,18 @@ final class ThemeResolver
             }
         }
 
-        return new ThemeAppearance($theme, $mode, $density, $source);
+        $accent = $this->validAccent($this->config['accent'] ?? null, false);
+
+        if ($this->userAllows('accent') && array_key_exists('accent', $userPreferences)) {
+            $candidate = $this->validAccent($userPreferences['accent'], true);
+
+            if ($candidate !== false) {
+                $accent = $candidate;
+                $source['accent'] = 'user';
+            }
+        }
+
+        return new ThemeAppearance($theme, $mode, $density, $accent, $source);
     }
 
     /** @return array<string, array{theme:ThemeDefinition,modes:string[]}> */
@@ -130,6 +153,44 @@ final class ThemeResolver
         return (array) $this->config['user'];
     }
 
+    /** @return array<string, string> */
+    public function accents(): array
+    {
+        $accents = [];
+
+        foreach ((array) $this->config['accents'] as $name => $color) {
+            $name = strtolower(trim((string) $name));
+            $color = $this->normalizeHex($color);
+
+            if ($name !== '' && $color !== null) {
+                $accents[$name] = $color;
+            }
+        }
+
+        return $accents;
+    }
+
+    public function customAccentAllowed(): bool
+    {
+        return (bool) ($this->config['custom_accent'] ?? false);
+    }
+
+    public function accentColor(?string $accent): ?string
+    {
+        if ($accent === null || $accent === '') {
+            return null;
+        }
+
+        $key = strtolower(trim($accent));
+        $accents = $this->accents();
+
+        if (isset($accents[$key])) {
+            return $accents[$key];
+        }
+
+        return $this->normalizeHex($key);
+    }
+
     private function userAllows(string $setting): bool
     {
         $policy = (array) $this->config['user'];
@@ -140,6 +201,30 @@ final class ThemeResolver
             ?? $policy['allow_' . $setting]
             ?? false
         );
+    }
+
+    private function validAccent(mixed $accent, bool $user): string|null|false
+    {
+        if ($accent === null || trim((string) $accent) === '') {
+            return null;
+        }
+
+        $value = strtolower(trim((string) $accent));
+
+        if (in_array($value, ['default', 'inherit'], true)) {
+            return null;
+        }
+
+        if (isset($this->accents()[$value])) {
+            return $value;
+        }
+
+        $hex = $this->normalizeHex($value);
+        if ($hex !== null && (!$user || $this->customAccentAllowed())) {
+            return $hex;
+        }
+
+        return false;
     }
 
     /** @param string[] $allowedModes */
@@ -160,5 +245,23 @@ final class ThemeResolver
                 && in_array('dark', $allowedModes, true);
         }
         return in_array($mode, $allowedModes, true);
+    }
+
+    private function normalizeHex(mixed $color): ?string
+    {
+        $color = strtolower(trim((string) $color));
+
+        if (preg_match('/^#[0-9a-f]{6}$/', $color) === 1) {
+            return $color;
+        }
+
+        if (preg_match('/^#[0-9a-f]{3}$/', $color) === 1) {
+            return '#'
+                . $color[1] . $color[1]
+                . $color[2] . $color[2]
+                . $color[3] . $color[3];
+        }
+
+        return null;
     }
 }
