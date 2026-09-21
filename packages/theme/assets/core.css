@@ -27,6 +27,7 @@
     --bs-secondary-bg: var(--pf-surface-alt);
     --bs-primary: var(--pf-primary);
     --bs-link-color: var(--pf-primary);
+    --bs-focus-ring-color: color-mix(in srgb, var(--pf-primary) 25%, transparent);
     --bs-link-hover-color: color-mix(in srgb, var(--pf-primary) 82%, #000);
     --bs-border-radius: var(--pf-radius);
     --bs-border-radius-sm: var(--pf-radius-sm);
@@ -110,6 +111,26 @@ body {
     --bs-btn-active-bg: var(--pf-primary);
     --bs-btn-active-border-color: var(--pf-primary);
     --bs-btn-active-color: var(--pf-primary-contrast);
+}
+
+.text-primary { color: var(--pf-primary) !important; }
+.bg-primary,
+.text-bg-primary { background-color: var(--pf-primary) !important; }
+.text-bg-primary { color: var(--pf-primary-contrast) !important; }
+.border-primary { border-color: var(--pf-primary) !important; }
+
+.progress-bar {
+    background-color: var(--pf-primary);
+}
+
+.form-check-input:checked {
+    background-color: var(--pf-primary);
+    border-color: var(--pf-primary);
+}
+
+.pagination {
+    --bs-pagination-active-bg: var(--pf-primary);
+    --bs-pagination-active-border-color: var(--pf-primary);
 }
 
 .text-body-secondary,

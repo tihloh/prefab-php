@@ -12,6 +12,7 @@ final class ThemeAppearance
         public readonly string $mode,
         public readonly string $density,
         public readonly array $source = [],
+        public readonly ?string $accent = null,
     ) {}
 
     public function toArray(): array
@@ -20,6 +21,7 @@ final class ThemeAppearance
             'theme' => $this->theme,
             'mode' => $this->mode,
             'density' => $this->density,
+            'accent' => $this->accent,
             'source' => $this->source,
         ];
     }

@@ -32,7 +32,9 @@ $themes = new ThemeManager([
         'theme' => true,
         'mode' => true,
         'density' => true,
+        'accent' => true,
     ],
+    'custom_accent' => true,
     'components' => [
         'admin' => true,
     ],
@@ -51,6 +53,7 @@ $documents = [
 ];
 
 $themeOptions = $themes->available();
+$accentOptions = (array) ($themes->config()['accents'] ?? []);
 $diagnostics = $themes->explain();
 
 function e(mixed $value): string
@@ -83,6 +86,26 @@ function e(mixed $value): string
         .demo-sidebar-caption { color: var(--pf-text-muted); font-size: .75rem; }
         .demo-topbar-title { font-weight: 650; white-space: nowrap; }
         .demo-state code { color: var(--pf-primary); }
+        .demo-accents { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; }
+        .demo-accent {
+            width: 2rem;
+            height: 2rem;
+            padding: 0;
+            border: 2px solid var(--pf-surface);
+            border-radius: 50%;
+            background: var(--demo-accent);
+            box-shadow: 0 0 0 1px var(--pf-border);
+            cursor: pointer;
+        }
+        .demo-accent:hover { transform: scale(1.08); }
+        .demo-accent-input {
+            width: 2.25rem;
+            height: 2.25rem;
+            padding: .15rem;
+            border: 1px solid var(--pf-border);
+            border-radius: .5rem;
+            background: var(--pf-surface);
+        }
     </style>
 </head>
 <body>
@@ -100,7 +123,7 @@ function e(mixed $value): string
             <nav class="pf-nav">
                 <div class="pf-nav-section">Overview</div>
                 <a class="pf-nav-link active" href="#overview">Overview</a>
-                <a class="pf-nav-link" href="#appearance">Appearance <span class="pf-nav-counter">3</span></a>
+                <a class="pf-nav-link" href="#appearance">Appearance <span class="pf-nav-counter">4</span></a>
                 <a class="pf-nav-link" href="#stats">Stats</a>
 
                 <div class="pf-nav-section">Application UI</div>
@@ -135,7 +158,8 @@ function e(mixed $value): string
                 <span class="demo-state d-none d-md-inline small">
                     <code id="currentTheme">default</code> /
                     <code id="currentMode">system</code> /
-                    <code id="currentDensity">comfortable</code>
+                    <code id="currentDensity">comfortable</code> /
+                    <code id="currentAccent">theme</code>
                 </span>
                 <button class="btn btn-sm btn-outline-secondary" type="button" pf:theme-mode="toggle">Toggle mode</button>
                 <div class="dropdown">
@@ -150,6 +174,21 @@ function e(mixed $value): string
                         <button class="dropdown-item" type="button" pf:theme-mode="light">Light</button>
                         <button class="dropdown-item" type="button" pf:theme-mode="dark">Dark</button>
                         <button class="dropdown-item" type="button" pf:theme-mode="system">System</button>
+                        <div class="dropdown-divider"></div>
+                        <div class="small text-body-secondary px-2 pb-2">Accent</div>
+                        <div class="demo-accents px-2 pb-2">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" pf:theme-accent="default">Theme</button>
+                            <?php foreach ($accentOptions as $accentName => $accentColor): ?>
+                                <button
+                                    class="demo-accent"
+                                    type="button"
+                                    pf:theme-accent="<?= e($accentName) ?>"
+                                    style="--demo-accent:<?= e($accentColor) ?>"
+                                    title="<?= e(ucfirst((string) $accentName)) ?>"
+                                    aria-label="<?= e(ucfirst((string) $accentName)) ?> accent"
+                                ></button>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -170,7 +209,7 @@ function e(mixed $value): string
 
                 <section class="demo-section" id="appearance">
                     <h2 class="demo-section-title">Appearance actions</h2>
-                    <p class="demo-section-copy">Theme owns only <code>pf:theme</code>, <code>pf:theme-mode</code> and <code>pf:theme-density</code>. Changes persist automatically.</p>
+                    <p class="demo-section-copy">Theme owns <code>pf:theme</code>, <code>pf:theme-mode</code>, <code>pf:theme-density</code> and <code>pf:theme-accent</code>. Changes persist automatically.</p>
 
                     <div class="pf-panel">
                         <div class="pf-panel-header"><strong>Directives on ordinary controls</strong></div>
@@ -190,6 +229,26 @@ function e(mixed $value): string
                                     <button class="btn btn-outline-secondary" type="button" pf:theme-mode="dark">Dark</button>
                                     <button class="btn btn-outline-secondary" type="button" pf:theme-mode="system">System</button>
                                     <button class="btn btn-outline-secondary" type="button" pf:theme-mode="toggle">Toggle</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="small fw-semibold mb-2">Accent</div>
+                                <div class="demo-accents">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" pf:theme-accent="default">Theme default</button>
+                                    <?php foreach ($accentOptions as $accentName => $accentColor): ?>
+                                        <button
+                                            class="demo-accent"
+                                            type="button"
+                                            pf:theme-accent="<?= e($accentName) ?>"
+                                            style="--demo-accent:<?= e($accentColor) ?>"
+                                            title="<?= e(ucfirst((string) $accentName)) ?>"
+                                            aria-label="<?= e(ucfirst((string) $accentName)) ?> accent"
+                                        ></button>
+                                    <?php endforeach; ?>
+                                    <label class="d-inline-flex align-items-center gap-2 small">
+                                        Custom
+                                        <input class="demo-accent-input" id="customAccent" type="color" value="#6d5dfc" pf:theme-accent aria-label="Custom accent color">
+                                    </label>
                                 </div>
                             </div>
                             <div>
@@ -442,6 +501,26 @@ function e(mixed $value): string
                                     <option value="light">Light</option>
                                     <option value="dark">Dark</option>
                                 </select>
+                            </div>
+                            <div class="pf-setting-row">
+                                <div class="pf-setting-main">
+                                    <div class="pf-setting-label">Accent color</div>
+                                    <div class="pf-setting-help">Use the theme color, a preset accent, or a custom color.</div>
+                                </div>
+                                <div class="demo-accents">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" pf:theme-accent="default">Theme</button>
+                                    <?php foreach ($accentOptions as $accentName => $accentColor): ?>
+                                        <button
+                                            class="demo-accent"
+                                            type="button"
+                                            pf:theme-accent="<?= e($accentName) ?>"
+                                            style="--demo-accent:<?= e($accentColor) ?>"
+                                            title="<?= e(ucfirst((string) $accentName)) ?>"
+                                            aria-label="<?= e(ucfirst((string) $accentName)) ?> accent"
+                                        ></button>
+                                    <?php endforeach; ?>
+                                    <input class="demo-accent-input" type="color" value="#6d5dfc" pf:theme-accent aria-label="Custom accent color">
+                                </div>
                             </div>
                             <div class="pf-setting-row">
                                 <div class="pf-setting-main">
@@ -702,9 +781,13 @@ function e(mixed $value): string
         document.getElementById('currentTheme').textContent = state.theme;
         document.getElementById('currentMode').textContent = state.mode;
         document.getElementById('currentDensity').textContent = state.density;
+        document.getElementById('currentAccent').textContent = state.accent || 'theme';
         document.querySelectorAll('select[pf\\:theme]').forEach(el => el.value = state.theme);
         document.querySelectorAll('select[pf\\:theme-mode]').forEach(el => el.value = state.mode);
         document.querySelectorAll('select[pf\\:theme-density]').forEach(el => el.value = state.density);
+        if (state.accentColor) {
+            document.querySelectorAll('input[type="color"][pf\\:theme-accent]').forEach(el => el.value = state.accentColor);
+        }
     };
 
     document.addEventListener('prefab:themechange', renderState);
