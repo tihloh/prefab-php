@@ -4,20 +4,14 @@
   "repositories": [
     {
       "type": "path",
-      "url": "../../../core",
-      "options": {
-        "symlink": true,
-        "versions": {
-          "tihloh/prefab-core": "0.5.2"
-        }
-      }
-    },
-    {
-      "type": "path",
       "url": "../..",
       "options": {
         "symlink": true
       }
+    },
+    {
+      "type": "vcs",
+      "url": "https://github.com/tihloh/prefab-core"
     }
   ],
   "require": {
