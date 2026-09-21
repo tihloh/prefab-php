@@ -11,8 +11,8 @@ final class ThemeAppearance
         public readonly string $theme,
         public readonly string $mode,
         public readonly string $density,
-        public readonly ?string $accent = null,
         public readonly array $source = [],
+        public readonly ?string $accent = null,
     ) {}
 
     public function toArray(): array
