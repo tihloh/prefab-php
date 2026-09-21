@@ -86,6 +86,10 @@ final class ThemeManager
             'data-density="' . $this->escape($appearance->density) . '"',
         ];
 
+        if ($appearance->accent !== null) {
+            $attributes[] = 'data-accent="' . $this->escape($appearance->accent) . '"';
+        }
+
         if (in_array($appearance->mode, ['light', 'dark'], true)) {
             $attributes[] = 'data-bs-theme="' . $this->escape($appearance->mode) . '"';
         }
@@ -97,9 +101,12 @@ final class ThemeManager
     {
         $appearance ??= $this->appearance();
 
-        return $this->assetMode() === 'published'
+        $styles = $this->assetMode() === 'published'
             ? $this->publishedStyles($appearance)
             : $this->inlineStyles($appearance);
+        $accent = $this->accentStyle($appearance);
+
+        return $accent === '' ? $styles : $styles . "\n" . $accent;
     }
 
     public function scripts(?ThemeAppearance $appearance = null): string
@@ -297,6 +304,8 @@ final class ThemeManager
             'current' => $appearance->toArray(),
             'themes' => $themes,
             'densities' => array_values((array) $this->config['densities']),
+            'accents' => $this->resolver->accents(),
+            'customAccent' => $this->resolver->customAccentAllowed(),
             'user' => $this->resolver->userPolicy(),
             'toggle' => (array) $this->config['toggle'],
             'assetMode' => $this->assetMode(),
@@ -426,6 +435,32 @@ final class ThemeManager
     }
 
     /** @return array{0: ThemeDefinition, 1: array} */
+    private function accentStyle(ThemeAppearance $appearance): string
+    {
+        $color = $this->resolver->accentColor($appearance->accent);
+
+        if ($color === null) {
+            return '';
+        }
+
+        return sprintf(
+            '<style data-prefab-accent>:root{--pf-primary:%s;--pf-primary-contrast:%s}</style>',
+            $this->escape($color),
+            $this->escape($this->accentContrast($color)),
+        );
+    }
+
+    private function accentContrast(string $color): string
+    {
+        $hex = ltrim($color, '#');
+        $red = hexdec(substr($hex, 0, 2));
+        $green = hexdec(substr($hex, 2, 2));
+        $blue = hexdec(substr($hex, 4, 2));
+        $luminance = (($red * 299) + ($green * 587) + ($blue * 114)) / 1000;
+
+        return $luminance >= 150 ? '#111111' : '#ffffff';
+    }
+
     private function resolvedTheme(ThemeAppearance $appearance): array
     {
         $entry = $this->resolver->enabledThemes()[$appearance->theme] ?? null;
@@ -496,12 +531,23 @@ final class ThemeManager
             'mode' => 'light',
             'density' => 'comfortable',
             'densities' => ['comfortable', 'compact'],
+            'accent' => null,
+            'accents' => [
+                'blue' => '#0d6efd',
+                'purple' => '#6f42c1',
+                'green' => '#198754',
+                'teal' => '#0f766e',
+                'orange' => '#fd7e14',
+                'red' => '#dc3545',
+            ],
+            'custom_accent' => false,
             'themes' => [],
             'user' => [
                 'enabled' => false,
                 'theme' => false,
                 'mode' => false,
                 'density' => false,
+                'accent' => false,
             ],
             'components' => [
                 'admin' => false,
