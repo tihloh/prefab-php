@@ -14,6 +14,9 @@ $themes = new ThemeManager([
     'themes' => [
         'default' => ['modes' => ['light', 'dark']],
         'showcase' => ['modes' => ['light', 'dark']],
+        'win11' => ['modes' => ['light', 'dark']],
+        'vscode' => ['modes' => ['light', 'dark']],
+        'minimal' => ['modes' => ['light', 'dark']],
     ],
     'user' => [
         'enabled' => true,
@@ -38,6 +41,7 @@ $documents = [
     ['OBR-2026-09117', 'Maintenance', 'Engineering', 'Draft', 'neutral'],
 ];
 
+$themeOptions = $themes->available();
 $diagnostics = $themes->explain();
 
 function e(mixed $value): string
@@ -129,8 +133,9 @@ function e(mixed $value): string
                     <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">Appearance</button>
                     <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 14rem">
                         <div class="small text-body-secondary px-2 pb-1">Theme</div>
-                        <button class="dropdown-item" type="button" pf:theme="default">Default</button>
-                        <button class="dropdown-item" type="button" pf:theme="showcase">Showcase Blue</button>
+                        <?php foreach ($themeOptions as $themeId => $entry): ?>
+                            <button class="dropdown-item" type="button" pf:theme="<?= e($themeId) ?>"><?= e($entry['theme']->name) ?></button>
+                        <?php endforeach; ?>
                         <div class="dropdown-divider"></div>
                         <div class="small text-body-secondary px-2 pb-1">Mode</div>
                         <button class="dropdown-item" type="button" pf:theme-mode="light">Light</button>
@@ -164,8 +169,9 @@ function e(mixed $value): string
                             <div>
                                 <div class="small fw-semibold mb-2">Theme</div>
                                 <div class="demo-inline">
-                                    <button class="btn btn-outline-primary" type="button" pf:theme="default">Default</button>
-                                    <button class="btn btn-outline-primary" type="button" pf:theme="showcase">Showcase Blue</button>
+                                    <?php foreach ($themeOptions as $themeId => $entry): ?>
+                                        <button class="btn btn-outline-primary" type="button" pf:theme="<?= e($themeId) ?>"><?= e($entry['theme']->name) ?></button>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                             <div>
@@ -191,8 +197,9 @@ function e(mixed $value): string
                             <div class="col-md-4">
                                 <label class="form-label">Theme select</label>
                                 <select class="form-select" pf:theme>
-                                    <option value="default">Default</option>
-                                    <option value="showcase">Showcase Blue</option>
+                                    <?php foreach ($themeOptions as $themeId => $entry): ?>
+                                        <option value="<?= e($themeId) ?>"><?= e($entry['theme']->name) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="col-md-4">
@@ -411,8 +418,9 @@ function e(mixed $value): string
                                     <div class="pf-setting-help">Choose an enabled application theme.</div>
                                 </div>
                                 <select class="form-select" style="max-width: 13rem" pf:theme>
-                                    <option value="default">Default</option>
-                                    <option value="showcase">Showcase Blue</option>
+                                    <?php foreach ($themeOptions as $themeId => $entry): ?>
+                                        <option value="<?= e($themeId) ?>"><?= e($entry['theme']->name) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="pf-setting-row">
