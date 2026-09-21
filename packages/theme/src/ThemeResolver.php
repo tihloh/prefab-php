@@ -104,7 +104,7 @@ final class ThemeResolver
             }
         }
 
-        return new ThemeAppearance($theme, $mode, $density, $accent, $source);
+        return new ThemeAppearance($theme, $mode, $density, $source, $accent);
     }
 
     /** @return array<string, array{theme:ThemeDefinition,modes:string[]}> */
