@@ -4,7 +4,7 @@
   "repositories": [
     {
       "type": "path",
-      "url": "../../packages/core",
+      "url": "../../../core",
       "options": {
         "symlink": true,
         "versions": {
@@ -14,7 +14,7 @@
     },
     {
       "type": "path",
-      "url": "../../packages/theme",
+      "url": "../..",
       "options": {
         "symlink": true
       }

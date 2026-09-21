@@ -22,11 +22,19 @@ It demonstrates:
 - Timeline
 - Settings
 - Empty states
-- Bootstrap buttons, cards, forms, alerts, badges, progress, list groups, accordion, tabs, dropdowns, collapse, modal, offcanvas, toast and pagination
+- Bootstrap component integration
 - Semantic theme token swatches
 - `ThemeManager::explain()` diagnostics
 
-## Run
+## Run from the monorepo
+
+```bash
+cd packages/theme/examples/theme-showcase
+composer update
+php -S 127.0.0.1:8080
+```
+
+## Run from the standalone prefab-theme repo
 
 ```bash
 cd examples/theme-showcase
@@ -40,9 +48,7 @@ Open:
 http://127.0.0.1:8080
 ```
 
-Bootstrap is loaded from jsDelivr for the demo. Prefab Theme itself is loaded from the local monorepo through Composer path repositories.
-
-The demo intentionally enables user theme, mode and density changes. Since no `save_url` is configured, appearance changes are persisted in browser `localStorage`.
+Bootstrap is loaded from jsDelivr. The demo enables user theme, mode and density changes. With no `save_url`, appearance changes persist in browser `localStorage`.
 
 The custom sample theme lives in:
 
@@ -53,11 +59,3 @@ themes/showcase/
 ├── light.css
 └── dark.css
 ```
-
-It is discovered through:
-
-```php
-'themes_path' => __DIR__ . '/themes',
-```
-
-so it also demonstrates loading an installed theme outside the package itself.
