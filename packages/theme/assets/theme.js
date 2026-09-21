@@ -93,8 +93,9 @@
             document.head.appendChild(style);
         }
 
-        style.textContent = ':root{--pf-primary:' + color
+        style.textContent = 'html[data-accent]{--pf-primary:' + color
             + ';--pf-primary-contrast:' + accentContrast(color) + '}';
+        document.head.appendChild(style);
     };
 
     const createThemeAsset = (value, mode = null, media = null) => {
