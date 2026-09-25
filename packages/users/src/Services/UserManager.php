@@ -169,6 +169,51 @@ final class UserManager
         return PrefabRuntime::traceCall('users', 'findByEmail', [], fn () => $this->provider()->findByEmail($email));
     }
 
+    public function findByIdentifier(string $identifier, ?array $fields = null): ?PrefabUser
+    {
+        $resolved = $fields ?? PrefabConfig::resolve(
+            'users',
+            'identifiers',
+            $this->config,
+            ['email'],
+        )['value'];
+
+        $fields = is_array($resolved) ? $resolved : [$resolved];
+        $fields = array_values(array_unique(array_filter(
+            array_map(static fn ($field) => is_string($field) ? trim($field) : '', $fields),
+            static fn (string $field): bool => $field !== '',
+        )));
+
+        if ($fields === []) {
+            $fields = ['email'];
+        }
+
+        return PrefabRuntime::traceCall(
+            'users',
+            'findByIdentifier',
+            ['fields' => $fields],
+            function () use ($identifier, $fields): ?PrefabUser {
+                $provider = $this->provider();
+
+                foreach ($fields as $field) {
+                    if ($field === 'email') {
+                        $user = $provider->findByEmail($identifier);
+                    } elseif (method_exists($provider, 'findBy')) {
+                        $user = $provider->findBy($field, $identifier);
+                    } else {
+                        $user = null;
+                    }
+
+                    if ($user) {
+                        return $user;
+                    }
+                }
+
+                return null;
+            },
+        );
+    }
+
     /** @return array<int, PrefabUser> */
     public function all(int $limit = 100, int $offset = 0): array
     {

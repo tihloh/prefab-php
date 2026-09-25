@@ -75,7 +75,48 @@ Prefab now exposes a consistent user abstraction while the database remains proj
 
 ---
 
-# 2. User mapping
+# 2. Login identifiers
+
+Email is the default identifier. Without extra configuration, Prefab Auth + Users continue to look users up by email only.
+
+A project may enable one or more additional mapped fields through Prefab configuration:
+
+```php
+use Tihloh\Prefab\PrefabConfig;
+
+PrefabConfig::set([
+    'modules' => [
+        'users' => [
+            'identifiers' => ['email', 'username'],
+        ],
+    ],
+]);
+```
+
+The configured values are logical fields from the user mapping. For example:
+
+```php
+$map = new UserMap(
+    table: 'users',
+    email: 'email',
+    attributes: [
+        'username' => 'user',
+        'employee_no' => 'employee_no',
+    ],
+);
+```
+
+Then `identifiers => ['email', 'username', 'employee_no']` allows the same login input to match any of those fields, in order.
+
+```php
+$user = $users->findByIdentifier($identifier);
+```
+
+Unknown or unmapped fields are skipped. If `identifiers` is omitted or empty, email is used.
+
+---
+
+# 3. User mapping
 
 `UserMap` describes how project fields correspond to Prefab's common user fields.
 
@@ -104,7 +145,7 @@ The project does not need to rename its columns.
 
 ---
 
-# 3. Extra attributes
+# 4. Extra attributes
 
 Project-specific fields can remain available:
 
@@ -126,7 +167,7 @@ Then application code can work with the mapped attributes on the resulting user 
 
 ---
 
-# 4. CRUD
+# 5. CRUD
 
 The manager provides a compact CRUD API:
 
@@ -158,7 +199,7 @@ $users->update(25, [
 
 ---
 
-# 5. Controlling write operations
+# 6. Controlling write operations
 
 Projects may deliberately make their user source read-only or partially writable.
 
@@ -186,7 +227,7 @@ This is useful when Prefab should consume an authoritative employee/account tabl
 
 ---
 
-# 6. Direct database configuration
+# 7. Direct database configuration
 
 A database-backed manager can be configured directly:
 
@@ -201,7 +242,7 @@ Direct configuration affects that Users instance and has the highest normal prio
 
 ---
 
-# 7. Central Prefab configuration
+# 8. Central Prefab configuration
 
 Common resources and module-specific settings can be configured centrally:
 
@@ -223,7 +264,7 @@ This keeps application bootstrap configuration in one place while preserving the
 
 ---
 
-# 8. Configuration resolution
+# 9. Configuration resolution
 
 Database-backed Users follows the Prefab configuration hierarchy:
 
@@ -240,7 +281,7 @@ This means a small application can configure Users explicitly, while a larger Pr
 
 ---
 
-# 9. Prefab Database integration
+# 11. Prefab Database integration
 
 When Prefab Database is present, Users can inherit a compatible database capability:
 
@@ -269,7 +310,7 @@ Users does not require Prefab Database; it merely knows how to cooperate with th
 
 ---
 
-# 10. Database abstraction
+# 11. Database abstraction
 
 The built-in database provider accepts either:
 
@@ -296,7 +337,7 @@ This design allows future Laravel, Doctrine or other framework adapters to provi
 
 ---
 
-# 11. Custom provider
+# 12. Custom provider
 
 Applications are not limited to the built-in database provider. A custom provider can implement the appropriate Users provider contract and supply users from another source.
 
@@ -314,7 +355,7 @@ This keeps the manager independent of one persistence strategy.
 
 ---
 
-# 12. Custom user class
+# 13. Custom user class
 
 Projects may extend `PrefabUser` with domain-specific behavior:
 
@@ -336,7 +377,7 @@ This preserves a common Prefab contract without removing project-specific behavi
 
 ---
 
-# 13. Prefab Auth integration
+# 14. Prefab Auth integration
 
 Users can expose the user-provider capability needed by Prefab Auth:
 
@@ -354,7 +395,7 @@ Neither package must become a hard dependency of the other.
 
 ---
 
-# 14. Prefab Permissions integration
+# 15. Prefab Permissions integration
 
 Users and Permissions can cooperate while retaining separate responsibilities:
 
@@ -372,7 +413,7 @@ The project remains free to define its own user/group model as long as the appro
 
 ---
 
-# 15. Prefab Logs integration
+# 16. Prefab Logs integration
 
 When a compatible logger is available, Users can emit activity records for operations such as user creation, modification and deletion.
 
@@ -387,7 +428,7 @@ This cooperation is optional.
 
 ---
 
-# 16. HTTP usage
+# 17. HTTP usage
 
 `Http\UserController` is transport-neutral and returns arrays suitable for JSON serialization.
 
@@ -405,7 +446,7 @@ Prefab Users itself does not force those URLs or require a router. Prefab Routes
 
 ---
 
-# 17. Diagnostics
+# 18. Diagnostics
 
 Use:
 
@@ -423,7 +464,7 @@ without exposing actual database connection objects or sensitive configuration v
 
 ---
 
-# 18. Practical small application
+# 19. Practical small application
 
 ```php
 $users = new UserManager([
@@ -438,7 +479,7 @@ That is enough for a small project. No global configuration or other Prefab modu
 
 ---
 
-# 19. Practical modular application
+# 20. Practical modular application
 
 ```php
 PrefabConfig::set([
@@ -473,7 +514,7 @@ Each module remains independently configurable.
 
 ---
 
-# 20. API quick reference
+# 21. API quick reference
 
 Common `UserManager` operations:
 
@@ -499,7 +540,7 @@ Important extension points:
 
 ---
 
-# 21. Design philosophy
+# 22. Design philosophy
 
 Prefab Users is an adapter around the project's user domain, not a demand to replace it.
 

@@ -170,6 +170,47 @@ A compatible user object implements `AuthenticatableUserInterface`. Existing pro
 
 # 5. Cooperation with Prefab Users
 
+Prefab Auth accepts any identifier string. When Prefab Users is connected, Auth delegates identifier resolution to Users.
+
+By default, Users resolves login identifiers by email only. Projects may configure one or more mapped login fields:
+
+```php
+use Tihloh\Prefab\PrefabConfig;
+
+PrefabConfig::set([
+    'modules' => [
+        'users' => [
+            'identifiers' => ['email', 'username'],
+        ],
+    ],
+]);
+```
+
+With a mapping such as:
+
+```php
+$map = new UserMap(
+    table: 'users',
+    email: 'email',
+    attributes: [
+        'username' => 'user',
+    ],
+);
+```
+
+the normal Auth API accepts either username or email:
+
+```php
+$result = $auth->attempt(
+    $_POST['identifier'] ?? '',
+    $_POST['password'] ?? '',
+);
+```
+
+Auth itself remains identifier-agnostic. Prefab Users owns the configured lookup fields. Older Users integrations that do not expose `findByIdentifier()` continue to fall back to email lookup.
+
+
+
 Prefab Users publishes a compatible user-provider capability. Auth can discover it automatically:
 
 ```text

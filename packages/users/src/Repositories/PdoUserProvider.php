@@ -87,6 +87,30 @@ final class PdoUserProvider implements UserProviderInterface
         return isset($rows[0]) ? $this->hydrate($rows[0]) : null;
     }
 
+    public function findBy(string $field, mixed $value): ?PrefabUser
+    {
+        $column = $this->mappedColumn($field);
+        if ($column === null) {
+            return null;
+        }
+
+        $sql = $this->database->driver() === 'sqlsrv'
+            ? sprintf(
+                'SELECT TOP 1 * FROM %s WHERE %s = :value',
+                $this->map->table,
+                $column,
+            )
+            : sprintf(
+                'SELECT * FROM %s WHERE %s = :value LIMIT 1',
+                $this->map->table,
+                $column,
+            );
+
+        $rows = $this->database->select($sql, ['value' => $value]);
+
+        return isset($rows[0]) ? $this->hydrate($rows[0]) : null;
+    }
+
     /** @return array<int, PrefabUser> */
     public function all(int $limit = 100, int $offset = 0): array
     {
@@ -253,6 +277,26 @@ final class PdoUserProvider implements UserProviderInterface
         }
 
         return $result;
+    }
+
+    private function mappedColumn(string $field): ?string
+    {
+        $core = $this->map->coreColumns();
+        if (isset($core[$field])) {
+            return $core[$field];
+        }
+
+        if (array_key_exists($field, $this->map->attributes)) {
+            return $this->map->attributes[$field];
+        }
+
+        foreach ($this->map->attributes as $alias => $column) {
+            if (!is_string($alias) && $column === $field) {
+                return $column;
+            }
+        }
+
+        return null;
     }
 
     private function assertIdentifier(string $identifier): void
