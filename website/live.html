@@ -47,16 +47,47 @@ $response = $live-&gt;handle(
 );
 
 header('Content-Type: application/json');
-echo json_encode($response, JSON_THROW_ON_ERROR);</code></pre><p>The host application owns the HTTP route and response handling. Live restores signed state, applies permitted updates, calls the requested action and renders the next component HTML.</p><h2>6. Bind form values</h2><pre><code>&lt;form pf:submit="save"&gt;
-    &lt;input pf:model="name" value="&lt;?= htmlspecialchars($name) ?&gt;"&gt;
-    &lt;input type="checkbox" pf:model="active"&gt;
+echo json_encode($response, JSON_THROW_ON_ERROR);</code></pre><p>The host application owns the HTTP route and response handling. Live restores signed state, applies permitted updates, calls the requested action and renders the next component HTML.</p><h2>6. Bind normal and reactive form values</h2><p>Plain <code>pf:model</code> collects a value when another Live action is sent:</p><pre><code>&lt;input pf:model="name"&gt;</code></pre><p>Reactive fields can send themselves:</p><pre><code>&lt;input pf:model.live="search"&gt;
+&lt;input pf:model.live.debounce.400ms="email"&gt;
+&lt;input pf:model.blur="recordNo"&gt;</code></pre><p>Use <code>.live</code> for immediate updates, <code>.debounce.400ms</code> for delayed updates such as database availability checks, and <code>.blur</code> when validation should wait until the user leaves the field. Nested paths such as <code>pf:model="filters.search"</code> remain supported.</p><h2>7. Normalize and validate with Prefab Input</h2><p>When <code>prefab-input</code> is installed, a Live component can reuse the same normalization and validation rules:</p><pre><code>protected function rules(): array
+{
+    return [
+        'email' =&gt; 'trim|lowercase|required|email',
+        'username' =&gt; 'trim|lowercase|required|string|max:30',
+        'recordNo' =&gt; 'trim|uppercase|required|string',
+    ];
+}</code></pre><p>A reactive request applies the processed value back to component state, so an email such as <code> USER@Example.COM </code> can become <code>user@example.com</code> on the server without duplicating formatting logic in JavaScript.</p><h2>8. Check uniqueness or existence through the application</h2><p>Prefab Live deliberately does not know database tables. The component supplies application checks:</p><pre><code>protected function liveChecks(): array
+{
+    return [
+        'email' =&gt; fn (mixed $value): ?string =&gt;
+            $this-&gt;users-&gt;emailExists((string) $value)
+                ? 'Email is already registered.'
+                : null,
 
-    &lt;button type="submit"&gt;Save&lt;/button&gt;
-    &lt;span pf:loading&gt;Saving...&lt;/span&gt;
-&lt;/form&gt;</code></pre><p><code>pf:model</code> collects input values when a Live action is sent. Nested array paths such as <code>pf:model="filters.search"</code> are supported when the top-level public property is an array.</p><div class="nextbox"><b>Current behavior:</b> <code>pf:model</code> is action-synchronized. Automatic live/debounced requests while typing are not part of the current public behavior yet.</div><h2>7. Protect server-controlled state</h2><pre><code>use Tihloh\Prefab\Live\Attributes\Locked;
+        'username' =&gt; fn (mixed $value): ?string =&gt;
+            $this-&gt;users-&gt;usernameExists((string) $value)
+                ? 'Username is already taken.'
+                : null,
+
+        'recordNo' =&gt; fn (mixed $value): ?string =&gt;
+            $this-&gt;documents-&gt;recordExists((string) $value)
+                ? 'Record number already exists.'
+                : null,
+    ];
+}</code></pre><p>The same pattern works for employee IDs, student numbers, OBR numbers, invoice numbers, SKUs, voucher codes or any other application-defined value.</p><pre><code>&lt;input pf:model.live.debounce.400ms="email"&gt;
+&lt;small pf:loading="email"&gt;Checking...&lt;/small&gt;
+&lt;small pf:error="email"&gt;&lt;/small&gt;</code></pre><p><code>pf:error</code> displays the current field error and Live adds <code>aria-invalid</code> automatically. Field-scoped <code>pf:loading</code> appears only while that field is being checked.</p><h2>9. Validate again before saving</h2><pre><code>#[Action]
+public function save(): void
+{
+    if (!$this-&gt;validate()) {
+        return;
+    }
+
+    // Persist the current values.
+}</code></pre><p>Live availability feedback is not a database guarantee. Final actions must rerun validation, and real uniqueness should still be protected by database unique constraints because concurrent requests can pass the same availability check.</p><h2>10. Protect server-controlled state</h2><pre><code>use Tihloh\Prefab\Live\Attributes\Locked;
 
 #[Locked]
-public int $documentId;</code></pre><p>A signed snapshot prevents modification of previous state, while <code>#[Locked]</code> additionally prevents a browser model update from changing that public property. Authorization still belongs inside your application/action.</p><h2>8. Understand the request cycle</h2><pre><code>browser action
+public int $documentId;</code></pre><p>A signed snapshot prevents modification of previous state, while <code>#[Locked]</code> additionally prevents a browser model update from changing that public property. Authorization still belongs inside your application/action.</p><h2>11. Understand the request cycle</h2><pre><code>browser action
     ↓
 verify signed snapshot
     ↓
@@ -66,15 +97,17 @@ restore public state
     ↓
 apply pf:model updates
     ↓
+optional Input rules + liveChecks
+    ↓
 call #[Action]
     ↓
 render HTML
     ↓
 sign next snapshot
     ↓
-update only the component</code></pre><h2>9. Lifecycle</h2><pre><code>protected function mount(): void {}
+update only the component</code></pre><h2>12. Lifecycle</h2><pre><code>protected function mount(): void {}
 protected function hydrate(): void {}
-protected function dehydrate(): void {}</code></pre><p><code>mount()</code> runs on initial mounting, <code>hydrate()</code> after signed state is restored for a Live request, and <code>dehydrate()</code> at the end of the render cycle.</p><h2>10. Responsibility boundary</h2><pre><code>Prefab Live owns:
+protected function dehydrate(): void {}</code></pre><p><code>mount()</code> runs on initial mounting, <code>hydrate()</code> after signed state is restored for a Live request, and <code>dehydrate()</code> at the end of the render cycle.</p><h2>13. Responsibility boundary</h2><pre><code>Prefab Live owns:
 component state + signed protocol + browser bridge + component rendering
 
 Your application owns:
