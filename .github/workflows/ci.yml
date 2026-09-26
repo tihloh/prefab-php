@@ -130,6 +130,26 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/live
         run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+      - name: Live JS syntax check
+        run: node --check packages/live/assets/prefab-live.js
+
+  live-input-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: fileinfo
+      - working-directory: packages/live
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
+      - working-directory: packages/live
+        run: composer config repositories.prefab-input '{"type":"path","url":"../input","options":{"symlink":false,"versions":{"tihloh/prefab-input":"0.4.0"}}}'
+      - working-directory: packages/live
+        run: composer require tihloh/prefab-input:0.4.0 --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/live
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
 
   theme-smoke:
     runs-on: ubuntu-latest
