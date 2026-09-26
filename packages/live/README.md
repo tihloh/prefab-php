@@ -9,9 +9,13 @@ Prefab Live currently focuses on the core reactive loop:
 - PHP component classes;
 - public component state;
 - `pf:model` state binding;
+- reactive `pf:model.live`, `.debounce` and `.blur` field updates;
+- optional Prefab Input normalization/validation through component `rules()`;
+- application-defined live availability/uniqueness checks through `liveChecks()`;
+- automatic `pf:error` field messages and field-scoped `pf:loading`;
 - `pf:click` actions;
 - `pf:submit` form actions;
-- `pf:loading` request state;
+- focus/cursor preservation during component refreshes;
 - signed snapshots;
 - explicit `#[Action]` methods;
 - `#[Locked]` state that may be rendered but not client-updated;
@@ -181,7 +185,21 @@ final class ProfileForm extends Component
 }
 ```
 
-Currently, `pf:model` values are collected when a Live action is sent. Automatic live/debounced model requests are intentionally deferred to a later version.
+Plain `pf:model` values are collected when a Live action is sent.
+
+For reactive fields, add modifiers:
+
+```html
+<input pf:model.live="search">
+<input pf:model.live.debounce.400ms="email">
+<input pf:model.blur="recordNo">
+```
+
+- `.live` sends the changed field immediately.
+- `.debounce.400ms` waits before sending and is recommended for database/API availability checks.
+- `.blur` sends when the user leaves the field.
+
+Newer model requests cancel older in-flight requests for the same component so stale responses do not overwrite newer typing. Component refreshes restore focus and the text selection/cursor where possible.
 
 Nested array paths are supported:
 
@@ -205,14 +223,30 @@ The top-level public property must be an array for nested updates.
 
 The browser runtime prevents the normal form submission, sends current model values plus the action, then replaces only that component's rendered HTML.
 
-## 9. Loading UI
+## 9. Loading and field errors
 
-Any element with `pf:loading` is hidden when idle and visible while the component request is running:
+Any element with plain `pf:loading` is visible during any request for that component:
 
 ```html
 <button pf:click="refresh">Refresh</button>
 <span pf:loading>Loading...</span>
 ```
+
+A loading indicator can target one reactive field:
+
+```html
+<input pf:model.live.debounce.400ms="email">
+<span pf:loading="email">Checking email...</span>
+```
+
+Use `pf:error` to display the first current error for a field:
+
+```html
+<input pf:model.live.debounce.400ms="email">
+<small pf:error="email"></small>
+```
+
+Prefab Live also applies `aria-invalid="true"` while that field has an error.
 
 ## 10. Lifecycle
 
@@ -237,30 +271,116 @@ protected function dehydrate(): void
 
 Lifecycle methods are infrastructure hooks, not browser-callable actions.
 
-## 11. Component errors
+## 11. Live form normalization and validation
 
-Components have a small error bag for render-time validation feedback:
+Prefab Live remains usable without Prefab Input. When `tihloh/prefab-input` is installed, a component may expose normal Input rules:
+
+```php
+protected function rules(): array
+{
+    return [
+        'email' => 'trim|lowercase|required|email',
+        'username' => 'trim|lowercase|required|string|max:30',
+        'recordNo' => 'trim|uppercase|required|string',
+    ];
+}
+```
+
+Reactive validation applies those transformations back to public component state. For example:
+
+```text
+"  USER@Example.COM  "
+        ↓
+trim + lowercase + email
+        ↓
+"user@example.com"
+```
+
+This lets the server remain the source of truth for formatting instead of duplicating normalization rules in browser JavaScript.
+
+### Application-defined availability / uniqueness checks
+
+Database and business checks stay application-owned:
+
+```php
+protected function liveChecks(): array
+{
+    return [
+        'email' => function (mixed $value): ?string {
+            return $this->users->emailExists((string) $value)
+                ? 'Email is already registered.'
+                : null;
+        },
+
+        'username' => function (mixed $value): ?string {
+            return $this->users->usernameExists((string) $value)
+                ? 'Username is already taken.'
+                : null;
+        },
+
+        'recordNo' => function (mixed $value): ?string {
+            return $this->documents->recordExists((string) $value)
+                ? 'Record number already exists.'
+                : null;
+        },
+    ];
+}
+```
+
+The field name is not special. Applications can check email addresses, usernames, employee IDs, student numbers, OBR numbers, invoice numbers, SKUs, voucher codes or any other value.
+
+A check callback receives:
+
+```php
+$value
+$field
+$component
+```
+
+and returns `null`/ `true` when valid or an error string when invalid.
+
+For edit forms, the application can naturally ignore the record being edited:
+
+```php
+#[Locked]
+public int $userId;
+
+protected function liveChecks(): array
+{
+    return [
+        'email' => fn (mixed $value): ?string =>
+            $this->users->emailExists((string) $value, exceptId: $this->userId)
+                ? 'Email is already in use.'
+                : null,
+    ];
+}
+```
+
+### Always validate again before saving
+
+Live checks are user experience, not a persistence guarantee. Final actions should rerun validation:
 
 ```php
 #[Action]
 public function save(): void
 {
-    $this->clearErrors();
-
-    if (trim($this->name) === '') {
-        $this->addError('name', 'Name is required.');
+    if (!$this->validate()) {
         return;
     }
+
+    // Persist only after the current values pass again.
 }
 ```
 
-Then in `render()`:
+Validate one field when needed:
 
 ```php
-$error = $this->error('name');
+$this->validateOnly('email');
 ```
 
-Prefab Input can later be used inside actions for richer validation without making it mandatory for Prefab Live.
+The database should still enforce real uniqueness with unique indexes/constraints because two requests can pass an availability check at nearly the same time.
+
+Components still have the low-level error bag APIs `errors()`, `error()`, `addError()` and `clearErrors()` for custom action feedback.
 
 ## 12. Security model
 
@@ -378,7 +498,7 @@ signed Live protocol
       ↕
 tiny browser bridge
       ↕
-component-local DOM replacement
+focus-preserving component HTML refresh
 ```
 
 It does not own:
@@ -393,7 +513,7 @@ It does not own:
 - nested Live components yet;
 - polling/lazy loading yet;
 - URL/query-string binding yet;
-- automatic/debounced live model syncing yet.
+- a built-in database-specific `unique:table,column` rule (uniqueness remains application-owned).
 
 Those features can be added after the base protocol is stable.
 
