@@ -10,8 +10,20 @@ use RuntimeException;
 abstract class Component
 {
     private array $liveErrors = [];
+    private array $liveValidatedFields = [];
+    private mixed $liveValidator = null;
 
     abstract public function render(): string;
+
+    protected function rules(): array
+    {
+        return [];
+    }
+
+    protected function liveChecks(): array
+    {
+        return [];
+    }
 
     final public function __liveMount(array $params = []): void
     {
@@ -26,6 +38,50 @@ abstract class Component
     final public function __liveDehydrate(): void
     {
         $this->callLifecycle('dehydrate');
+    }
+
+    final public function __liveBindValidator(callable $validator): void
+    {
+        $this->liveValidator = $validator;
+    }
+
+    final public function __liveResetValidation(): void
+    {
+        $this->liveErrors = [];
+        $this->liveValidatedFields = [];
+    }
+
+    final public function __liveApplyValidation(array $errors, array $fields): void
+    {
+        foreach ($fields as $field) {
+            unset($this->liveErrors[(string) $field]);
+        }
+
+        foreach ($errors as $field => $messages) {
+            $messages = array_values(array_filter(
+                (array) $messages,
+                static fn (mixed $message): bool => is_string($message) && trim($message) !== '',
+            ));
+
+            if ($messages !== []) {
+                $this->liveErrors[(string) $field] = $messages;
+            }
+        }
+
+        $this->liveValidatedFields = array_values(array_unique(array_map('strval', $fields)));
+    }
+
+    final public function __liveClearValidation(array $fields): void
+    {
+        foreach ($fields as $field) {
+            unset($this->liveErrors[(string) $field]);
+        }
+        $this->liveValidatedFields = array_values(array_unique(array_map('strval', $fields)));
+    }
+
+    final public function __liveValidatedFields(): array
+    {
+        return $this->liveValidatedFields;
     }
 
     final public function errors(?string $field = null): array
@@ -43,6 +99,20 @@ abstract class Component
     {
         $errors = $this->errors($field);
         return isset($errors[0]) ? (string) $errors[0] : null;
+    }
+
+    final protected function validate(?array $fields = null): bool
+    {
+        if (!is_callable($this->liveValidator)) {
+            throw new RuntimeException('Prefab Live validation is unavailable outside a LiveManager lifecycle.');
+        }
+
+        return ($this->liveValidator)($this, $fields) === true;
+    }
+
+    final protected function validateOnly(string $field): bool
+    {
+        return $this->validate([$field]);
     }
 
     final protected function setErrors(array $errors): void
