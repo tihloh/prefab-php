@@ -13,6 +13,7 @@ final class LiveManager
     private SnapshotSigner $signer;
     private StateSerializer $serializer;
     private ActionInvoker $actions;
+    private FormProcessor $forms;
     private mixed $csrfValidator;
 
     public function __construct(
@@ -25,6 +26,7 @@ final class LiveManager
         $this->signer = new SnapshotSigner($signingKey);
         $this->serializer = new StateSerializer();
         $this->actions = new ActionInvoker();
+        $this->forms = new FormProcessor($this->serializer);
         $this->csrfValidator = $csrfValidator;
     }
 
@@ -32,6 +34,7 @@ final class LiveManager
     {
         $component = $this->registry->make($name);
         $name = strtolower(trim($name));
+        $this->bindValidation($component);
         $component->__liveMount($params);
 
         $html = $component->render();
@@ -64,6 +67,7 @@ final class LiveManager
         $checksum = $this->requiredString($payload, 'checksum');
         $snapshot = $payload['snapshot'] ?? null;
         $updates = $payload['updates'] ?? [];
+        $validate = $payload['validate'] ?? [];
         $action = $payload['action'] ?? null;
 
         if (!is_array($snapshot)) {
@@ -74,14 +78,28 @@ final class LiveManager
             throw new InvalidArgumentException('Prefab Live request updates must be an object/array.');
         }
 
+        if (!is_array($validate)) {
+            throw new InvalidArgumentException('Prefab Live request validate field list must be an array.');
+        }
+
         if (!$this->signer->verify($id, $name, $snapshot, $checksum)) {
             throw new RuntimeException('Prefab Live snapshot checksum is invalid.');
         }
 
         $component = $this->registry->make($name);
+        $this->bindValidation($component);
         $this->serializer->hydrate($component, $snapshot);
         $component->__liveHydrate();
         $this->serializer->applyUpdates($component, $updates);
+
+        $validate = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $field): string => trim((string) $field), $validate),
+            static fn (string $field): bool => $field !== '',
+        )));
+
+        if ($validate !== []) {
+            $this->forms->validate($component, $validate);
+        }
 
         if ($action !== null) {
             if (!is_array($action)) {
@@ -109,6 +127,8 @@ final class LiveManager
             'html' => $html,
             'snapshot' => $nextSnapshot,
             'checksum' => $nextChecksum,
+            'errors' => $component->errors(),
+            'validated' => $component->__liveValidatedFields(),
         ];
     }
 
@@ -125,6 +145,13 @@ final class LiveManager
         }
 
         return $payload;
+    }
+
+    private function bindValidation(Component $component): void
+    {
+        $component->__liveBindValidator(
+            fn (Component $target, ?array $fields = null): bool => $this->forms->validate($target, $fields),
+        );
     }
 
     private function validateCsrf(?string $token): void
