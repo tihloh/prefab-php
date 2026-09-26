@@ -102,6 +102,9 @@ const apiReferences={
   intro:'Prefab Live provides server-driven reactive components. Component is the base class, ComponentRegistry resolves safe aliases, and LiveManager owns mounting and the signed request/response cycle.',
   rows:[
     ['Component','render()','Return the component HTML for the current server-side state.'],
+    ['Component','rules()','Define optional Prefab Input normalization/validation rules for Live fields.'],
+    ['Component','liveChecks()','Define application-owned field checks such as email/username/record-number availability.'],
+    ['Component','validate(fields?) / validateOnly(field)','Rerun current form validation inside a final action before persistence.'],
     ['Component','errors(field?) / error(field)','Read the component error bag while rendering validation feedback.'],
     ['ComponentRegistry','register(name, resolver)','Register a component alias using a class name or factory.'],
     ['ComponentRegistry','has(name) / names()','Inspect registered component aliases.'],
