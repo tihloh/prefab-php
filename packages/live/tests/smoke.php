@@ -75,7 +75,7 @@ final class AvailabilityForm extends Component
     }
 }
 
-if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+if (class_exists(\Tihloh\Prefab\Input\Input::class)) {
     final class RegistrationForm extends Component
     {
         public string $email = '';
@@ -146,7 +146,7 @@ $registry = (new ComponentRegistry())
     ->register('counter', Counter::class)
     ->register('availability', AvailabilityForm::class);
 
-if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+if (class_exists(\Tihloh\Prefab\Input\Input::class)) {
     $registry->register('registration', RegistrationForm::class);
 }
 $live = new LiveManager(
@@ -286,7 +286,7 @@ $availability = $live->handle([
 assert($availability['snapshot']['saved'] === false);
 assert($availability['errors']['email'][0] === 'Email is already registered.');
 
-if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+if (class_exists(\Tihloh\Prefab\Input\Input::class)) {
     $registrationHtml = $live->mount('registration');
     $registration = $live->handle([
         'id' => attr($registrationHtml, 'pf:id'),
