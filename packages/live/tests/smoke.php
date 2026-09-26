@@ -41,6 +41,89 @@ final class Counter extends Component
     }
 }
 
+
+final class AvailabilityForm extends Component
+{
+    public string $email = '';
+    public bool $saved = false;
+
+    protected function liveChecks(): array
+    {
+        return [
+            'email' => fn (mixed $value): ?string => $value === 'taken@example.com'
+                ? 'Email is already registered.'
+                : null,
+        ];
+    }
+
+    #[Action]
+    public function save(): void
+    {
+        if (!$this->validate()) {
+            return;
+        }
+
+        $this->saved = true;
+    }
+
+    public function render(): string
+    {
+        $email = htmlspecialchars($this->email, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return '<input pf:model.live.debounce.400ms="email" value="' . $email . '">'
+            . '<small pf:error="email"></small>'
+            . '<small pf:loading="email">Checking...</small>';
+    }
+}
+
+if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+    final class RegistrationForm extends Component
+    {
+        public string $email = '';
+        public string $username = '';
+        public bool $saved = false;
+
+        protected function rules(): array
+        {
+            return [
+                'email' => 'trim|lowercase|required|email',
+                'username' => 'trim|lowercase|required|string|max:30',
+            ];
+        }
+
+        protected function liveChecks(): array
+        {
+            return [
+                'email' => fn (mixed $value): ?string => $value === 'taken@example.com'
+                    ? 'Email is already registered.'
+                    : null,
+                'username' => fn (mixed $value): ?string => $value === 'admin'
+                    ? 'Username is already taken.'
+                    : null,
+            ];
+        }
+
+        #[Action]
+        public function save(): void
+        {
+            if (!$this->validate()) {
+                return;
+            }
+
+            $this->saved = true;
+        }
+
+        public function render(): string
+        {
+            return '<form pf:submit="save">'
+                . '<input pf:model.live.debounce.400ms="email" value="' . htmlspecialchars($this->email) . '">'
+                . '<small pf:error="email"></small>'
+                . '<input pf:model.blur="username" value="' . htmlspecialchars($this->username) . '">'
+                . '<small pf:error="username"></small>'
+                . '</form>';
+        }
+    }
+}
+
 function attr(string $html, string $name): string
 {
     preg_match('/' . preg_quote($name, '/') . '="([^"]+)"/', $html, $matches);
@@ -59,7 +142,13 @@ function decodeSnapshot(string $encoded): array
     return $state;
 }
 
-$registry = (new ComponentRegistry())->register('counter', Counter::class);
+$registry = (new ComponentRegistry())
+    ->register('counter', Counter::class)
+    ->register('availability', AvailabilityForm::class);
+
+if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+    $registry->register('registration', RegistrationForm::class);
+}
 $live = new LiveManager(
     $registry,
     str_repeat('k', 32),
@@ -151,5 +240,80 @@ try {
     $csrfRejected = true;
 }
 assert($csrfRejected);
+
+
+$availabilityHtml = $live->mount('availability');
+$availabilityId = attr($availabilityHtml, 'pf:id');
+$availabilityChecksum = attr($availabilityHtml, 'pf:checksum');
+$availabilitySnapshot = decodeSnapshot(attr($availabilityHtml, 'pf:snapshot'));
+
+$availability = $live->handle([
+    'id' => $availabilityId,
+    'component' => 'availability',
+    'snapshot' => $availabilitySnapshot,
+    'checksum' => $availabilityChecksum,
+    'updates' => ['email' => 'taken@example.com'],
+    'validate' => ['email'],
+    'action' => null,
+], 'csrf-token');
+
+assert($availability['snapshot']['email'] === 'taken@example.com');
+assert($availability['validated'] === ['email']);
+assert($availability['errors']['email'][0] === 'Email is already registered.');
+
+$availability = $live->handle([
+    'id' => $availability['id'],
+    'component' => $availability['component'],
+    'snapshot' => $availability['snapshot'],
+    'checksum' => $availability['checksum'],
+    'updates' => ['email' => 'free@example.com'],
+    'validate' => ['email'],
+    'action' => null,
+], 'csrf-token');
+
+assert($availability['errors'] === []);
+assert($availability['snapshot']['email'] === 'free@example.com');
+
+$availability = $live->handle([
+    'id' => $availability['id'],
+    'component' => $availability['component'],
+    'snapshot' => $availability['snapshot'],
+    'checksum' => $availability['checksum'],
+    'updates' => ['email' => 'taken@example.com'],
+    'action' => ['method' => 'save', 'params' => []],
+], 'csrf-token');
+
+assert($availability['snapshot']['saved'] === false);
+assert($availability['errors']['email'][0] === 'Email is already registered.');
+
+if (class_exists(\\Tihloh\\Prefab\\Input\\Input::class)) {
+    $registrationHtml = $live->mount('registration');
+    $registration = $live->handle([
+        'id' => attr($registrationHtml, 'pf:id'),
+        'component' => 'registration',
+        'snapshot' => decodeSnapshot(attr($registrationHtml, 'pf:snapshot')),
+        'checksum' => attr($registrationHtml, 'pf:checksum'),
+        'updates' => ['email' => '  TAKEN@EXAMPLE.COM  '],
+        'validate' => ['email'],
+        'action' => null,
+    ], 'csrf-token');
+
+    assert($registration['snapshot']['email'] === 'taken@example.com');
+    assert($registration['errors']['email'][0] === 'Email is already registered.');
+
+    $registration = $live->handle([
+        'id' => $registration['id'],
+        'component' => $registration['component'],
+        'snapshot' => $registration['snapshot'],
+        'checksum' => $registration['checksum'],
+        'updates' => ['email' => 'USER@EXAMPLE.COM', 'username' => 'NewUser'],
+        'action' => ['method' => 'save', 'params' => []],
+    ], 'csrf-token');
+
+    assert($registration['snapshot']['email'] === 'user@example.com');
+    assert($registration['snapshot']['username'] === 'newuser');
+    assert($registration['snapshot']['saved'] === true);
+    assert($registration['errors'] === []);
+}
 
 echo "Prefab Live smoke test passed", PHP_EOL;
