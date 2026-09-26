@@ -18,7 +18,7 @@
   },
   "suggest": {
     "tihloh/prefab-routes": "Optional routing integration for the Prefab Live endpoint.",
-    "tihloh/prefab-input": "Optional validation and normalization for component actions."
+    "tihloh/prefab-input": "Optional live form normalization and validation through component rules()."
   },
   "autoload": {
     "psr-4": {
