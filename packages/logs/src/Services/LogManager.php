@@ -2,6 +2,8 @@
 
 namespace Tihloh\Prefab\Logs\Services;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
@@ -25,6 +27,8 @@ final class LogManager
     private ?LogRepositoryInterface $repository = null;
     private ?DatabaseInterface $database = null;
     private array $config = [];
+    private mixed $background = null;
+    private bool $backgroundEnabled = false;
 
     public function __construct(LogRepositoryInterface|array|null $repository = null)
     {
@@ -107,6 +111,52 @@ final class LogManager
                 'logger',
                 $this,
                 'prefab-logs',
+            );
+        }
+
+        $background = PrefabConfig::resolve(
+            'logs',
+            'background',
+            $this->config,
+            false,
+        );
+        $this->backgroundEnabled = (bool) $background['value'];
+
+        if ($this->backgroundEnabled) {
+            $entry = PrefabRuntime::resolveEntry('background');
+            $service = $entry['value'] ?? null;
+
+            if (is_object($service)
+                && method_exists($service, 'handler')
+                && method_exists($service, 'run')
+            ) {
+                $this->background = $service;
+                $service->handler('logs.record', function (array $payload): void {
+                    $this->recordDirect(LogEntry::fromArray($payload));
+                });
+
+                PrefabRuntime::recordResolution(
+                    'logs',
+                    'background',
+                    'prefab-capability',
+                    ['provider' => $entry['provider'] ?? 'unknown'],
+                );
+            } else {
+                $this->background = null;
+                PrefabRuntime::recordResolution(
+                    'logs',
+                    'background',
+                    'unresolved',
+                    ['requested' => true],
+                );
+            }
+        } else {
+            $this->background = null;
+            PrefabRuntime::recordResolution(
+                'logs',
+                'background',
+                $background['source'],
+                ['enabled' => false],
             );
         }
     }
@@ -249,7 +299,46 @@ final class LogManager
             );
         }
 
+        if ($entry->occurredAt === null || trim($entry->occurredAt) === '') {
+            $entry->occurredAt = self::nowUtc();
+        }
+
+        if ($this->backgroundEnabled) {
+            if (!is_object($this->background)) {
+                $this->prefabConfigure();
+            }
+
+            if (!is_object($this->background) || !method_exists($this->background, 'run')) {
+                throw new RuntimeException(
+                    'Prefab Logs background mode requires tihloh/prefab-background and an active BackgroundManager.'
+                );
+            }
+
+            $receipt = $this->background->run(
+                'logs.record',
+                $entry->toArray(),
+                $entry->occurredAt,
+            );
+
+            if (!is_object($receipt) || !isset($receipt->id)) {
+                throw new RuntimeException('Prefab Background returned an invalid receipt for Logs.');
+            }
+
+            return (string) $receipt->id;
+        }
+
+        return $this->recordDirect($entry);
+    }
+
+    private function recordDirect(LogEntry $entry): int|string
+    {
         return $this->repo()->record($entry);
+    }
+
+    private static function nowUtc(): string
+    {
+        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+            ->format('Y-m-d\\TH:i:s.u\\Z');
     }
 
     public function find(int|string $id): ?array

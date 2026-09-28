@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.1', '8.2', '8.3', '8.4']
-        package: [core, users, auth, permissions, logs, routes, input, live, theme, files, messaging, notifications]
+        package: [core, users, auth, permissions, logs, routes, input, live, theme, background, files, messaging, notifications]
 
     steps:
       - name: Checkout
@@ -150,6 +150,40 @@ jobs:
         run: composer require tihloh/prefab-input:0.4.0 --no-interaction --prefer-dist --no-progress
       - working-directory: packages/live
         run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+
+  background-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+      - working-directory: packages/background
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
+      - working-directory: packages/background
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/background
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+      - run: php -l packages/background/bin/prefab-background
+
+  background-logs-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: pdo, pdo_sqlite
+      - working-directory: packages/background
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
+      - working-directory: packages/background
+        run: composer config repositories.prefab-logs '{"type":"path","url":"../logs","options":{"symlink":false,"versions":{"tihloh/prefab-logs":"0.4.0"}}}'
+      - working-directory: packages/background
+        run: composer require tihloh/prefab-logs:0.4.0 --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/background
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/logs-integration.php
 
   theme-smoke:
     runs-on: ubuntu-latest

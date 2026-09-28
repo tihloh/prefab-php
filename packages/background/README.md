@@ -53,7 +53,7 @@ $background = new BackgroundManager([
 ]);
 
 $background->handler('logs.write', function (array $payload): void {
-    // Write the log using application/Pefab services.
+    // Write the log using application/Prefab services.
 });
 ```
 
@@ -303,3 +303,30 @@ A background instruction executes in another PHP process and therefore cannot sh
 ## Design rule
 
 > **Background work must never be allowed to consume unbounded server resources. Main application health has priority over background throughput, while accepted instructions are preserved.**
+
+
+## Prefab Logs integration
+
+Prefab Logs can opt into Background without changing normal application logging calls:
+
+```php
+$background = new BackgroundManager([
+    'path' => __DIR__ . '/../storage/prefab/background',
+    'max_workers' => 2,
+]);
+
+$logs = new LogManager([
+    'database' => $pdo,
+    'background' => true,
+]);
+
+$logs->record([
+    'action' => 'document.approved',
+    'subject_type' => 'document',
+    'subject_id' => 1001,
+]);
+```
+
+With `background => true`, Logs captures `occurred_at` in the originating request before any Background backpressure wait. The returned string is the Background instruction ID; the worker later performs the repository insert.
+
+`created_at` remains the database persistence time, while `occurred_at` is the actual application event time.

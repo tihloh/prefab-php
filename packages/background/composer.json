@@ -1,12 +1,23 @@
 {
   "name": "tihloh/prefab-background",
   "description": "Immediate bounded background execution for Prefab PHP with durable handoff, fixed workers and backpressure.",
-  "keywords": ["php", "background", "worker", "async", "ipc", "prefab", "modular", "framework-independent"],
+  "keywords": [
+    "php",
+    "background",
+    "worker",
+    "async",
+    "ipc",
+    "prefab",
+    "modular",
+    "framework-independent"
+  ],
   "homepage": "https://github.com/tihloh/prefab-php",
   "type": "library",
   "license": "MIT",
   "authors": [
-    {"name": "Christian Bustamante"}
+    {
+      "name": "Christian Bustamante"
+    }
   ],
   "support": {
     "issues": "https://github.com/tihloh/prefab-php/issues",
@@ -23,5 +34,8 @@
   },
   "bin": [
     "bin/prefab-background"
-  ]
+  ],
+  "suggest": {
+    "tihloh/prefab-logs": "Optional integration for immediate background audit/activity persistence."
+  }
 }
