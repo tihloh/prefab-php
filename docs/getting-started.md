@@ -28,6 +28,7 @@ Current packages are organized like this:
 | File storage | `prefab-files` |
 | Image inspection and transformation | `prefab-image` |
 | Audit/activity logs | `prefab-logs` |
+| Immediate bounded background execution | `prefab-background` |
 | Email/external messages | `prefab-messaging` |
 | Internal user notifications | `prefab-notifications` |
 
@@ -95,6 +96,8 @@ Routes + Input + Auth + Permissions
 Add Live when screens need server-driven interactivity
   ↓
 Add Theme when the application needs shared appearance/admin UI
+  ↓
+Add Background when secondary work should leave the web request
 ```
 
 All of those feature packages share the same Core infrastructure instead of carrying duplicated runtime/database bootstrap files.
@@ -237,5 +240,6 @@ $info = PrefabRuntime::inspect();
 - [Files](../packages/files/README.md)
 - [Image](../packages/image/README.md)
 - [Logs](../packages/logs/README.md)
+- [Background](../packages/background/README.md)
 - [Messaging](../packages/messaging/README.md)
 - [Notifications](../packages/notifications/README.md)
