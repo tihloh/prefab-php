@@ -165,6 +165,8 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/background
         run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+      - working-directory: packages/background
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/process-smoke.php
       - run: php -l packages/background/bin/prefab-background
 
   background-logs-smoke:
