@@ -28,6 +28,7 @@ Need login?         Add Auth.
 Already have users? Add Users and map your existing table.
 Need permissions?   Add Permissions.
 Need audit logs?    Add Logs.
+Need background work? Add Background.
 ```
 
 You do **not** install everything. Feature packages install the compatible shared **Prefab Core** infrastructure they need automatically; install Core directly only when your application wants Core infrastructure by itself.
@@ -235,6 +236,9 @@ Users + Auth
 Users + Auth + Logs
   └─ authentication infrastructure can gain auditing
 
+Logs + Background
+  └─ audit persistence can run immediately outside the web request
+
 Users + Notifications
   └─ compatible operations can gain ->notify()
 
@@ -326,6 +330,7 @@ Short code, but no hidden business policy.
 | Image inspection/resize/crop/conversion | [Image](packages/image/README.md) | Image processing and delivery |
 | Bootstrap theming/admin UI | [Theme](packages/theme/README.md) | Theme engine, appearance policy and reusable admin components |
 | Audit/activity history | [Logs](packages/logs/README.md) | Logging |
+| Immediate bounded background execution | [Background](packages/background/README.md) | Durable handoff, workers and backpressure |
 | Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
 | Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
 
