@@ -21,11 +21,12 @@ const pages=[
 ['TUTORIAL','auth.html','5. Authentication'],
 ['TUTORIAL','permissions.html','6. Permissions'],
 ['TUTORIAL','logs.html','7. Audit Logs'],
-['TUTORIAL','files.html','8. Files'],
-['TUTORIAL','live.html','9. Live'],
-['TUTORIAL','theme.html','10. Theme'],
-['TUTORIAL','notifications.html','11. Notifications'],
-['TUTORIAL','messaging.html','12. Messaging'],
+['TUTORIAL','background.html','8. Background'],
+['TUTORIAL','files.html','9. Files'],
+['TUTORIAL','live.html','10. Live'],
+['TUTORIAL','theme.html','11. Theme'],
+['TUTORIAL','notifications.html','12. Notifications'],
+['TUTORIAL','messaging.html','13. Messaging'],
 ['REFERENCE','config.html','Shared Configuration'],
 ['REFERENCE','sessions.html','Session Isolation'],
 ['REFERENCE','autowiring.html','Auto-Wiring'],
@@ -91,6 +92,18 @@ const apiReferences={
   rows:[
     ['LogManager','prefabConfigure()','Resolve/publish log repository and database capabilities.'],['LogManager','explain()','Inspect repository/database resolution.'],['LogManager','record(entry)','Persist a LogEntry or compatible array and return its ID.'],['LogManager','find(id)','Find one stored log record.'],['LogManager','recent(limit=100, offset=0)','Return recent log records.'],['LogManager','forSubject(type, id, limit=100)','Return history for one business subject such as a document or user.'],['LogManager','forActor(actorId, limit=100)','Return actions performed by one actor.'],['LogManager','humanRecent(limit, offset, actorResolver?, subjectResolver?)','Return recent logs transformed into human-friendly presentation data.'],['LogManager','human(log, actorResolver?, subjectResolver?)','Present one raw log record in human-friendly form.'],
     ['LogRepositoryInterface','record(), find(), recent(), forSubject(), forActor()','Contract for replacing PDO persistence with another repository.'],['LogEntry','fromArray(data)','Create a normalized structured log entry from an array.'],['LogEntry','action / subjectType / subjectId / actorType / actorId','Core audit identity fields.'],['LogEntry','message / changes / metadata / ipAddress / userAgent / createdAt','Descriptive, structured change and request context fields.'],['HumanLogPresenter','present(), many()','Convert raw logs into readable presentation values, optionally resolving actor/subject names.']
+  ]},
+'background.html':{
+  intro:'BackgroundManager performs immediate durable handoff to a bounded worker pool. BackgroundReceipt describes the caller-side handoff and BackgroundContext gives workers the originating event timing and sequence.',
+  rows:[
+    ['BackgroundManager','handler(name, handler)','Register a server-side named background handler.'],
+    ['BackgroundManager','run(handler, payload, occurredAt?)','Capture/normalize event time, wait for bounded journal capacity when necessary, durably hand off the instruction and return BackgroundReceipt.'],
+    ['BackgroundManager','work(maxTasks?, maxLifetime?)','Run a persistent worker within the configured worker ceiling.'],
+    ['BackgroundManager','workOnce()','Process at most one immediately available instruction; useful for tests/diagnostics.'],
+    ['BackgroundManager','status()','Inspect busy/max workers, pending journal count/bytes and registered handlers.'],
+    ['BackgroundManager','explain()','Inspect Prefab configuration resolution for Background.'],
+    ['BackgroundReceipt','id / occurredAt / acceptedAt / requestId / sequence','Describe the originating handoff without waiting for handler completion.'],
+    ['BackgroundContext','id / handler / occurredAt / acceptedAt / requestId / sequence / attempt','Provide immutable execution metadata to a worker handler.']
   ]},
 'files.html':{
   intro:'FileManager is the high-level storage API. DiskInterface is the adapter contract. FileInfo and FileDownload are returned value objects.',
