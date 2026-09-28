@@ -87,6 +87,8 @@ final class BackgroundManager
 
     public function run(string $handler, array $payload = [], ?string $occurredAt = null): BackgroundReceipt
     {
+        $occurredAt = $this->normalizeTime($occurredAt);
+
         $handler = $this->handlerName($handler);
         if (!isset($this->handlers[$handler])) {
             throw new InvalidArgumentException("Prefab Background handler is not registered: {$handler}");
@@ -95,7 +97,6 @@ final class BackgroundManager
         $this->assertJsonSafe($payload, 'payload');
         $this->ensureDirectories();
 
-        $occurredAt = $this->normalizeTime($occurredAt);
         $id = bin2hex(random_bytes(16));
         $sequence = ++$this->sequence;
 
