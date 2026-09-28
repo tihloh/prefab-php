@@ -16,6 +16,7 @@ prefab-php (source of truth)
         ├── packages/input ──────────► prefab-input ──────────► Packagist
         ├── packages/live ───────────► prefab-live ───────────► Packagist
         ├── packages/theme ──────────► prefab-theme ──────────► Packagist
+        ├── packages/background ─────► prefab-background ─────► Packagist
         ├── packages/files ──────────► prefab-files ──────────► Packagist
         ├── packages/image ──────────► prefab-image ──────────► Packagist
         ├── packages/messaging ──────► prefab-messaging ──────► Packagist
@@ -47,6 +48,7 @@ prefab-php              v0.2.0
 ├── prefab-auth         v0.2.0
 ├── prefab-live         v0.2.0
 ├── prefab-theme        v0.2.0
+├── prefab-background   v0.2.0
 └── every other official mirror receives v0.2.0
 ```
 
@@ -70,6 +72,7 @@ tihloh/prefab-routes
 tihloh/prefab-input
 tihloh/prefab-live
 tihloh/prefab-theme
+tihloh/prefab-background
 tihloh/prefab-files
 tihloh/prefab-image
 tihloh/prefab-messaging
