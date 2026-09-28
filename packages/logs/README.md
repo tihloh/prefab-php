@@ -339,3 +339,45 @@ technical        human presenter
 The core principle is:
 
 > **Store structured facts compactly. Show them like a person wrote the audit trail.**
+
+
+## Immediate background persistence
+
+Install Prefab Background when log persistence should leave the main request:
+
+```bash
+composer require tihloh/prefab-background
+```
+
+Configure Background in the application bootstrap and opt Logs in:
+
+```php
+use Tihloh\Prefab\Background\BackgroundManager;
+use Tihloh\Prefab\Logs\Services\LogManager;
+
+$background = new BackgroundManager([
+    'path' => __DIR__ . '/../storage/prefab/background',
+    'max_workers' => 2,
+]);
+
+$logs = new LogManager([
+    'database' => $pdo,
+    'background' => true,
+]);
+```
+
+Application logging remains unchanged:
+
+```php
+$instructionId = $logs->record([
+    'action' => 'document.approved',
+    'subject_type' => 'document',
+    'subject_id' => 1001,
+]);
+```
+
+In background mode, the returned string is the Background instruction ID rather than the eventual database log ID.
+
+Logs captures `occurred_at` before handing the instruction to Background. If Background must wait because its bounded journal is full, the stored event time still represents when the application activity actually happened. `created_at` continues to represent database persistence time.
+
+Background mode is explicit. Installing Prefab Background alone does not silently change Logs from synchronous to background persistence.
