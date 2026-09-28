@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Learn immediate bounded background execution with Prefab Background."><title>Prefab PHP — Background</title><link rel="stylesheet" href="assets/css/app.css"></head><body data-page="background.html"><header class="topbar"><button class="menu" id="menu">☰</button><a class="brand" href="index.html">PREFAB</a><span class="tagline">PHP building blocks. Your architecture.</span><nav><a href="https://github.com/tihloh/prefab-php">GitHub</a><a href="https://packagist.org/?query=tihloh%2Fprefab">Packagist</a></nav></header><div class="layout"><aside class="sidebar" id="sidebar"></aside><main><article class="doc"><span class="crumb">Tutorial · Background</span><h1>Run secondary work now, outside the web request.</h1><p class="lead">Prefab Background immediately hands instructions to a fixed worker pool through a bounded durable journal. It avoids unlimited process creation, never drops work because workers are busy, and captures the originating event time before any backpressure wait.</p><div class="callout"><b>This is not a scheduler.</b> Every instruction is due immediately. The journal exists for durability and controlled backpressure, not for application-managed delayed jobs.</div><h2>1. Install</h2><pre><code>composer require tihloh/prefab-background</code></pre><h2>2. Configure the shared journal and worker ceiling</h2><pre><code>use Tihloh\Prefab\Background\BackgroundManager;
+
+$background = new BackgroundManager([
+    'path' =&gt; __DIR__ . '/../storage/prefab/background',
+    'max_workers' =&gt; 2,
+]);</code></pre><p>The web process and every worker must use the same persistent journal path. In Docker, mount the same storage volume into both services.</p><h2>3. Register a named handler</h2><pre><code>$background-&gt;handler('report.audit', function (array $payload, $context): void {
+    // Perform independent work here.
+});</code></pre><p>Only registered handler names can be dispatched. Payloads are JSON-safe scalar/array data; Prefab does not serialize arbitrary executable PHP objects into the journal.</p><h2>4. Hand work off immediately</h2><pre><code>$receipt = $background-&gt;run('report.audit', [
+    'report_id' =&gt; 125,
+    'actor_id' =&gt; 7,
+]);</code></pre><p>The caller waits only for a safe handoff. It does not wait for the handler to finish.</p><h2>5. Understand timing</h2><pre><code>occurred_at
+= when run() was called in the main process
+
+accepted_at
+= when Background safely committed the instruction
+
+processed_at
+= when a worker completed it</code></pre><p><code>occurred_at</code> is captured before waiting for capacity, so a saturated worker pool cannot change the event's real application time. <code>requestId + sequence</code> also preserve request-local ordering.</p><h2>6. Start workers</h2><pre><code>vendor/bin/prefab-background work</code></pre><p>Run the configured number under systemd, Supervisor or Docker. <code>max_workers</code> is enforced with process locks, so starting extra worker commands cannot increase Background concurrency beyond the configured ceiling.</p><h2>7. Backpressure instead of overload</h2><pre><code>$background = new BackgroundManager([
+    'max_workers' =&gt; 2,
+    'max_pending' =&gt; 1000,
+    'max_bytes' =&gt; 32 * 1024 * 1024,
+]);</code></pre><pre><code>capacity available
+      ↓
+durable handoff
+      ↓
+return immediately
+
+journal full
+      ↓
+caller sleeps/waits
+      ↓
+worker frees capacity
+      ↓
+handoff
+      ↓
+return</code></pre><p>Background does not drop the instruction, silently execute it synchronously, or create more workers. With finite workers and finite storage, backpressure is the safe consequence of sustained overload.</p><h2>8. Retries are retained</h2><p>If a handler throws, its instruction stays in the journal and is retried using bounded exponential backoff. There is no default maximum retry count.</p><h2>9. Use Background with Logs</h2><pre><code>$logs = new LogManager([
+    'database' =&gt; $pdo,
+    'background' =&gt; true,
+]);
+
+$logs-&gt;record([
+    'action' =&gt; 'document.approved',
+    'subject_type' =&gt; 'document',
+    'subject_id' =&gt; 1001,
+]);</code></pre><p>Logs captures <code>occurred_at</code> before handoff. <code>created_at</code> remains the later database persistence time. Installing Background alone does not change Logs; background logging must be explicitly enabled.</p><h2>10. Inspect health</h2><pre><code>vendor/bin/prefab-background status</code></pre><p>or:</p><pre><code>print_r($background-&gt;status());</code></pre><p>Status reports busy/max workers, pending journal count/bytes and registered handlers.</p><div class="nextbox"><b>Checkpoint:</b> The main request can commit an instruction quickly while a fixed worker executes it independently, and the event timestamp remains the time it happened in the caller.</div></article></main></div><script src="assets/js/app.js"></script></body></html>
