@@ -1,0 +1,66 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Tihloh\Prefab\Background\BackgroundManager;
+use Tihloh\Prefab\PrefabRuntime;
+
+$autoload = $_composer_autoload_path ?? dirname(__DIR__, 3) . '/autoload.php';
+if (!is_file($autoload)) {
+    fwrite(STDERR, "Prefab Background could not locate Composer autoload.php." . PHP_EOL);
+    exit(1);
+}
+
+require $autoload;
+
+$bootstrap = (getcwd() ?: '.') . DIRECTORY_SEPARATOR . 'bootstrap'
+    . DIRECTORY_SEPARATOR . 'prefab.php';
+
+foreach ($argv as $argument) {
+    if (str_starts_with($argument, '--bootstrap=')) {
+        $bootstrap = substr($argument, strlen('--bootstrap='));
+    }
+}
+
+if (is_file($bootstrap)) {
+    require $bootstrap;
+}
+
+$background = PrefabRuntime::resolve('background')
+    ?? PrefabRuntime::get('background');
+
+if (!$background instanceof BackgroundManager) {
+    fwrite(
+        STDERR,
+        "Prefab Background is not configured. Register BackgroundManager and handlers in bootstrap/prefab.php." . PHP_EOL
+    );
+    exit(1);
+}
+
+$command = $argv[1] ?? 'status';
+
+try {
+    if ($command === 'work') {
+        $processed = $background->work();
+        fwrite(STDOUT, "Prefab Background worker stopped after {$processed} instruction(s)." . PHP_EOL);
+        exit(0);
+    }
+
+    if ($command === 'once') {
+        $processed = $background->workOnce();
+        fwrite(STDOUT, $processed ? "Processed one instruction." . PHP_EOL : "No pending instruction." . PHP_EOL);
+        exit(0);
+    }
+
+    if ($command === 'status') {
+        fwrite(STDOUT, json_encode($background->status(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        exit(0);
+    }
+
+    fwrite(STDERR, "Usage: prefab-background [work|once|status] [--bootstrap=/path/to/bootstrap.php]" . PHP_EOL);
+    exit(1);
+} catch (Throwable $error) {
+    fwrite(STDERR, $error->getMessage() . PHP_EOL);
+    exit(1);
+}
