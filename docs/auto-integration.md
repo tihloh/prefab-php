@@ -41,6 +41,7 @@ Auth → Permissions           current actor
 Auth → Logs                  authentication audit context
 Database → compatible blocks shared database capability
 Logs ← compatible blocks     structured infrastructure events
+Background → Logs             optional immediate out-of-request persistence
 ```
 
 It should **not invent application business rules**.
@@ -253,3 +254,18 @@ This distinction is important:
 | **Object Interoperability** | Let compatible objects pass naturally | Input upload → Files |
 
 > **Auto-Wiring connects the plumbing. Fluent Extensions express optional actions. Your application keeps the business decisions.**
+
+
+## Background capability
+
+Prefab Background publishes the `background` capability. Modules may use it for infrastructure work that the application explicitly enables for background execution.
+
+For example, Prefab Logs can be configured with:
+
+```php
+$logs = new LogManager([
+    'background' => true,
+]);
+```
+
+When Background is present, the normal `record()` call captures the event time in the originating request and hands persistence to Background. If Background was explicitly requested but is unavailable, Logs reports the configuration error instead of silently changing execution semantics.
