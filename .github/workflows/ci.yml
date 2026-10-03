@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.1', '8.2', '8.3', '8.4']
-        package: [core, users, auth, permissions, logs, routes, input, live, theme, background, files, messaging, notifications]
+        package: [core, users, auth, auth-server, permissions, logs, routes, input, live, theme, background, files, messaging, notifications]
 
     steps:
       - name: Checkout
@@ -32,6 +32,10 @@ jobs:
         if: ${{ matrix.package != 'core' }}
         working-directory: packages/${{ matrix.package }}
         run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
+      - name: Use monorepo Auth
+        if: ${{ matrix.package == 'auth-server' }}
+        working-directory: packages/${{ matrix.package }}
+        run: composer config repositories.prefab-auth '{"type":"path","url":"../auth","options":{"symlink":false,"versions":{"tihloh/prefab-auth":"0.4.0"}}}'
       - name: Install package
         working-directory: packages/${{ matrix.package }}
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -50,6 +54,24 @@ jobs:
       - working-directory: packages/core
         run: composer install --no-interaction --prefer-dist --no-progress
       - working-directory: packages/core
+        run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
+
+  auth-server-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          extensions: pdo, pdo_sqlite, openssl
+      - working-directory: packages/auth-server
+        run: composer config repositories.prefab-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"tihloh/prefab-core":"0.4.0"}}}'
+      - working-directory: packages/auth-server
+        run: composer config repositories.prefab-auth '{"type":"path","url":"../auth","options":{"symlink":false,"versions":{"tihloh/prefab-auth":"0.4.0"}}}'
+      - working-directory: packages/auth-server
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - working-directory: packages/auth-server
         run: php -d zend.assertions=1 -d assert.exception=1 tests/smoke.php
 
   input-smoke:
