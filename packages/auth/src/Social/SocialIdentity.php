@@ -11,5 +11,7 @@ final class SocialIdentity
         public ?string $name = null,
         public ?string $avatar = null,
         public array $raw = [],
+        public ?bool $emailVerified = null,
+        public ?string $username = null,
     ) {}
 }

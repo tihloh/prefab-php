@@ -321,7 +321,7 @@ Short code, but no hidden business policy.
 |---|---|---|
 | Shared runtime, database, session, cache, CLI and diagnostics | [Core](packages/core/README.md) | Shared infrastructure |
 | Existing/project-owned users | [Users](packages/users/README.md) | User mapping and management |
-| Login/logout/current user | [Auth](packages/auth/README.md) | Authentication |
+| Login/logout/current user/social sign-in | [Auth](packages/auth/README.md) | Authentication |
 | Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
 | HTTP routing | [Routes](packages/routes/README.md) | Request routing |
 | Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
