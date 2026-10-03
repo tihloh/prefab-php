@@ -3,6 +3,7 @@
 namespace Tihloh\Prefab\Auth\Social;
 
 use PDO;
+use PDOException;
 use Tihloh\Prefab\Auth\Contracts\SocialAccountStoreInterface;
 
 final class PdoSocialAccountStore implements SocialAccountStoreInterface
@@ -19,8 +20,90 @@ final class PdoSocialAccountStore implements SocialAccountStoreInterface
 
     public function link(int|string $userId, SocialIdentity $identity): void
     {
-        $stmt = $this->pdo->prepare('INSERT INTO prefab_auth_social_accounts (user_id, provider, provider_user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), email = VALUES(email), updated_at = NOW()');
-        $stmt->execute([$userId, $identity->provider, $identity->providerUserId, $identity->email]);
+        $linkedUserId = $this->findUserId(
+            $identity->provider,
+            $identity->providerUserId,
+        );
+
+        if (
+            $linkedUserId !== null
+            && (string) $linkedUserId !== (string) $userId
+        ) {
+            throw new SocialAccountConflictException(
+                $identity->provider,
+                $identity->providerUserId,
+                $linkedUserId,
+                'This external account is already linked to another user.',
+            );
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT provider_user_id
+             FROM prefab_auth_social_accounts
+             WHERE user_id = ? AND provider = ?
+             LIMIT 1',
+        );
+        $stmt->execute([$userId, $identity->provider]);
+        $currentProviderUserId = $stmt->fetchColumn();
+
+        if (
+            $currentProviderUserId !== false
+            && (string) $currentProviderUserId !== $identity->providerUserId
+        ) {
+            throw new SocialAccountConflictException(
+                $identity->provider,
+                $identity->providerUserId,
+                $userId,
+                'This user already has another account linked for this provider.',
+            );
+        }
+
+        if ($currentProviderUserId !== false) {
+            $stmt = $this->pdo->prepare(
+                'UPDATE prefab_auth_social_accounts
+                 SET email = ?, updated_at = NOW()
+                 WHERE user_id = ? AND provider = ?',
+            );
+            $stmt->execute([
+                $identity->email,
+                $userId,
+                $identity->provider,
+            ]);
+            return;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO prefab_auth_social_accounts
+                    (user_id, provider, provider_user_id, email, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, NOW(), NOW())',
+            );
+            $stmt->execute([
+                $userId,
+                $identity->provider,
+                $identity->providerUserId,
+                $identity->email,
+            ]);
+        } catch (PDOException $e) {
+            $linkedUserId = $this->findUserId(
+                $identity->provider,
+                $identity->providerUserId,
+            );
+
+            if (
+                $linkedUserId !== null
+                && (string) $linkedUserId !== (string) $userId
+            ) {
+                throw new SocialAccountConflictException(
+                    $identity->provider,
+                    $identity->providerUserId,
+                    $linkedUserId,
+                    'This external account is already linked to another user.',
+                );
+            }
+
+            throw $e;
+        }
     }
 
     public function unlink(int|string $userId, string $provider): void
