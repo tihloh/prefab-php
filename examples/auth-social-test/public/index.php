@@ -5,7 +5,6 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 use TestApp\InMemoryUserProvider;
 use TestApp\SessionSocialAccountStore;
 use TestApp\TestSocialUserResolver;
-use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\Auth\Services\AuthManager;
 use Tihloh\Prefab\Auth\Services\SocialAuthManager;
 use Tihloh\Prefab\Auth\Session\NativeSessionStore;
@@ -15,18 +14,17 @@ use Tihloh\Prefab\Auth\Social\SocialIdentity;
 use Tihloh\Prefab\Auth\Social\SocialProviderRegistry;
 
 /*
- * OPTIONAL COMMON CONFIGURATION
- * PrefabConfig::set([...]);
- * Social provider credentials/configuration remain project-specific.
+ * Start Prefab's isolated Auth session first. The demo user/account stores then
+ * use that active session only to remain persistent across local test requests.
  */
-
+$session = new NativeSessionStore();
 $users = new InMemoryUserProvider();
-$auth = new AuthManager($users, new NativeSessionStore());
+$auth = new AuthManager($users, $session);
 
 /*
- * This standalone social-auth demo explicitly supplies its in-memory user source.
- * In a combined project, Auth can automatically use a compatible Prefab Users
- * module when no Auth provider is configured.
+ * Auth does not require Prefab Users. This demo supplies its own user provider.
+ * A real project may instead use Prefab Users, a Laravel/CodeIgniter adapter,
+ * or any other AuthUserProviderInterface implementation.
  */
 
 $providers = new SocialProviderRegistry();
@@ -39,10 +37,12 @@ $providers->register(new CallbackSocialProvider(
         return new SocialIdentity(
             provider: 'mock-google',
             providerUserId: 'google-demo-001',
-            email: 'demo@example.com',
+            email: 'social@example.com',
             name: 'Demo Google User',
             avatar: null,
             raw: $query,
+            emailVerified: true,
+            username: 'social-demo',
         );
     },
 ));
@@ -59,7 +59,10 @@ $social = new SocialAuthManager(
 $action = $_GET['action'] ?? 'home';
 
 if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $result = $auth->attempt($_POST['email'] ?? '', $_POST['password'] ?? '');
+    $result = $auth->attempt(
+        $_POST['email'] ?? '',
+        $_POST['password'] ?? '',
+    );
     $_SESSION['last_log'] = $result->log;
     header('Location: /');
     exit;
@@ -72,13 +75,18 @@ if ($action === 'social') {
 
 if ($action === 'mock-provider') {
     $state = $_GET['state'] ?? '';
-    header('Location: /?action=callback&state=' . urlencode($state) . '&code=demo-code');
+    header(
+        'Location: /?action=callback&state='
+        . urlencode($state)
+        . '&code=demo-code',
+    );
     exit;
 }
 
 if ($action === 'callback') {
     $result = $social->callback('mock-google', $_GET);
     $_SESSION['last_log'] = $result->log;
+    $_SESSION['last_reason'] = $result->reason;
     header('Location: /');
     exit;
 }
@@ -91,8 +99,11 @@ if ($action === 'logout') {
 }
 
 $user = $auth->user();
-$accounts = $user ? $social->accountsForUser($user->authId()) : [];
+$accounts = $user
+    ? $social->accountsForUser($user->authId())
+    : [];
 $lastLog = $_SESSION['last_log'] ?? null;
+$lastReason = $_SESSION['last_reason'] ?? null;
 ?>
 <!doctype html>
 <html lang="en">
@@ -107,16 +118,75 @@ $lastLog = $_SESSION['last_log'] ?? null;
     <h1 class="mb-4">Tihloh Prefab Auth Test</h1>
 
     <?php if (!$auth->check()): ?>
-        <div class="card mb-3"><div class="card-body"><h5 class="card-title">Password sign-in</h5><form method="post" action="/?action=login" class="row g-3"><div class="col-12"><label class="form-label">Email</label><input class="form-control" name="email" value="demo@example.com"></div><div class="col-12"><label class="form-label">Password</label><input class="form-control" type="password" name="password" value="password123"></div><div class="col-12"><button class="btn btn-primary">Sign in</button></div></form></div></div>
-        <div class="card"><div class="card-body"><h5 class="card-title">Social sign-in</h5><p class="text-muted">This uses a local mock provider but follows the real OAuth redirect/callback flow.</p><a class="btn btn-outline-dark" href="/?action=social">Continue with Mock Google</a></div></div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Password sign-in</h5>
+                <form method="post" action="/?action=login" class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" name="email" value="demo@example.com">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Password</label>
+                        <input class="form-control" type="password" name="password" value="password123">
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary">Sign in</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Social sign-in / registration</h5>
+                <p class="text-muted">
+                    This uses a local mock provider but follows the real OAuth
+                    redirect/callback flow. The first use creates a passwordless
+                    social user; later uses sign that linked user in.
+                </p>
+                <a class="btn btn-outline-dark" href="/?action=social">
+                    Continue with Mock Google
+                </a>
+            </div>
+        </div>
     <?php else: ?>
         <div class="alert alert-success">Signed in successfully.</div>
-        <div class="card mb-3"><div class="card-body"><h5><?= htmlspecialchars($user->name ?? 'User') ?></h5><div><?= htmlspecialchars($user->email ?? '') ?></div><div class="text-muted">User ID: <?= htmlspecialchars((string)$user->authId()) ?></div></div></div>
-        <div class="card mb-3"><div class="card-header">Linked social accounts</div><div class="card-body"><?php if ($accounts === []): ?><span class="text-muted">None</span><?php else: ?><pre class="mb-0"><?= htmlspecialchars(json_encode($accounts, JSON_PRETTY_PRINT)) ?></pre><?php endif; ?></div></div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5><?= htmlspecialchars($user->name ?? 'User') ?></h5>
+                <div><?= htmlspecialchars($user->email ?? '') ?></div>
+                <div class="text-muted">
+                    User ID: <?= htmlspecialchars((string) $user->authId()) ?>
+                </div>
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-header">Linked social accounts</div>
+            <div class="card-body">
+                <?php if ($accounts === []): ?>
+                    <span class="text-muted">None</span>
+                <?php else: ?>
+                    <pre class="mb-0"><?= htmlspecialchars(json_encode($accounts, JSON_PRETTY_PRINT)) ?></pre>
+                <?php endif; ?>
+            </div>
+        </div>
         <a class="btn btn-danger" href="/?action=logout">Logout</a>
     <?php endif; ?>
 
-    <?php if ($lastLog): ?><div class="card mt-4"><div class="card-header">Last structured log payload</div><div class="card-body"><pre class="mb-0"><?= htmlspecialchars(json_encode($lastLog, JSON_PRETTY_PRINT)) ?></pre></div></div><?php endif; ?>
+    <?php if ($lastReason): ?>
+        <div class="alert alert-warning mt-4">
+            Last social result: <?= htmlspecialchars($lastReason) ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($lastLog): ?>
+        <div class="card mt-4">
+            <div class="card-header">Last structured log payload</div>
+            <div class="card-body">
+                <pre class="mb-0"><?= htmlspecialchars(json_encode($lastLog, JSON_PRETTY_PRINT)) ?></pre>
+            </div>
+        </div>
+    <?php endif; ?>
 </div>
 </body>
 </html>
