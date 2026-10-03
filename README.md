@@ -25,6 +25,7 @@ Need validation?    Add Input.
 Need reactive UI?   Add Live.
 Need app theming?    Add Theme.
 Need login?         Add Auth.
+Need your app to provide SSO? Add Auth Server.
 Already have users? Add Users and map your existing table.
 Need permissions?   Add Permissions.
 Need audit logs?    Add Logs.
@@ -322,6 +323,7 @@ Short code, but no hidden business policy.
 | Shared runtime, database, session, cache, CLI and diagnostics | [Core](packages/core/README.md) | Shared infrastructure |
 | Existing/project-owned users | [Users](packages/users/README.md) | User mapping and management |
 | Login/logout/current user | [Auth](packages/auth/README.md) | Authentication |
+| Let other apps sign in with this app (OAuth/OIDC) | [Auth Server](packages/auth-server/README.md) | Identity provider / SSO |
 | Access rules/groups/permissions | [Permissions](packages/permissions/README.md) | Authorization |
 | HTTP routing | [Routes](packages/routes/README.md) | Request routing |
 | Validation/request data/uploads | [Input](packages/input/README.md) | Input processing |
@@ -340,6 +342,7 @@ A useful distinction:
 
 ```text
 Auth            = Who are you?
+Auth Server     = Let another app verify who you are
 Permissions     = What are you allowed to do?
 
 Messaging       = Send something outside the application
