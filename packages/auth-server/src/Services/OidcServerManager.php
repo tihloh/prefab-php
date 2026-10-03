@@ -8,6 +8,7 @@ use DateInterval;
 use League\OAuth2\Server\AuthorizationServer;
 use League\OAuth2\Server\Exception\OAuthServerException;
 use League\OAuth2\Server\Grant\AuthCodeGrant;
+use League\OAuth2\Server\Grant\RefreshTokenGrant;
 use League\OAuth2\Server\Repositories\AccessTokenRepositoryInterface;
 use League\OAuth2\Server\Repositories\AuthCodeRepositoryInterface;
 use League\OAuth2\Server\Repositories\ClientRepositoryInterface;
@@ -99,9 +100,18 @@ final class OidcServerManager
             new DateInterval((string) ($config['refresh_token_ttl'] ?? 'P30D'))
         );
 
+        $accessTokenTtl = new DateInterval(
+            (string) ($config['access_token_ttl'] ?? 'PT1H')
+        );
+
         $this->authorizationServer->enableGrantType(
             $grant,
-            new DateInterval((string) ($config['access_token_ttl'] ?? 'PT1H')),
+            $accessTokenTtl,
+        );
+
+        $this->authorizationServer->enableGrantType(
+            new RefreshTokenGrant($refreshTokens),
+            $accessTokenTtl,
         );
 
         $this->resourceServer = new ResourceServer(
@@ -163,6 +173,13 @@ final class OidcServerManager
             '/\s+/',
             trim((string) ($query['scope'] ?? ''))
         ) ?: [];
+
+        if (isset($query['nonce'])) {
+            throw OAuthServerException::invalidRequest(
+                'nonce',
+                'Nonce support is not available in this initial Auth Server release.'
+            );
+        }
 
         if (!in_array('openid', $requestedScopes, true)) {
             throw OAuthServerException::invalidRequest(
@@ -235,9 +252,17 @@ final class OidcServerManager
             ? array_values(array_map('strval', $scopes))
             : [];
 
+        $claims = $this->claims->claims((string) $userId, $scopeNames);
+
+        foreach ([
+            'iss', 'sub', 'aud', 'exp', 'iat', 'nbf', 'jti', 'nonce',
+        ] as $reserved) {
+            unset($claims[$reserved]);
+        }
+
         return [
             'sub' => $this->claims->subject((string) $userId),
-            ...$this->claims->claims((string) $userId, $scopeNames),
+            ...$claims,
         ];
     }
 
