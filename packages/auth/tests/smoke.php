@@ -190,10 +190,10 @@ $social = new SocialAuthManager(
 );
 
 $url = $social->authorizationUrl('GOOGLE');
-assert(str_contains($url, 'state=state-google'));
+assert(str_contains($url, 'state=state-signin:google'));
 
 $result = $social->callback('google', [
-    'state' => 'state-google',
+    'state' => 'state-signin:google',
     'code' => 'demo',
 ]);
 assert($result->success === true);
@@ -208,10 +208,10 @@ $auth->logout();
 $auth->login($users->users[1]);
 
 $linkUrl = $social->linkAuthorizationUrl('google');
-assert(str_contains($linkUrl, 'state=state-google'));
+assert(str_contains($linkUrl, 'state=state-link:google'));
 
 $conflict = $social->linkCurrentUser('google', [
-    'state' => 'state-google',
+    'state' => 'state-link:google',
     'code' => 'demo',
 ]);
 assert($conflict['success'] === false);
