@@ -26,7 +26,7 @@ final class SocialAuthManager
     public function authorizationUrl(string $provider): string
     {
         $provider = $this->normalizeProvider($provider);
-        $state = $this->states->issue($provider);
+        $state = $this->states->issue($this->stateKey('signin', $provider));
 
         return $this->providers->get($provider)->authorizationUrl($state);
     }
@@ -45,7 +45,10 @@ final class SocialAuthManager
             );
         }
 
-        return $this->authorizationUrl($provider);
+        $provider = $this->normalizeProvider($provider);
+        $state = $this->states->issue($this->stateKey('link', $provider));
+
+        return $this->providers->get($provider)->authorizationUrl($state);
     }
 
     public function callback(
@@ -56,7 +59,13 @@ final class SocialAuthManager
         $provider = $this->normalizeProvider($provider);
         $state = (string) ($query['state'] ?? '');
 
-        if ($state === '' || !$this->states->validate($provider, $state)) {
+        if (
+            $state === ''
+            || !$this->states->validate(
+                $this->stateKey('signin', $provider),
+                $state,
+            )
+        ) {
             return $this->failed(
                 'auth.social_failed',
                 null,
@@ -201,7 +210,13 @@ final class SocialAuthManager
         $provider = $this->normalizeProvider($provider);
         $state = (string) ($query['state'] ?? '');
 
-        if ($state === '' || !$this->states->validate($provider, $state)) {
+        if (
+            $state === ''
+            || !$this->states->validate(
+                $this->stateKey('link', $provider),
+                $state,
+            )
+        ) {
             return [
                 'success' => false,
                 'reason' => 'invalid_state',
@@ -409,6 +424,11 @@ final class SocialAuthManager
     private function normalizeProvider(string $provider): string
     {
         return strtolower(trim($provider));
+    }
+
+    private function stateKey(string $flow, string $provider): string
+    {
+        return $flow . ':' . $provider;
     }
 
     private function failed(
