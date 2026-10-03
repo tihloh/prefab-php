@@ -141,6 +141,27 @@ final class PdoSocialAccountStore implements SocialAccountStoreInterface
                 );
             }
 
+            $stmt = $this->pdo->prepare(
+                'SELECT provider_user_id
+                 FROM prefab_auth_social_accounts
+                 WHERE user_id = ? AND provider = ?
+                 LIMIT 1',
+            );
+            $stmt->execute([$userId, $provider]);
+            $currentProviderUserId = $stmt->fetchColumn();
+
+            if (
+                $currentProviderUserId !== false
+                && (string) $currentProviderUserId !== $providerUserId
+            ) {
+                throw new SocialAccountConflictException(
+                    $provider,
+                    $providerUserId,
+                    $userId,
+                    'This user already has another account linked for this provider.',
+                );
+            }
+
             throw $e;
         }
     }
