@@ -16,6 +16,10 @@ final class NativeSessionStore implements AuthSessionStoreInterface
 
     public function put(int|string $userId): void
     {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+
         $_SESSION[$this->scopedKey] = $userId;
     }
 
