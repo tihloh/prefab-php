@@ -125,6 +125,17 @@
         });
     };
 
+    const restoreModelValues = (root, values, except = []) => {
+        const excluded = new Set(except);
+
+        modelElements(root).forEach(element => {
+            const directive = modelDirective(element);
+            const path = directive?.path;
+            if (!path || excluded.has(path) || !(path in values)) return;
+            setElementValue(element, values[path]);
+        });
+    };
+
     const errorEntries = (errors) => errors && typeof errors === 'object' ? errors : {};
 
     const formHasValidationErrors = (root, form) => {
@@ -242,7 +253,13 @@
         }) || null;
     };
 
-    const replaceContentPreservingFocus = (root, html, snapshot) => {
+    const replaceContentPreservingFocus = (
+        root,
+        html,
+        snapshot,
+        preserveValues = null,
+        validatedFields = [],
+    ) => {
         const active = document.activeElement instanceof Element && root.contains(document.activeElement)
             ? document.activeElement
             : null;
@@ -253,6 +270,10 @@
 
         root.innerHTML = html;
         syncModelValues(root, snapshot);
+
+        if (preserveValues && typeof preserveValues === 'object') {
+            restoreModelValues(root, preserveValues, validatedFields);
+        }
 
         const replacement = findByIdentity(root, identity);
         if (!(replacement instanceof HTMLElement)) return;
@@ -322,8 +343,15 @@
 
             if ((requestState.get(root)?.sequence || 0) !== sequence) return;
 
+            const browserValues = action ? null : collectUpdates(root);
             mergeErrors(root, data, Boolean(action));
-            replaceContentPreservingFocus(root, data.html, data.snapshot);
+            replaceContentPreservingFocus(
+                root,
+                data.html,
+                data.snapshot,
+                browserValues,
+                fields,
+            );
             root.setAttribute('pf:snapshot', encodeSnapshot(data.snapshot));
             root.setAttribute('pf:checksum', data.checksum);
             renderErrors(root);
@@ -348,7 +376,7 @@
         if (value === undefined) return;
 
         request(root, {
-            updates: {[directive.path]: value},
+            updates: collectUpdates(root),
             validate: [directive.path],
         });
     };
