@@ -248,6 +248,22 @@ Use `pf:error` to display the first current error for a field:
 
 Prefab Live also applies `aria-invalid="true"` while that field has an error.
 
+### Submit blocking while validation errors exist
+
+For a form using `pf:submit`, Prefab Live automatically disables its submit button while any model-bound field in that form has a current validation error:
+
+```html
+<form pf:submit="save">
+    <input pf:model.live.debounce.400ms="recordNo">
+    <small pf:error="recordNo"></small>
+    <button type="submit">Save</button>
+</form>
+```
+
+If `recordNo` fails its live validation, the submit button stays disabled until that field validates successfully again. Pressing Enter is also blocked while such errors remain, and Prefab Live focuses the first invalid field.
+
+Only model-field validation errors block submission. Form-level/server errors such as `_form` do not permanently disable the button because they may require a retry rather than a field change.
+
 ## 10. Lifecycle
 
 A component may define:
