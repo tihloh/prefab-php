@@ -127,6 +127,53 @@
 
     const errorEntries = (errors) => errors && typeof errors === 'object' ? errors : {};
 
+    const formHasValidationErrors = (root, form) => {
+        const errors = errorState.get(root) || {};
+
+        return modelElements(form).some(element => {
+            const field = modelDirective(element)?.path;
+            return Boolean(field && Array.isArray(errors[field]) && errors[field].length);
+        });
+    };
+
+    const syncSubmitState = (root) => {
+        root.querySelectorAll('form[pf\\:submit]').forEach(form => {
+            const blocked = formHasValidationErrors(root, form);
+
+            form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(control => {
+                if (!(control instanceof HTMLButtonElement || control instanceof HTMLInputElement)) return;
+
+                if (blocked) {
+                    if (!control.disabled) {
+                        control.dataset.pfLiveValidationDisabled = '1';
+                    }
+                    control.disabled = true;
+                    control.setAttribute('aria-disabled', 'true');
+                    return;
+                }
+
+                if (control.dataset.pfLiveValidationDisabled === '1') {
+                    control.disabled = false;
+                    delete control.dataset.pfLiveValidationDisabled;
+                    control.removeAttribute('aria-disabled');
+                }
+            });
+        });
+    };
+
+    const focusFirstValidationError = (root, form) => {
+        const errors = errorState.get(root) || {};
+
+        const target = modelElements(form).find(element => {
+            const field = modelDirective(element)?.path;
+            return Boolean(field && Array.isArray(errors[field]) && errors[field].length);
+        });
+
+        if (!(target instanceof HTMLElement)) return;
+        target.focus({preventScroll: false});
+        target.scrollIntoView({behavior: 'smooth', block: 'center'});
+    };
+
     const renderErrors = (root) => {
         const errors = errorState.get(root) || {};
 
@@ -147,6 +194,8 @@
                 element.removeAttribute('aria-invalid');
             }
         });
+
+        syncSubmitState(root);
     };
 
     const mergeErrors = (root, data, replace = false) => {
@@ -374,6 +423,13 @@
         if (!root || !method) return;
 
         event.preventDefault();
+
+        if (formHasValidationErrors(root, form)) {
+            syncSubmitState(root);
+            focusFirstValidationError(root, form);
+            return;
+        }
+
         request(root, {action: method});
     });
 
