@@ -201,6 +201,8 @@ For reactive fields, add modifiers:
 
 Newer model requests cancel older in-flight requests for the same component so stale responses do not overwrite newer typing. Component refreshes restore focus and the text selection/cursor where possible.
 
+A reactive field check also carries the current values of the component's other model-bound controls. When the response returns, Prefab Live preserves any newer browser values in fields that were not being validated. This prevents a live uniqueness/availability check from clearing or rolling back text, selections, checkboxes, or other inputs the user changed while the request was in flight.
+
 Nested array paths are supported:
 
 ```html
