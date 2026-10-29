@@ -30,6 +30,7 @@ Already have users? Add Users and map your existing table.
 Need permissions?   Add Permissions.
 Need audit logs?    Add Logs.
 Need background work? Add Background.
+Need request throttling? Add Rate Limiter.
 ```
 
 You do **not** install everything. Feature packages install the compatible shared **Prefab Core** infrastructure they need automatically; install Core directly only when your application wants Core infrastructure by itself.
@@ -333,8 +334,11 @@ Short code, but no hidden business policy.
 | Bootstrap theming/admin UI | [Theme](packages/theme/README.md) | Theme engine, appearance policy and reusable admin components |
 | Audit/activity history | [Logs](packages/logs/README.md) | Logging |
 | Immediate bounded background execution | [Background](packages/background/README.md) | Durable handoff, workers and backpressure |
+| Request throttling / quota enforcement | [Rate Limiter](https://github.com/tihloh/prefab-rate-limiter) | Independent fixed-window rate limits and retry headers |
 | Email/external communication | [Messaging](packages/messaging/README.md) | Outbound communication |
 | Internal bell/inbox notices | [Notifications](packages/notifications/README.md) | In-app notifications |
+
+**Independent module:** [Prefab Rate Limiter](https://github.com/tihloh/prefab-rate-limiter) is maintained in its own repository rather than under `packages/` in this monorepo. Its initial implementation provides file-backed fixed-window counters; sliding windows, distributed storage, and automatic middleware wiring are not yet implemented.
 
 The standalone `prefab-database` package is retired. Database connections, transactions and lightweight query infrastructure now belong to Prefab Core.
 
