@@ -145,6 +145,18 @@ final class DatabaseManager implements DatabaseInterface
         return new QueryBuilder($this->connection($connection), $table);
     }
 
+    /** Build portable schema statements for the selected connection. */
+    public function schema(?string $connection = null): SchemaBuilder
+    {
+        return new SchemaBuilder($this->connection($connection));
+    }
+
+    /** Inspect the SQL dialect selected by a named PDO connection. */
+    public function dialect(?string $connection = null): SqlDialect
+    {
+        return new SqlDialect($this->driver($connection));
+    }
+
     public function select(string $sql, array $bindings = [], ?string $connection = null): array
     {
         return PrefabRuntime::traceCall('database', 'select', [
