@@ -132,7 +132,37 @@ $db = new DatabaseManager(new PDO('sqlite::memory:'));
 $rows = $db->table('users')->where('active', 1)->get();
 ```
 
-Core intentionally stays small: named PDO connections, parameterized SQL, transactions and a lightweight query builder. It is not an ORM and does not own models, relations, migrations or schema design.
+Core intentionally stays small: named PDO connections, parameterized SQL, transactions, a lightweight query builder and portable create-table schema definitions. It is not an ORM and does not own models, relations, versioned migrations or arbitrary schema alterations.
+
+### Portable SQL and schema declarations
+
+Core can connect to MySQL/MariaDB, PostgreSQL, SQLite and SQL Server when the corresponding PDO driver is installed. The schema API compiles common column types, nullable/default values, identity keys and unique constraints for those engines.
+
+~~~php
+use Tihloh\Prefab\Core\Database\DatabaseManager;
+use Tihloh\Prefab\Core\Database\TableBlueprint;
+
+$db = new DatabaseManager(new PDO('sqlite::memory:'));
+$db->schema()->create('users', function (TableBlueprint $table): void {
+    $table->id();
+    $table->string('email')->unique('email');
+    $table->boolean('active')->default('active', true);
+    $table->dateTime('created_at')->nullable('created_at');
+});
+
+$exists = $db->schema()->hasTable('users');
+$rows = $db->table('users')->where('active', true)->get();
+~~~
+
+The API is additive. Existing SQL and the existing query builder are unchanged. Raw SQL is sent directly to PDO and is **not** automatically translated. Cross-engine data migration, alter-table operations, foreign keys, indexes beyond unique constraints, expression defaults and versioned migrations require further work or explicit database-specific SQL. Switching a connection does not transfer tables or data.
+
+Run the compiler smoke test with:
+
+~~~bash
+php packages/core/tests/PortableSchemaTest.php
+~~~
+
+The smoke test checks all dialect compilers without needing database servers and runs live SQLite operations when pdo_sqlite is available. Live integration tests against other servers are still needed before claiming full application portability.
 
 ## Session
 
